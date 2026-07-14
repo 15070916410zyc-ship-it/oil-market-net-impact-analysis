@@ -3,7 +3,7 @@
 This module is intentionally separate from the core WTI data-fetching logic.
 WTI freshness remains controlled by ``src.data_fetcher`` and the Streamlit
 pipeline. Expanded explanatory variables are optional: failures are logged, but
-they never interrupt the forecasting pipeline.
+they never interrupt the net-impact analysis pipeline.
 """
 
 from __future__ import annotations

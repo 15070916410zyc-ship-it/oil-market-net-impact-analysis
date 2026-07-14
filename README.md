@@ -17,8 +17,9 @@ The app supports this workflow:
 5. Review generated tables and figures in the dashboard.
 6. Upload optional local candidate-variable files.
 
-Oil-price forecasting functions have been removed. The app now focuses on the
-multiscale net-impact research workflow.
+The app is dedicated to the multiscale net-impact research workflow. It
+explains how selected market variables contribute to oil-market movements; it
+does not generate oil-price forecasts.
 
 ## Data Sources
 

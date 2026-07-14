@@ -549,7 +549,7 @@ def select_features_from_training_data(
                         retained_variables,
                         window_number=window_number,
                     )
-            except Exception as exc:  # noqa: BLE001 - fallback keeps forecasts runnable.
+            except Exception as exc:  # noqa: BLE001 - fallback keeps the analysis runnable.
                 warnings.warn(f"MRGC screening failed ({exc}); falling back to default variable pool.")
 
         if not retained_variables:

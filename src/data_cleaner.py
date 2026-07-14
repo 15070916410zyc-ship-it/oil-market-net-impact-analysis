@@ -1,7 +1,7 @@
-"""WTI model-data cleaning utilities.
+"""WTI net-impact analysis data-cleaning utilities.
 
 This module turns ``data/processed/clean_market_data.xlsx`` into a modeling
-table for the first-version WTI forecasting system.
+table for the multiscale net-impact analysis system.
 """
 
 from __future__ import annotations
@@ -232,7 +232,7 @@ def prepare_model_data(
     max_ffill_days: int = 0,
     min_non_missing_ratio: float = 0.6,
 ) -> pd.DataFrame:
-    """Prepare model-ready WTI forecasting data.
+    """Prepare model-ready WTI net-impact analysis data.
 
     Cleaning rules:
     - Convert Date to pandas datetime, sort, and remove duplicate dates.
@@ -243,7 +243,7 @@ def prepare_model_data(
     Args:
         input_path: Source market-data workbook.
         output_path: Destination model-ready workbook.
-        target_col: Forecast target, default ``WTI``.
+        target_col: Analysis target, default ``WTI``.
         candidate_features: Candidate explanatory variables.
         max_ffill_days: Retained for compatibility; strict cleaning does not fill missing values.
         min_non_missing_ratio: Minimum coverage required to keep a feature.
