@@ -77,13 +77,30 @@ Caldara-Iacoviello daily GPR file.
 
 Do not share your private API key unless you intend to.
 
-The dashboard can open without API keys. The app uses public fallbacks when
-available, but personal FRED and EIA keys make online refreshes more stable.
+The dashboard can open without API keys. Automatic refresh first uses an
+uploaded same-name variable, then a configured official FRED or EIA API, then
+public no-key sources and local cache fallbacks.
 
-For Streamlit Community Cloud, configure API keys in the app's **Advanced
-settings > Secrets**. The hosted website hides the local API and cleanup tools
-so public visitors cannot change shared server settings or delete generated
-workspace files.
+On Streamlit Community Cloud, each visitor enters their own keys in **My API
+keys**. The keys are request-isolated and are never written to the shared
+`API.env`. After the site owner configures `BROWSER_API_COOKIE_KEY` in
+**Advanced settings > Secrets**, the keys are encrypted and remembered for one
+year in that browser. Visitors can remove them with **Forget API keys in this
+browser**. The workspace cleanup tools remain hidden on the hosted website.
+
+Generate the one-time site encryption key locally:
+
+```powershell
+.venv\Scripts\python.exe -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+```
+
+Save the output in Streamlit Secrets:
+
+```toml
+BROWSER_API_COOKIE_KEY = "paste-the-generated-value-here"
+```
+
+Do not commit that value to GitHub.
 
 ## Local uploaded variable format
 

@@ -42,8 +42,11 @@ Date, Value
 The app starts from the first row where column 1 can be parsed as a date and
 column 2 can be parsed as a numeric value.
 
-When an uploaded variable has the same name as an existing variable, the
-uploaded values take priority automatically.
+Data refresh uses this priority automatically:
+
+1. A visitor-uploaded value with the same variable name.
+2. The configured official API source, including FRED and EIA.
+3. Public no-key sources and the local cache when an API is unavailable.
 
 ## Cloud Results and File Lifetime
 
@@ -57,10 +60,30 @@ all results**. The ZIP contains generated tables, figures, reports, and model
 outputs. It intentionally excludes raw uploads, downloaded caches, processed
 working data, `API.env`, and Streamlit secrets.
 
-The API and workspace-cleanup menu is available in the local Windows software
-but hidden on the hosted website. Configure hosted API keys through the
-Streamlit deployment's **Advanced settings > Secrets** instead of saving an
-`API.env` file from the public interface.
+The hosted website keeps the API-key interface and asks every visitor to use
+their own FRED and EIA keys. Keys are isolated from other visitors, encrypted,
+and remembered for one year in that browser. They are never written to the
+shared `API.env` file or included in result downloads. Use **Forget API keys in
+this browser** to remove them. A different browser, private window, or cleared
+browser storage requires the keys to be entered again.
+
+The site owner must add one Fernet key named `BROWSER_API_COOKIE_KEY` in the
+Streamlit deployment's **Advanced settings > Secrets**. Generate it locally:
+
+```powershell
+.venv\Scripts\python.exe -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+```
+
+Then save it in Streamlit Secrets without committing it to GitHub:
+
+```toml
+BROWSER_API_COOKIE_KEY = "paste-the-generated-value-here"
+```
+
+Without this owner secret, visitor keys still work in the current session but
+cannot be restored after the session ends. Cloud visitors never inherit keys
+from the server environment or another visitor. The destructive workspace
+cleanup control remains local-only.
 
 ## Run Locally
 
@@ -84,8 +107,8 @@ window to stop the app.
 
 ## Optional API Keys
 
-For more stable online data refreshes in the local Windows software, use the
-top-right app menu or create `API.env` in the project folder:
+For more stable online data refreshes, use the top-right API menu. In the local
+Windows software, keys can also be stored in `API.env` in the project folder:
 
 ```text
 FRED_API_KEY=your_fred_api_key

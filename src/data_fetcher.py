@@ -17,6 +17,11 @@ from urllib.request import Request, urlopen
 
 import pandas as pd
 
+from src.api_credentials import (
+    get_session_api_key,
+    shared_api_fallback_allowed,
+)
+
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 RAW_DATA_DIR = PROJECT_ROOT / "data" / "raw"
@@ -324,7 +329,15 @@ def _looks_like_fred_api_key(api_key: str) -> bool:
 
 
 def _get_fred_api_key() -> str:
-    """Read FRED_API_KEY from .env, API.env, or the process environment."""
+    """Return the request-local FRED key before optional local shared sources."""
+    session_key = get_session_api_key("FRED_API_KEY")
+    if _looks_like_fred_api_key(session_key):
+        return session_key
+    if not shared_api_fallback_allowed():
+        raise RuntimeError(
+            "FRED_API_KEY was not found for this browser session. Public FRED CSV "
+            "fallback will be used when possible."
+        )
     _load_environment_files()
     env_path = PROJECT_ROOT / ".env"
     api_env_path = PROJECT_ROOT / "API.env"
@@ -350,12 +363,21 @@ def _get_fred_api_key() -> str:
 
 def _get_eia_api_key() -> str:
     'EIA source returned no usable data.'
+    session_key = get_session_api_key("EIA_API_KEY")
+    if session_key:
+        return session_key
+    if not shared_api_fallback_allowed():
+        return "DEMO_KEY"
     _load_environment_files()
     return os.getenv("EIA_API_KEY", "DEMO_KEY").strip() or "DEMO_KEY"
 
 
 def _has_configured_fred_api_key() -> bool:
     """Return True when a usable FRED API key is configured."""
+    if _looks_like_fred_api_key(get_session_api_key("FRED_API_KEY")):
+        return True
+    if not shared_api_fallback_allowed():
+        return False
     _load_environment_files()
     env_path = PROJECT_ROOT / ".env"
     api_env_path = PROJECT_ROOT / "API.env"
@@ -369,6 +391,11 @@ def _has_configured_fred_api_key() -> bool:
 
 def _has_configured_eia_api_key() -> bool:
     """Return True when a non-demo EIA API key is configured."""
+    session_key = get_session_api_key("EIA_API_KEY")
+    if session_key and session_key.upper() != "DEMO_KEY":
+        return True
+    if not shared_api_fallback_allowed():
+        return False
     _load_environment_files()
     env_path = PROJECT_ROOT / ".env"
     api_env_path = PROJECT_ROOT / "API.env"

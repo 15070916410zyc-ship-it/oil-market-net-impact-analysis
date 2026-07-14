@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib
+import hashlib
 from io import BytesIO
 import os
 import re
@@ -11,6 +12,7 @@ from pathlib import Path
 import sys
 from typing import Any, Callable, Literal, Mapping
 import warnings
+from urllib.parse import unquote
 from zipfile import ZIP_DEFLATED, ZipFile
 
 import pandas as pd
@@ -20,6 +22,12 @@ import streamlit as st
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
+
+from src.api_credentials import (  # noqa: E402 - project root is added above.
+    decrypt_api_keys,
+    encrypt_api_keys,
+    set_session_api_keys,
+)
 
 DEFAULT_PRE_EVENT_WINDOW_TRADING_DAYS = 300
 DEFAULT_VARIABLE_SELECTION_VERSION = "full-pool-no-bdti-v7-compact-selector"
@@ -32,6 +40,10 @@ NET_IMPACT_TVP_CONFIRMATION_STATE = "net_impact_pending_tvp_confirmation"
 API_ENV_PATH = PROJECT_ROOT / "API.env"
 API_KEY_ORDER = ["FRED_API_KEY", "EIA_API_KEY"]
 API_VALIDATION_CACHE: dict[str, dict[str, str]] = {}
+BROWSER_API_COOKIE_NAME = "net_impact_api_keys_v1"
+BROWSER_API_COOKIE_SECRET_NAME = "BROWSER_API_COOKIE_KEY"
+BROWSER_API_SESSION_STATE = "browser_api_keys"
+BROWSER_API_COOKIE_MAX_AGE_SECONDS = 365 * 24 * 60 * 60
 UI_LANGUAGE_STATE = "ui_language"
 LanguageCode = Literal["zh", "en"]
 RESULT_ARTIFACT_DIRECTORIES = ("tables", "figures", "reports", "models")
@@ -1718,7 +1730,7 @@ def validate_fred_api_key(api_key: str) -> dict[str, str]:
             "message": "FRED_API_KEY has the wrong format. A FRED key should be 32 lower-case alphanumeric characters.",
         }
 
-    cache_key = f"fred:{text}"
+    cache_key = f"fred:{hashlib.sha256(text.encode('utf-8')).hexdigest()}"
     if cache_key in API_VALIDATION_CACHE:
         return API_VALIDATION_CACHE[cache_key]
 
@@ -1770,14 +1782,24 @@ def read_api_env_values() -> dict[str, str]:
     return values
 
 
-def api_key_status() -> dict[str, Any]:
-    """Return API key availability from API.env or process environment."""
-    file_values = read_api_env_values()
+def api_key_status(
+    session_values: Mapping[str, Any] | None = None,
+    *,
+    include_shared_sources: bool = True,
+) -> dict[str, Any]:
+    """Return API availability without exposing any credential value."""
+    browser_values = session_values or {}
+    file_values = read_api_env_values() if include_shared_sources else {}
     keys: dict[str, dict[str, str | bool]] = {}
     for key in API_KEY_ORDER:
+        browser_value = str(browser_values.get(key, "") or "").strip()
         file_value = file_values.get(key, "")
-        env_value = os.getenv(key, "").strip()
-        if _api_value_is_filled(file_value):
+        env_value = os.getenv(key, "").strip() if include_shared_sources else ""
+        if _api_value_is_filled(browser_value):
+            configured = True
+            source = "this browser"
+            value = browser_value
+        elif _api_value_is_filled(file_value):
             configured = True
             source = "API.env"
             value = file_value
@@ -1804,8 +1826,119 @@ def api_key_status() -> dict[str, Any]:
         "has_any_key": any(bool(item["configured"]) for item in keys.values()),
         "has_invalid_key": fred_status == "invalid",
         "has_unverified_key": fred_status == "unverified",
-        "has_saved_file": API_ENV_PATH.exists(),
+        "has_saved_file": include_shared_sources and API_ENV_PATH.exists(),
     }
+
+
+def browser_api_cookie_encryption_key() -> str:
+    """Return the site-owner secret used to encrypt per-browser API cookies."""
+    environment_value = os.getenv(BROWSER_API_COOKIE_SECRET_NAME, "").strip()
+    if environment_value:
+        return environment_value
+    try:
+        return str(st.secrets.get(BROWSER_API_COOKIE_SECRET_NAME, "") or "").strip()
+    except (FileNotFoundError, KeyError, AttributeError):
+        return ""
+
+
+def get_browser_cookie_controller() -> Any:
+    """Return one cookie component per Streamlit browser session."""
+    state_key = "_browser_api_cookie_controller"
+    controller = st.session_state.get(state_key)
+    if controller is None:
+        from streamlit_cookies_controller import CookieController
+
+        controller = CookieController(key="net_impact_browser_cookies")
+        st.session_state[state_key] = controller
+    return controller
+
+
+def decode_browser_api_cookie_value(value: str) -> str:
+    """Decode the URL escaping applied by the browser cookie component."""
+    return unquote(str(value or ""))
+
+
+def read_browser_api_cookie() -> str | None:
+    """Read the encrypted API cookie sent by the current visitor's browser."""
+    try:
+        value = st.context.cookies.get(BROWSER_API_COOKIE_NAME)
+    except (AttributeError, KeyError, RuntimeError):
+        return None
+    return decode_browser_api_cookie_value(str(value)) if value is not None else None
+
+
+def browser_api_cookie_is_secure(page_url: str | None = None) -> bool:
+    """Use secure cookies on HTTPS while keeping local HTTP software usable."""
+    if page_url is None:
+        try:
+            page_url = str(st.context.url or "")
+        except (AttributeError, RuntimeError):
+            page_url = ""
+    return str(page_url).lower().startswith("https://")
+
+
+def restore_api_credentials_for_request() -> dict[str, str]:
+    """Restore this visitor's encrypted cookie and activate keys for this rerun."""
+    if not is_cloud_runtime():
+        set_session_api_keys({}, allow_shared_fallback=True)
+        return {}
+
+    restored = dict(st.session_state.get(BROWSER_API_SESSION_STATE, {}))
+    encryption_key = browser_api_cookie_encryption_key()
+    if encryption_key:
+        token = read_browser_api_cookie()
+        if token is not None:
+            restored = decrypt_api_keys(token, encryption_key)
+            st.session_state[BROWSER_API_SESSION_STATE] = restored
+    set_session_api_keys(restored, allow_shared_fallback=False)
+    return restored
+
+
+def save_browser_api_values(fred_api_key: str, eia_api_key: str) -> tuple[list[str], bool]:
+    """Save visitor keys in request state and, when configured, an encrypted cookie."""
+    existing = dict(st.session_state.get(BROWSER_API_SESSION_STATE, {}))
+    updates = {
+        "FRED_API_KEY": fred_api_key.strip(),
+        "EIA_API_KEY": eia_api_key.strip(),
+    }
+    saved_keys: list[str] = []
+    for key in API_KEY_ORDER:
+        if _api_value_is_filled(updates[key]):
+            existing[key] = updates[key]
+            saved_keys.append(key)
+    if not saved_keys:
+        return [], False
+
+    st.session_state[BROWSER_API_SESSION_STATE] = existing
+    set_session_api_keys(existing, allow_shared_fallback=False)
+    encryption_key = browser_api_cookie_encryption_key()
+    if not encryption_key:
+        return saved_keys, False
+    token = encrypt_api_keys(existing, encryption_key)
+    get_browser_cookie_controller().set(
+        BROWSER_API_COOKIE_NAME,
+        token,
+        path="/",
+        max_age=BROWSER_API_COOKIE_MAX_AGE_SECONDS,
+        secure=browser_api_cookie_is_secure(),
+        same_site="strict",
+    )
+    return saved_keys, True
+
+
+def clear_browser_api_values() -> None:
+    """Forget this visitor's keys in both the current session and browser cookie."""
+    controller = get_browser_cookie_controller()
+    controller.set(
+        BROWSER_API_COOKIE_NAME,
+        "",
+        path="/",
+        max_age=0,
+        secure=browser_api_cookie_is_secure(),
+        same_site="strict",
+    )
+    st.session_state[BROWSER_API_SESSION_STATE] = {}
+    set_session_api_keys({}, allow_shared_fallback=False)
 
 
 def save_api_env_values(
@@ -1890,7 +2023,7 @@ def clear_workspace_artifacts() -> dict[str, Any]:
     }
 
 
-def render_api_settings_panel(status: dict[str, Any]) -> None:
+def render_api_settings_panel(status: dict[str, Any], *, browser_persistence: bool = False) -> None:
     """Render API key save controls in the top tool menu."""
     keys = status.get("keys", {})
     fred_status = keys.get("FRED_API_KEY", {})
@@ -1918,13 +2051,19 @@ def render_api_settings_panel(status: dict[str, Any]) -> None:
         """
         **API 密钥**
 
-        FRED 与 EIA 密钥用于市场和宏观数据更新；GPRD 不需要密钥。
+        每位用户填写自己的 FRED 与 EIA 密钥，用于市场和宏观数据更新；
+        GPRD 不需要密钥。若启用浏览器保存，密钥仅在当前浏览器中恢复。
 
         """,
         )
     )
     if fred_status.get("configured"):
-        st.caption(f"FRED_API_KEY is configured from {fred_status.get('source')}.")
+        st.caption(
+            ui_text(
+                f"FRED API key is configured from {fred_status.get('source')}.",
+                "FRED API 密钥已为当前用户配置。",
+            )
+        )
         validation_status = str(fred_status.get("validation_status") or "")
         validation_message = str(fred_status.get("validation_message") or "")
         if validation_status == "valid":
@@ -1934,7 +2073,27 @@ def render_api_settings_panel(status: dict[str, Any]) -> None:
         elif validation_status == "unverified":
             st.warning(validation_message)
     if eia_status.get("configured"):
-        st.caption(f"EIA_API_KEY is configured from {eia_status.get('source')}.")
+        st.caption(
+            ui_text(
+                f"EIA API key is configured from {eia_status.get('source')}.",
+                "EIA API 密钥已为当前用户配置。",
+            )
+        )
+    if browser_persistence:
+        if browser_api_cookie_encryption_key():
+            st.caption(
+                ui_text(
+                    "Keys are encrypted and remembered for one year in this browser only.",
+                    "密钥将加密保存在当前浏览器中一年，不会写入网站共享文件。",
+                )
+            )
+        else:
+            st.warning(
+                ui_text(
+                    "Browser auto-save is awaiting the site encryption secret. Keys will work for this session only.",
+                    "网站尚未配置浏览器加密密钥；本次填写仅在当前会话生效，暂不能自动保存。",
+                )
+            )
     with st.form("api_settings_form"):
         fred_key = st.text_input(
             ui_text("FRED API key", "FRED API 密钥"),
@@ -1952,22 +2111,79 @@ def render_api_settings_panel(status: dict[str, Any]) -> None:
         )
         submitted = st.form_submit_button(ui_text("Save API keys", "保存 API 密钥"), use_container_width=True)
     if submitted:
-        saved = save_api_env_values(fred_key, eia_key)
+        if browser_persistence:
+            saved, persisted = save_browser_api_values(fred_key, eia_key)
+        else:
+            saved = save_api_env_values(fred_key, eia_key)
+            persisted = True
         if saved:
-            st.session_state["api_settings_status"] = (
-                ui_text("API.env saved. The current session will use the keys immediately.", "API.env 已保存，当前会话将立即使用这些密钥。")
-            )
+            if browser_persistence and persisted:
+                message = ui_text(
+                    "API keys saved securely in this browser and activated now.",
+                    "API 密钥已加密保存在当前浏览器，并立即生效。",
+                )
+            elif browser_persistence:
+                message = ui_text(
+                    "API keys activated for this session. Browser auto-save needs the site encryption secret.",
+                    "API 密钥已在当前会话生效；配置网站加密密钥后才能自动保存。",
+                )
+            else:
+                message = ui_text(
+                    "API.env saved. The current session will use the keys immediately.",
+                    "API.env 已保存，当前会话将立即使用这些密钥。",
+                )
+            st.session_state["api_settings_status"] = message
             st.session_state["api_settings_expanded"] = False
-            st.rerun()
         elif status.get("has_any_key"):
             st.info(ui_text("API keys are already configured. No changes were saved.", "API 密钥已配置，本次未保存更改。"))
         else:
             st.warning(ui_text("Paste at least one API key before saving.", "保存前请至少填写一个 API 密钥。"))
+    if browser_persistence and status.get("has_any_key"):
+        if st.button(
+            ui_text("Forget API keys in this browser", "清除当前浏览器中的 API 密钥"),
+            use_container_width=True,
+            key="clear_browser_api_keys",
+        ):
+            clear_browser_api_values()
+            st.session_state["api_settings_status"] = ui_text(
+                "Saved browser API keys were removed.",
+                "已清除当前浏览器保存的 API 密钥。",
+            )
+
+
+def render_cloud_api_tool_menu() -> None:
+    """Render cloud-safe per-browser API controls without shared cleanup tools."""
+    browser_values = dict(st.session_state.get(BROWSER_API_SESSION_STATE, {}))
+    status_info = api_key_status(browser_values, include_shared_sources=False)
+    api_missing = not bool(status_info.get("has_any_key"))
+    api_invalid = bool(status_info.get("has_invalid_key"))
+    if api_missing:
+        badge_class = "missing"
+        badge_text = ui_text("Your API keys are missing", "请填写你的 API 密钥")
+    elif api_invalid:
+        badge_class = "missing"
+        badge_text = ui_text("Your FRED key is invalid", "你的 FRED 密钥无效")
+    else:
+        badge_class = "configured"
+        badge_text = ui_text("Your API keys are ready", "你的 API 密钥已就绪")
+
+    st.markdown('<div class="top-tool-menu">', unsafe_allow_html=True)
+    with st.popover("⋯", use_container_width=False):
+        st.markdown(
+            f'<span class="api-status-badge {badge_class}">{badge_text}</span>',
+            unsafe_allow_html=True,
+        )
+        with st.expander(
+            ui_text("My API keys", "我的 API 密钥"),
+            expanded=api_missing or api_invalid,
+        ):
+            render_api_settings_panel(status_info, browser_persistence=True)
 
 
 def render_top_tool_menu() -> None:
     """Render the compact top-right app tool menu."""
     if is_cloud_runtime():
+        render_cloud_api_tool_menu()
         return
     status_info = api_key_status()
     api_missing = not bool(status_info.get("has_any_key"))
@@ -5491,6 +5707,7 @@ def render_run_pipeline_tab(options: dict[str, Any]) -> None:
 def main() -> None:
     """Run the Streamlit application."""
     configure_page()
+    restore_api_credentials_for_request()
     apply_custom_css()
     render_language_switcher()
     options = render_sidebar()
