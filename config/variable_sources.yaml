@@ -1,0 +1,328 @@
+variables:
+  - name: WTI
+    description: WTI crude oil futures price.
+    auto_download: false
+    is_proxy: false
+    frequency: Daily
+    daily_alignment: Native daily series from market-data workflow.
+    sources:
+      - type: existing_model_ready_column
+        id: WTI
+    cache_file: ""
+    note: Loaded by the market-data workflow. It can be used as a target or as a candidate driver for another target.
+
+  - name: GPRD
+    description: Traditional Caldara-Iacoviello daily geopolitical risk index.
+    auto_download: false
+    is_proxy: false
+    frequency: Daily
+    daily_alignment: Native daily series from the GPR workflow.
+    sources:
+      - type: existing_model_ready_column
+        id: GPRD
+    cache_file: ""
+    note: Loaded by the existing GPRD workflow or local upload.
+
+  - name: OVX
+    description: CBOE Crude Oil ETF Volatility Index.
+    auto_download: true
+    is_proxy: false
+    frequency: Daily
+    daily_alignment: Native daily series from FRED or Yahoo fallback via market-data workflow.
+    sources:
+      - type: existing_model_ready_column
+        id: OVX
+      - type: fred
+        id: OVXCLS
+      - type: yfinance
+        id: ^OVX
+    cache_file: ""
+    note: FRED OVXCLS is preferred; Yahoo Finance OVX is used when FRED is unreachable.
+
+  - name: DollarIndex
+    description: Broad U.S. dollar index.
+    auto_download: true
+    is_proxy: false
+    frequency: Daily
+    daily_alignment: Native daily series from FRED via market-data workflow.
+    sources:
+      - type: existing_model_ready_column
+        id: DollarIndex
+      - type: fred
+        id: DTWEXBGS
+      - type: yfinance
+        id: DX-Y.NYB
+      - type: yfinance
+        id: DX=F
+    cache_file: data/raw/variable_pool/DollarIndex_FRED_DTWEXBGS.csv
+    note: Loaded from model-ready data when present; otherwise FRED DTWEXBGS is preferred with Yahoo DXY futures/index fallbacks when FRED is unreachable.
+
+  - name: TNote10Y
+    description: 10-year U.S. Treasury yield.
+    auto_download: true
+    is_proxy: false
+    frequency: Daily
+    daily_alignment: Native daily series from FRED, U.S. Treasury, or Yahoo fallback.
+    sources:
+      - type: existing_model_ready_column
+        id: TNote10Y
+      - type: fred
+        id: DGS10
+      - type: treasury_yield_curve
+        id: 10 Yr
+      - type: yfinance
+        id: ^TNX
+    cache_file: ""
+    note: FRED DGS10 is preferred; the U.S. Treasury daily yield curve and Yahoo ^TNX are fallbacks.
+
+  - name: Gold
+    description: Gold futures or London gold price proxy when futures data are unavailable.
+    auto_download: false
+    is_proxy: true
+    frequency: Daily
+    daily_alignment: Native daily market series when available.
+    sources:
+      - type: existing_model_ready_column
+        id: Gold
+    cache_file: ""
+    note: Loaded by the existing gold workflow when available.
+
+  - name: VIX
+    description: CBOE equity market volatility index.
+    auto_download: true
+    is_proxy: false
+    frequency: Daily
+    daily_alignment: Native daily series aligned to the analysis calendar.
+    sources:
+      - type: fred
+        id: VIXCLS
+      - type: yfinance
+        id: ^VIX
+    cache_file: data/raw/variable_pool/VIX_FRED_VIXCLS.csv
+    note: FRED VIXCLS is preferred; Yahoo Finance VIX is used when FRED is unreachable.
+
+  - name: SP500
+    description: S&P 500 index.
+    auto_download: true
+    is_proxy: false
+    frequency: Daily
+    daily_alignment: Native daily series aligned to the analysis calendar.
+    sources:
+      - type: fred
+        id: SP500
+      - type: yfinance
+        id: ^GSPC
+    cache_file: data/raw/variable_pool/SP500_FRED_SP500.csv
+    note: FRED SP500 is preferred; Yahoo Finance S&P 500 is used when FRED is unreachable.
+
+  - name: Nasdaq
+    description: NASDAQ Composite index.
+    auto_download: true
+    is_proxy: false
+    frequency: Daily
+    daily_alignment: Native daily series aligned to the analysis calendar.
+    sources:
+      - type: fred
+        id: NASDAQCOM
+      - type: yfinance
+        id: ^IXIC
+    cache_file: data/raw/variable_pool/Nasdaq_FRED_NASDAQCOM.csv
+    note: FRED NASDAQCOM is preferred; Yahoo Finance NASDAQ Composite is used when FRED is unreachable.
+
+  - name: NaturalGas
+    description: Henry Hub natural gas spot price.
+    auto_download: true
+    is_proxy: true
+    frequency: Daily
+    daily_alignment: Native daily series aligned to the analysis calendar.
+    sources:
+      - type: fred
+        id: DHHNGSP
+      - type: yfinance
+        id: NG=F
+    cache_file: data/raw/variable_pool/NaturalGas_FRED_DHHNGSP.csv
+    note: FRED Henry Hub spot price is preferred; Yahoo natural-gas futures are used as a daily proxy when FRED is unreachable.
+
+  - name: US2Y
+    description: 2-year U.S. Treasury yield.
+    auto_download: true
+    is_proxy: false
+    frequency: Daily
+    daily_alignment: Native daily series aligned to the analysis calendar.
+    sources:
+      - type: fred
+        id: DGS2
+      - type: treasury_yield_curve
+        id: 2 Yr
+    cache_file: data/raw/variable_pool/US2Y_FRED_DGS2.csv
+    note: FRED DGS2 is preferred; the U.S. Treasury daily yield curve is used when FRED is unreachable.
+
+  - name: FedFunds
+    description: Effective federal funds rate.
+    auto_download: true
+    is_proxy: false
+    frequency: Daily
+    daily_alignment: Native daily series aligned to the analysis calendar.
+    sources:
+      - type: fred
+        id: DFF
+      - type: nyfed_rate
+        id: EFFR
+    cache_file: data/raw/variable_pool/FedFunds_FRED_DFF.csv
+    note: FRED DFF is preferred; New York Fed EFFR is used when FRED is unreachable.
+
+  - name: CNYUSD
+    description: Chinese yuan per U.S. dollar spot exchange rate.
+    auto_download: true
+    is_proxy: false
+    frequency: Daily
+    daily_alignment: Native daily series aligned to the analysis calendar.
+    sources:
+      - type: fred
+        id: DEXCHUS
+      - type: yfinance
+        id: CNY=X
+    cache_file: data/raw/variable_pool/CNYUSD_FRED_DEXCHUS.csv
+    note: FRED DEXCHUS is preferred; Yahoo USD/CNY is used when FRED is unreachable.
+
+  - name: ShanghaiSC
+    description: Shanghai INE crude oil futures main-contract settlement price.
+    auto_download: true
+    is_proxy: false
+    frequency: Daily
+    daily_alignment: Native daily futures series aligned to the analysis calendar.
+    sources:
+      - type: exchange_futures_daily
+        id: INE:SC
+      - type: sina_main_futures
+        id: SC0
+    cache_file: data/raw/variable_pool/ShanghaiSC_INE_SC.csv
+    note: Shanghai International Energy Exchange SC crude oil futures. The fast default uses daily main-continuous futures quotes; set PREFER_OFFICIAL_EXCHANGE_FUTURES=1 to force official exchange daily files.
+
+  - name: ShanghaiFU
+    description: Shanghai Futures Exchange fuel oil futures main-contract settlement price.
+    auto_download: true
+    is_proxy: false
+    frequency: Daily
+    daily_alignment: Native daily futures series aligned to the analysis calendar.
+    sources:
+      - type: exchange_futures_daily
+        id: SHFE:FU
+      - type: sina_main_futures
+        id: FU0
+    cache_file: data/raw/variable_pool/ShanghaiFU_SHFE_FU.csv
+    note: Shanghai Futures Exchange FU fuel oil futures. The fast default uses daily main-continuous futures quotes; set PREFER_OFFICIAL_EXCHANGE_FUTURES=1 to force official exchange daily files.
+
+  - name: Brent
+    description: Brent crude oil futures price.
+    auto_download: true
+    is_proxy: false
+    frequency: Daily
+    daily_alignment: Native daily futures series aligned to the analysis calendar.
+    sources:
+      - type: existing_model_ready_column
+        id: Brent
+      - type: fred
+        id: DCOILBRENTEU
+      - type: yfinance
+        id: BZ=F
+      - type: stooq
+        id: CB.F
+      - type: stooq
+        id: SC.F
+    cache_file: data/raw/variable_pool/Brent_BZ_F.csv
+    note: Brent crude oil futures. Existing market-data column is preferred; FRED API, yfinance, and Stooq are automatic fallbacks.
+
+  - name: Gasoline
+    description: RBOB gasoline futures price.
+    auto_download: true
+    is_proxy: false
+    frequency: Daily
+    daily_alignment: Native daily futures series aligned to the analysis calendar.
+    sources:
+      - type: yfinance
+        id: RB=F
+      - type: stooq
+        id: RB.F
+    cache_file: data/raw/variable_pool/Gasoline_RB_F.csv
+    note: RBOB gasoline futures from Yahoo Finance with Stooq fallback.
+
+  - name: HeatingOil
+    description: Heating oil futures price.
+    auto_download: true
+    is_proxy: false
+    frequency: Daily
+    daily_alignment: Native daily futures series aligned to the analysis calendar.
+    sources:
+      - type: yfinance
+        id: HO=F
+      - type: stooq
+        id: HO.F
+    cache_file: data/raw/variable_pool/HeatingOil_HO_F.csv
+    note: Heating oil futures from Yahoo Finance with Stooq fallback.
+
+  - name: Copper
+    description: COMEX copper futures price.
+    auto_download: true
+    is_proxy: false
+    frequency: Daily
+    daily_alignment: Native daily futures series aligned to the analysis calendar.
+    sources:
+      - type: yfinance
+        id: HG=F
+      - type: stooq
+        id: HG.F
+    cache_file: data/raw/variable_pool/Copper_HG_F.csv
+    note: COMEX copper futures from Yahoo Finance with Stooq fallback.
+
+  - name: Silver
+    description: COMEX silver futures price.
+    auto_download: true
+    is_proxy: false
+    frequency: Daily
+    daily_alignment: Native daily futures series aligned to the analysis calendar.
+    sources:
+      - type: yfinance
+        id: SI=F
+      - type: stooq
+        id: SI.F
+    cache_file: data/raw/variable_pool/Silver_SI_F.csv
+    note: COMEX silver futures from Yahoo Finance with Stooq fallback.
+
+  - name: EPU
+    description: U.S. daily news-based economic policy uncertainty index.
+    auto_download: true
+    is_proxy: false
+    frequency: Daily
+    daily_alignment: Native daily series aligned to the analysis calendar.
+    sources:
+      - type: fred
+        id: USEPUINDXD
+      - type: policy_uncertainty_daily
+        id: US
+    cache_file: data/raw/variable_pool/EPU_FRED_USEPUINDXD.csv
+    note: FRED USEPUINDXD is preferred; policyuncertainty.com daily U.S. EPU CSV is used when FRED is unreachable.
+
+  - name: TPU
+    description: U.S. daily trade policy uncertainty index.
+    auto_download: true
+    is_proxy: false
+    frequency: Daily
+    daily_alignment: Native daily series aligned to the analysis calendar.
+    sources:
+      - type: policy_uncertainty_daily
+        id: TPU
+    cache_file: data/raw/variable_pool/TPU_policy_uncertainty_daily.csv
+    note: Official policyuncertainty.com daily trade policy uncertainty index.
+
+  - name: EMV
+    description: U.S. daily infectious disease equity-market volatility tracker.
+    auto_download: true
+    is_proxy: false
+    frequency: Daily
+    daily_alignment: Native daily series aligned to the analysis calendar.
+    sources:
+      - type: policy_uncertainty_daily
+        id: EMV
+    cache_file: data/raw/variable_pool/EMV_policy_uncertainty_daily.csv
+    note: Official policyuncertainty.com daily infectious-disease EMV index.

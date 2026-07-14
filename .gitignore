@@ -1,0 +1,29 @@
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Local environment variables
+.env
+API.env
+
+# Streamlit local config
+.streamlit/secrets.toml
+
+# Generated project outputs
+outputs/figures/*
+outputs/tables/*
+outputs/models/*
+dist/
+.playwright-cli/
+tmp/
+
+# Keep output directory structure when placeholder files are added later.
+!outputs/figures/.gitkeep
+!outputs/tables/.gitkeep
+!outputs/models/.gitkeep
