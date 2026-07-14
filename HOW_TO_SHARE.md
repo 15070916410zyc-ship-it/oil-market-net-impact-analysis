@@ -80,6 +80,11 @@ Do not share your private API key unless you intend to.
 The dashboard can open without API keys. The app uses public fallbacks when
 available, but personal FRED and EIA keys make online refreshes more stable.
 
+For Streamlit Community Cloud, configure API keys in the app's **Advanced
+settings > Secrets**. The hosted website hides the local API and cleanup tools
+so public visitors cannot change shared server settings or delete generated
+workspace files.
+
 ## Local uploaded variable format
 
 Local candidate variables can be uploaded from the Run Analysis page. Each file
@@ -94,3 +99,13 @@ Date, Value
 Leading title, note, or header rows are allowed. The app starts from the first
 row where column 1 can be parsed as a date and column 2 can be parsed as a
 numeric value. Each uploaded file is registered as one candidate variable.
+If it has the same variable name as an existing data source, the uploaded
+values take priority automatically.
+
+## Downloading cloud results
+
+Cloud-generated files are temporary and are not written back to GitHub. After
+the analysis completes, open **Net-Impact Results** and click **Download all
+results** to save one ZIP containing the generated tables, figures, reports,
+and model outputs. Raw uploads, caches, processed working data, API keys, and
+secrets are excluded from the ZIP.

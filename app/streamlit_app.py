@@ -9,8 +9,9 @@ import re
 import shutil
 from pathlib import Path
 import sys
-from typing import Any, Callable, Literal
+from typing import Any, Callable, Literal, Mapping
 import warnings
+from zipfile import ZIP_DEFLATED, ZipFile
 
 import pandas as pd
 import streamlit as st
@@ -33,6 +34,7 @@ API_KEY_ORDER = ["FRED_API_KEY", "EIA_API_KEY"]
 API_VALIDATION_CACHE: dict[str, dict[str, str]] = {}
 UI_LANGUAGE_STATE = "ui_language"
 LanguageCode = Literal["zh", "en"]
+RESULT_ARTIFACT_DIRECTORIES = ("tables", "figures", "reports", "models")
 
 VARIABLE_CHINESE_NAMES: dict[str, str] = {
     "WTI": "WTI 西得克萨斯中质原油期货价格",
@@ -140,6 +142,51 @@ PATHS = {
     "uploaded_variable_manifest": PROJECT_ROOT / "outputs" / "tables" / "uploaded_variable_manifest.xlsx",
     "uploaded_variable_quality_report": PROJECT_ROOT / "outputs" / "tables" / "uploaded_variable_quality_report.xlsx",
 }
+
+
+def is_cloud_runtime(
+    environment: Mapping[str, str] | None = None,
+    project_root: Path = PROJECT_ROOT,
+) -> bool:
+    """Return whether the app is running in a hosted Streamlit workspace."""
+    values = os.environ if environment is None else environment
+    explicit_mode = str(values.get("NET_IMPACT_RUNTIME_MODE", "")).strip().lower()
+    if explicit_mode in {"cloud", "hosted", "website"}:
+        return True
+    if explicit_mode in {"local", "desktop", "software"}:
+        return False
+    sharing_mode = str(values.get("STREAMLIT_SHARING_MODE", "")).strip().lower()
+    if sharing_mode in {"1", "true", "yes", "on"}:
+        return True
+    normalized_root = project_root.as_posix().lower().rstrip("/")
+    return normalized_root == "/mount/src" or normalized_root.startswith("/mount/src/")
+
+
+def prefer_existing_variable_values(options: Mapping[str, Any]) -> bool:
+    """Map the upload-priority option to the variable-pool merge behavior."""
+    return not bool(options.get("use_uploaded_local_data_first", True))
+
+
+def build_results_archive(project_root: Path = PROJECT_ROOT) -> tuple[bytes, list[str]]:
+    """Build an in-memory ZIP containing generated result artifacts only."""
+    root = Path(project_root)
+    artifacts: list[tuple[str, Path]] = []
+    for directory_name in RESULT_ARTIFACT_DIRECTORIES:
+        directory = root / "outputs" / directory_name
+        if not directory.exists():
+            continue
+        for path in directory.rglob("*"):
+            if path.is_file():
+                artifacts.append((path.relative_to(root).as_posix(), path))
+    artifacts.sort(key=lambda item: item[0])
+    if not artifacts:
+        return b"", []
+
+    archive_buffer = BytesIO()
+    with ZipFile(archive_buffer, mode="w", compression=ZIP_DEFLATED) as archive:
+        for archive_name, path in artifacts:
+            archive.write(path, arcname=archive_name)
+    return archive_buffer.getvalue(), [archive_name for archive_name, _ in artifacts]
 
 
 def localized_text(english: str, chinese: str, language: LanguageCode) -> str:
@@ -1920,6 +1967,8 @@ def render_api_settings_panel(status: dict[str, Any]) -> None:
 
 def render_top_tool_menu() -> None:
     """Render the compact top-right app tool menu."""
+    if is_cloud_runtime():
+        return
     status_info = api_key_status()
     api_missing = not bool(status_info.get("has_any_key"))
     api_invalid = bool(status_info.get("has_invalid_key"))
@@ -3995,7 +4044,7 @@ def run_paper_replication_setup_workflow(
         end_date=options["end_date"],
         auto_download=True,
         force_refresh=True,
-        prefer_existing=options["use_uploaded_local_data_first"],
+        prefer_existing=prefer_existing_variable_values(options),
         min_coverage=options["min_data_coverage"],
         selected_variables=options.get("selected_variable_pool"),
         protected_variables=options.get("paper_target_variables"),
@@ -4466,6 +4515,36 @@ def render_paper_replication_tab() -> None:
         f"Method settings: VMD K = {vmd_k_note}, penalty factor = 1000, MRGC maximum lag = 5 selected by BIC, VAR lag selected by BIC, rolling window = 120, and FEVD horizon h determined by the trading-day interval between selected-scale extrema.",
         f"方法设置：VMD K = {vmd_k_note}，惩罚因子 = 1000，MRGC 最大滞后阶数 5（BIC 选择），VAR 滞后阶数由 BIC 选择，滚动窗口 = 120，FEVD 预测期 h 由所选尺度极值之间的交易日间隔确定。",
     ))
+
+    archive_bytes, archive_names = build_results_archive()
+    with st.container(border=True):
+        action_col, download_col = st.columns([0.72, 0.28])
+        with action_col:
+            st.markdown(ui_text("**Result package**", "**结果文件包**"))
+            st.caption(
+                ui_text(
+                    "Cloud-generated files are temporary. Download the ZIP after each completed analysis.",
+                    "云端生成文件为临时文件，建议每次分析完成后立即下载 ZIP 保存。",
+                )
+            )
+        with download_col:
+            if archive_names:
+                st.download_button(
+                    ui_text("Download all results", "下载全部结果"),
+                    data=archive_bytes,
+                    file_name="multiscale_net_impact_results.zip",
+                    mime="application/zip",
+                    use_container_width=True,
+                    key="download_all_result_artifacts",
+                )
+                st.caption(ui_text(f"{len(archive_names)} files", f"共 {len(archive_names)} 个文件"))
+            else:
+                st.button(
+                    ui_text("No results yet", "暂无结果文件"),
+                    disabled=True,
+                    use_container_width=True,
+                    key="download_all_result_artifacts_empty",
+                )
 
     with st.container(border=True):
         st.subheader(ui_text("A. Method, Sample, and Event Window", "A. 方法、样本与事件窗口"))
@@ -5051,16 +5130,9 @@ def render_run_pipeline_tab(options: dict[str, Any]) -> None:
         st.session_state["net_impact_target_variables"] = list(net_targets)
         st.session_state["net_impact_explanatory_variables"] = list(net_explanatory)
         net_options["auto_download_expanded_variable_pool"] = True
-        n_col1, n_col2, n_col3 = st.columns(3)
+        net_options["use_uploaded_local_data_first"] = True
+        n_col1, n_col2 = st.columns(2)
         with n_col1:
-            net_options["use_uploaded_local_data_first"] = bool(
-                st.checkbox(
-                    ui_text("Use uploaded local data first", "优先使用本地上传数据"),
-                    value=bool(options.get("use_uploaded_local_data_first", False)),
-                    key="net_use_uploaded_local_data_first",
-                )
-            )
-        with n_col2:
             net_options["vmd_imf_count"] = int(
                 st.number_input(
                     ui_text("Number of VMD IMFs", "VMD IMF 数量"),
@@ -5078,7 +5150,7 @@ def render_run_pipeline_tab(options: dict[str, Any]) -> None:
                     key="net_vmd_imf_count",
                 )
             )
-        with n_col3:
+        with n_col2:
             net_options["min_data_coverage"] = float(
                 st.slider(
                     ui_text("Minimum data coverage", "最低数据覆盖率"),

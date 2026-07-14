@@ -2,6 +2,9 @@
 __pycache__/
 *.py[cod]
 *$py.class
+.coverage
+coverage.json
+htmlcov/
 
 # Virtual environments
 .venv/
@@ -16,8 +19,11 @@ API.env
 .streamlit/secrets.toml
 
 # Generated project outputs
+data/raw/
+data/processed/
 outputs/figures/*
 outputs/tables/*
+outputs/reports/*
 outputs/models/*
 dist/
 .playwright-cli/

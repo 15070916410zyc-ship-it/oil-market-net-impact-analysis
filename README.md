@@ -42,6 +42,26 @@ Date, Value
 The app starts from the first row where column 1 can be parsed as a date and
 column 2 can be parsed as a numeric value.
 
+When an uploaded variable has the same name as an existing variable, the
+uploaded values take priority automatically.
+
+## Cloud Results and File Lifetime
+
+On Streamlit Community Cloud, generated files are stored temporarily in the
+app container. They are not written back to GitHub or copied automatically to
+the visitor's computer, and they may be removed when the app restarts or is
+redeployed.
+
+After an analysis finishes, open **Net-Impact Results** and select **Download
+all results**. The ZIP contains generated tables, figures, reports, and model
+outputs. It intentionally excludes raw uploads, downloaded caches, processed
+working data, `API.env`, and Streamlit secrets.
+
+The API and workspace-cleanup menu is available in the local Windows software
+but hidden on the hosted website. Configure hosted API keys through the
+Streamlit deployment's **Advanced settings > Secrets** instead of saving an
+`API.env` file from the public interface.
+
 ## Run Locally
 
 Double-click the website launcher:
@@ -64,8 +84,8 @@ window to stop the app.
 
 ## Optional API Keys
 
-For more stable online data refreshes, use the top-right app menu or create
-`API.env` in the project folder:
+For more stable online data refreshes in the local Windows software, use the
+top-right app menu or create `API.env` in the project folder:
 
 ```text
 FRED_API_KEY=your_fred_api_key
