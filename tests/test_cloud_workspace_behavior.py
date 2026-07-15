@@ -108,6 +108,23 @@ class CloudWorkspaceBehaviorTests(unittest.TestCase):
         self.assertEqual(session_state[app.BROWSER_API_SESSION_STATE], restored)
         activate_keys.assert_called_once_with(restored, allow_shared_fallback=False)
 
+    def test_cloud_cookie_restore_fails_closed_without_crashing_the_app(self) -> None:
+        from app import streamlit_app as app
+
+        with (
+            patch.object(app, "is_cloud_runtime", return_value=True),
+            patch.object(
+                app,
+                "browser_api_cookie_encryption_key",
+                side_effect=RuntimeError("cloud secrets are temporarily unavailable"),
+            ),
+            patch.object(app, "set_session_api_keys") as activate_keys,
+        ):
+            restored = app.restore_api_credentials_for_request()
+
+        self.assertEqual(restored, {})
+        activate_keys.assert_called_once_with({}, allow_shared_fallback=False)
+
     def test_cloud_api_status_ignores_shared_file_and_environment_keys(self) -> None:
         from app import streamlit_app as app
 
