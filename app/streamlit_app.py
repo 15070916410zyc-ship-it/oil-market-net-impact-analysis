@@ -218,22 +218,48 @@ def ui_text(english: str, chinese: str) -> str:
 
 
 RUNTIME_TRANSLATIONS = {
+    "Data refresh and preparation: ": "数据更新与准备：",
+    "Data refresh completed. ": "数据更新完成。",
+    "Data refresh completed, but ": "数据更新已完成，但",
+    "Clean market data range: ": "清洗后市场数据范围：",
+    "Complete core-market range: ": "完整核心市场数据范围：",
+    "the clean market data range could not be verified": "无法确认清洗后市场数据范围",
+    "Complete core-market range could not be verified": "无法确认完整核心市场数据范围",
     "Data refresh and preparation": "数据更新与准备",
     "refreshing market and geopolitical-risk data": "正在更新市场与地缘政治风险数据",
     "Data refresh completed": "数据更新完成",
     "checking complete core market data freshness": "正在检查核心市场数据新鲜度",
     "Core market data freshness check passed": "核心市场数据新鲜度检查通过",
+    "Latest complete core-market row before strict cleaning: ": "严格清洗前最新完整核心市场数据日期：",
     "preparing model-ready data": "正在准备模型数据",
     "Model-ready data prepared": "模型数据准备完成",
     "refreshing and aligning the expanded candidate variable pool": "正在更新并对齐扩展候选变量池",
+    "Expanded variable pool refreshed and merged into model-ready data": "扩展变量池已更新并合并到模型数据",
     "Expanded variable pool refreshed and merged": "扩展变量池已更新并合并",
+    "Additional candidate columns: ": "新增候选变量：",
+    "The following explanatory variables were excluded before MRGC/FEVD because they did not pass the data-quality filter: ":
+        "以下解释变量因未通过数据质量筛选，已在 MRGC/FEVD 前剔除：",
+    "Lower the minimum data coverage or select variables with better coverage":
+        "请降低最低数据覆盖率，或选择覆盖更完整的变量",
+    "Prepared cleaned common data window after strict alignment: ": "严格对齐后的清洗公共数据窗口：",
+    "Pre-event window has ": "事件前窗口包含 ",
+    " complete observations; event window has ": " 个完整观测；事件窗口包含 ",
+    " complete observations": " 个完整观测",
+    "Data refresh and preparation workbook created: ": "数据更新与准备工作簿已生成：",
+    "Running VMD decomposition review with K = ": "正在运行 VMD 分解审查，K = ",
     "Running VMD decomposition review": "正在运行 VMD 分解审查",
     "VMD center-frequency review is ready": "VMD 中心频率审查已就绪",
+    "Determining selected-scale extrema and FEVD horizon h before TVP/FEVD":
+        "正在确定所选尺度极值与 FEVD 预测期 h，随后进入 TVP/FEVD",
     "Determining selected-scale extrema and FEVD horizon h": "正在确定所选尺度极值与 FEVD 预测期 h",
     "FEVD horizon h review is ready": "FEVD 预测期 h 审查已就绪",
+    "Running final TVP/VAR FEVD contribution and figures using the confirmed h":
+        "正在使用已确认的 h 运行最终 TVP/VAR FEVD 贡献分析并生成图形",
     "Running final TVP/VAR FEVD contribution": "正在运行最终 TVP/VAR FEVD 贡献分析",
     "No explanatory variable passed the data-quality filter": "没有解释变量通过数据质量筛选",
     "Dropped before": "在进入下一步前已剔除",
+    "none": "无",
+    "unavailable": "不可用",
     " to ": " 至 ",
     "warning": "警告",
 }
@@ -244,9 +270,67 @@ def localized_runtime_message(message: str, language: LanguageCode) -> str:
     text = str(message)
     if language == "en":
         return text
-    for english, chinese in RUNTIME_TRANSLATIONS.items():
+    for english, chinese in sorted(RUNTIME_TRANSLATIONS.items(), key=lambda item: len(item[0]), reverse=True):
         text = text.replace(english, chinese)
+    text = text.replace("...", "……")
+    text = re.sub(r"\.(?=$|\s)", "。", text)
+    text = re.sub(r"。\s+", "。", text)
     return text
+
+
+WORKFLOW_COLUMN_TRANSLATIONS = {
+    "Variable": "变量",
+    "AutoDownload": "自动下载",
+    "UpdateResult": "更新结果",
+    "Status": "状态",
+    "DateCoverage": "日期覆盖",
+    "CoveragePercent": "覆盖率",
+    "MissingCount": "缺失数量",
+    "EarliestDate": "最早日期",
+    "LatestDate": "最新日期",
+    "StaleDays": "滞后天数",
+    "QualityAction": "质量处理",
+    "QualityReason": "质量说明",
+    "ActualSource": "实际来源",
+    "Note": "说明",
+    "NonMissingCount": "非缺失数量",
+    "CommonStartDate": "公共开始日期",
+    "CommonEndDate": "公共结束日期",
+    "CommonStartLimitedBy": "开始日期限制因素",
+    "CommonEndLimitedBy": "结束日期限制因素",
+    "CleanedCommonStartDate": "清洗后公共开始日期",
+    "CleanedCommonEndDate": "清洗后公共结束日期",
+    "CommonWindowStatus": "公共窗口状态",
+    "AlignmentNote": "对齐说明",
+    "IMF": "本征模态分量",
+    "VMD_K": "VMD 分量数量",
+    "CenterFrequencyCyclesPerObservation": "中心频率",
+    "CenterPeriodObservations": "中心周期观测数",
+    "Observations": "观测数",
+    "SampleStartDate": "样本开始日期",
+    "SampleEndDate": "样本结束日期",
+    "Target": "目标变量",
+    "SelectedScale": "所选主尺度",
+    "EventStartDate": "事件开始日期",
+    "SelectedScaleMinimumDate": "主尺度极小值日期",
+    "SelectedScaleMaximumDate": "主尺度极大值日期",
+    "TradingDayInterval": "交易日间隔",
+    "CalendarDayInterval": "自然日间隔",
+    "FEVD_h": "FEVD 预测期 h",
+}
+
+
+def localized_workflow_frame(frame: pd.DataFrame, language: LanguageCode | None = None) -> pd.DataFrame:
+    """Return a display-only workflow table with readable localized headings."""
+    active_language = current_language() if language is None else language
+    if active_language == "en":
+        return frame.rename(columns=lambda column: str(column).replace("_", " ").replace("^", ""))
+    return frame.rename(
+        columns=lambda column: WORKFLOW_COLUMN_TRANSLATIONS.get(
+            str(column),
+            str(column).replace("_", " ").replace("^", ""),
+        )
+    )
 
 
 def render_language_switcher() -> None:
@@ -1883,13 +1967,16 @@ def restore_api_credentials_for_request() -> dict[str, str]:
         set_session_api_keys({}, allow_shared_fallback=True)
         return {}
 
-    restored = dict(st.session_state.get(BROWSER_API_SESSION_STATE, {}))
-    encryption_key = browser_api_cookie_encryption_key()
-    if encryption_key:
-        token = read_browser_api_cookie()
-        if token is not None:
-            restored = decrypt_api_keys(token, encryption_key)
-            st.session_state[BROWSER_API_SESSION_STATE] = restored
+    try:
+        restored = dict(st.session_state.get(BROWSER_API_SESSION_STATE, {}))
+        encryption_key = browser_api_cookie_encryption_key()
+        if encryption_key:
+            token = read_browser_api_cookie()
+            if token is not None:
+                restored = decrypt_api_keys(token, encryption_key)
+                st.session_state[BROWSER_API_SESSION_STATE] = restored
+    except Exception:  # noqa: BLE001 - credential persistence must never take down the website.
+        restored = {}
     set_session_api_keys(restored, allow_shared_fallback=False)
     return restored
 
@@ -3919,80 +4006,99 @@ def display_variable_pool_update_result(summary: dict[str, Any]) -> None:
     workbook_path_text = str(summary.get("data_refresh_preparation_workbook_path") or "")
 
     cols = st.columns(6)
-    cols[0].metric("Selected variables", selected_count)
-    cols[1].metric("Auto-refresh attempts", auto_attempts)
-    cols[2].metric("Fresh online updates", auto_updated_count)
-    cols[3].metric("Auto-refresh failures", failed_count)
-    cols[4].metric("Full pre-clean coverage", full_coverage_count)
-    cols[5].metric("Kept for analysis", passed_quality_count)
+    cols[0].metric(ui_text("Selected variables", "所选变量"), selected_count)
+    cols[1].metric(ui_text("Auto-refresh attempts", "自动更新尝试"), auto_attempts)
+    cols[2].metric(ui_text("Fresh online updates", "在线更新成功"), auto_updated_count)
+    cols[3].metric(ui_text("Auto-refresh failures", "自动更新失败"), failed_count)
+    cols[4].metric(ui_text("Full pre-clean coverage", "清洗前完整覆盖"), full_coverage_count)
+    cols[5].metric(ui_text("Kept for analysis", "保留用于分析"), passed_quality_count)
     if selected_count:
-        st.caption(
+        st.caption(ui_text(
             f"{auto_attempts} selected variables require an online refresh attempt. "
             f"{selected_count} selected variables are checked after combining targets, existing data, "
-            "online refreshes, local uploads, and any usable prior app data."
-        )
-        st.caption(
+            "online refreshes, local uploads, and any usable prior app data.",
+            f"{auto_attempts} 个所选变量需要尝试在线更新。合并目标变量、现有数据、在线更新、"
+            f"本地上传和可用的历史数据后，共检查 {selected_count} 个所选变量。",
+        ))
+        st.caption(ui_text(
             "Rows marked Core/model-ready data are not separate variable-pool downloads; "
-            "they are target or core columns already prepared by the market-data step."
-        )
+            "they are target or core columns already prepared by the market-data step.",
+            "标记为“核心/模型数据”的行并非单独下载，而是市场数据步骤已准备好的目标或核心字段。",
+        ))
 
     for warning_text in summary_warnings:
         if warning_text in {selected_window_coverage_note, cleaned_shortfall_note}:
             continue
-        st.warning(warning_text)
+        st.warning(localized_runtime_message(warning_text, current_language()))
 
     if required_start and required_end:
-        st.caption(f"Requested data refresh period: {required_start} to {required_end}")
+        st.caption(ui_text(
+            f"Requested data refresh period: {required_start} to {required_end}",
+            f"请求的数据更新区间：{required_start} 至 {required_end}",
+        ))
     if requested_window_start and requested_window_end:
-        st.caption(
+        st.caption(ui_text(
             f"Requested pre-event window: {requested_window_start} to {requested_window_end} "
-            f"({requested_window_days} business days before strict cleaning)"
-        )
+            f"({requested_window_days} business days before strict cleaning)",
+            f"请求的事件前窗口：{requested_window_start} 至 {requested_window_end}"
+            f"（严格清洗前 {requested_window_days} 个工作日）",
+        ))
     if selected_start and selected_end:
-        st.caption(f"Initially selected event window: {selected_start} to {selected_end}")
+        st.caption(ui_text(
+            f"Initially selected event window: {selected_start} to {selected_end}",
+            f"最初选择的事件窗口：{selected_start} 至 {selected_end}",
+        ))
     period_table = build_data_refresh_period_summary_table(summary, expanded)
     if not period_table.empty:
-        st.write("Window and Event Periods")
-        st.table(period_table)
+        st.write(ui_text("Window and Event Periods", "窗口与事件期间"))
+        st.table(localized_workflow_frame(period_table))
     if cleaned_shortfall_note:
-        st.warning(cleaned_shortfall_note)
+        st.warning(localized_runtime_message(cleaned_shortfall_note, current_language()))
     if cleaned_gap_note:
-        st.info(cleaned_gap_note)
+        st.info(localized_runtime_message(cleaned_gap_note, current_language()))
     if common_data_start and common_data_end:
         window_cols = st.columns(2)
-        window_cols[0].metric("Cleaned common data start", common_data_start)
-        window_cols[1].metric("Cleaned common data end", common_data_end)
-        st.info(
+        window_cols[0].metric(ui_text("Cleaned common data start", "清洗后公共数据开始日期"), common_data_start)
+        window_cols[1].metric(ui_text("Cleaned common data end", "清洗后公共数据结束日期"), common_data_end)
+        st.info(ui_text(
             "The cleaned common data window is "
             f"{common_data_start} to {common_data_end}. "
             "It is computed after strict complete-case cleaning: the start is the latest first valid date "
-            "among retained variables, and the end is the earliest last valid date among retained variables."
-        )
+            "among retained variables, and the end is the earliest last valid date among retained variables.",
+            f"清洗后的公共数据窗口为 {common_data_start} 至 {common_data_end}。"
+            "该区间在严格完整样本清洗后计算：开始日期取保留变量中最晚的首个有效日期，"
+            "结束日期取最早的最后有效日期。",
+        ))
         limit_parts = []
         if common_start_limited_by:
-            limit_parts.append(f"start limited by: {common_start_limited_by}")
+            limit_parts.append(ui_text(f"start limited by: {common_start_limited_by}", f"开始日期受限于：{common_start_limited_by}"))
         if common_end_limited_by:
-            limit_parts.append(f"end limited by: {common_end_limited_by}")
+            limit_parts.append(ui_text(f"end limited by: {common_end_limited_by}", f"结束日期受限于：{common_end_limited_by}"))
         if common_window_status:
-            limit_parts.append(f"common window status: {common_window_status}")
+            limit_parts.append(ui_text(f"common window status: {common_window_status}", f"公共窗口状态：{common_window_status}"))
         if limit_parts:
-            st.caption("Common-window limits: " + " | ".join(limit_parts))
+            st.caption(ui_text("Common-window limits: ", "公共窗口限制：") + " | ".join(limit_parts))
         if selected_start and selected_end and not selected_window_fully_covered:
-            st.warning(
+            st.warning(ui_text(
                 f"The initially selected event window was {selected_start} to {selected_end}, "
                 f"but the retained variables jointly cover {common_data_start} to {common_data_end}. "
-                "VMD, MRGC, and FEVD will use only the complete observations inside the cleaned common window."
-            )
+                "VMD, MRGC, and FEVD will use only the complete observations inside the cleaned common window.",
+                f"最初选择的事件窗口为 {selected_start} 至 {selected_end}，但保留变量的共同覆盖区间为 "
+                f"{common_data_start} 至 {common_data_end}。VMD、MRGC 和 FEVD 将只使用清洗后公共窗口内的完整观测。",
+            ))
     if date_alignment_note:
-        st.info(date_alignment_note)
+        st.info(localized_runtime_message(date_alignment_note, current_language()))
 
     if auto_updated_names:
-        st.success("Automatically updated variables: " + ", ".join(auto_updated_names))
+        st.success(ui_text("Automatically updated variables: ", "已自动更新变量：") + ", ".join(auto_updated_names))
     elif auto_attempts:
-        st.info("No selected variable needed a fresh automatic download; existing or cached data may have been used.")
+        st.info(ui_text(
+            "No selected variable needed a fresh automatic download; existing or cached data may have been used.",
+            "所选变量均无需重新自动下载，可能已使用现有数据或缓存数据。",
+        ))
 
     if failed_names:
-        st.error("Automatic update failed for: " + ", ".join(failed_names))
+        st.error(ui_text("Automatic update failed for: ", "自动更新失败的变量：") + ", ".join(failed_names))
         if not review_table.empty and "Variable" in review_table.columns:
             failed_detail_mask = review_table["Variable"].astype(str).isin([str(name) for name in failed_names])
             if "UpdateResult" in review_table.columns:
@@ -4019,43 +4125,57 @@ def display_variable_pool_update_result(summary: dict[str, Any]) -> None:
             ]
             detail_columns = [column for column in detail_columns if column in failed_details.columns]
             if detail_columns:
-                st.write("Automatic update failure details")
-                st.dataframe(failed_details[detail_columns], use_container_width=True, hide_index=True)
+                st.write(ui_text("Automatic update failure details", "自动更新失败详情"))
+                st.dataframe(localized_workflow_frame(failed_details[detail_columns]), use_container_width=True, hide_index=True)
     elif auto_attempts:
-        st.success("No selected auto-download variable failed.")
+        st.success(ui_text("No selected auto-download variable failed.", "所选自动下载变量均未失败。"))
 
     if incomplete_coverage_names:
-        st.warning(
+        st.warning(ui_text(
             "These selected variables have gaps before strict complete-case cleaning: "
             + ", ".join(incomplete_coverage_names)
-            + ". They remain selected; the workflow only removes dates where at least one retained variable is missing."
-        )
+            + ". They remain selected; the workflow only removes dates where at least one retained variable is missing.",
+            "以下所选变量在严格完整样本清洗前存在缺口："
+            + ", ".join(incomplete_coverage_names)
+            + "。这些变量仍会保留；流程只移除至少一个保留变量缺失的日期。",
+        ))
     elif not review_table.empty:
-        st.success("All selected variables fully cover the requested data before strict cleaning.")
+        st.success(ui_text(
+            "All selected variables fully cover the requested data before strict cleaning.",
+            "严格清洗前，所有所选变量均完整覆盖请求的数据区间。",
+        ))
 
     if failed_names:
-        st.warning(
+        st.warning(ui_text(
             "The variable pool was prepared with available data, but some selected online "
             "variables could not be refreshed. Add a FRED API key, check the network, or "
-            "remove the failed variables before running the final analysis."
-        )
+            "remove the failed variables before running the final analysis.",
+            "变量池已使用可用数据完成准备，但部分所选在线变量无法更新。请填写 FRED API 密钥、"
+            "检查网络，或在运行最终分析前移除失败变量。",
+        ))
     elif incomplete_coverage_names:
-        st.warning(
+        st.warning(ui_text(
             "The variable pool was prepared, but some selected variables have pre-clean date gaps. "
-            "Strict complete-case cleaning will remove any date where a retained variable is missing."
-        )
+            "Strict complete-case cleaning will remove any date where a retained variable is missing.",
+            "变量池已准备完成，但部分所选变量在清洗前存在日期缺口。严格完整样本清洗将移除"
+            "任一保留变量缺失的日期。",
+        ))
     elif successful_count == 0 and auto_attempts:
-        st.warning("No selected auto-download variable produced usable online or cached data.")
+        st.warning(ui_text(
+            "No selected auto-download variable produced usable online or cached data.",
+            "所选自动下载变量均未获得可用的在线或缓存数据。",
+        ))
     elif auto_attempts and passed_auto_quality_count == 0:
-        st.warning(
+        st.warning(ui_text(
             "Expanded variables were available, but none of the selected auto-download "
-            "variables passed the quality filter."
-        )
+            "variables passed the quality filter.",
+            "扩展变量已有数据，但所选自动下载变量均未通过质量筛选。",
+        ))
     else:
-        st.success("Expanded variable pool is ready for the selected variables.")
+        st.success(ui_text("Expanded variable pool is ready for the selected variables.", "所选变量的扩展变量池已准备就绪。"))
 
     if not review_table.empty:
-        st.write("Variable update ranges and date-coverage review")
+        st.write(ui_text("Variable update ranges and date-coverage review", "变量更新范围与日期覆盖审查"))
         display_columns = [
             "Variable",
             "AutoDownload",
@@ -4073,7 +4193,7 @@ def display_variable_pool_update_result(summary: dict[str, Any]) -> None:
             "Note",
         ]
         st.dataframe(
-            review_table[[column for column in display_columns if column in review_table.columns]],
+            localized_workflow_frame(review_table[[column for column in display_columns if column in review_table.columns]]),
             use_container_width=True,
             hide_index=True,
         )
@@ -4085,7 +4205,7 @@ def display_variable_pool_update_result(summary: dict[str, Any]) -> None:
         else pd.DataFrame(raw_alignment_table or [])
     )
     if not alignment_table.empty:
-        st.write("Variable date-alignment window")
+        st.write(ui_text("Variable date-alignment window", "变量日期对齐窗口"))
         alignment_columns = [
             "Variable",
             "EarliestDate",
@@ -4102,7 +4222,7 @@ def display_variable_pool_update_result(summary: dict[str, Any]) -> None:
             "AlignmentNote",
         ]
         st.dataframe(
-            alignment_table[[column for column in alignment_columns if column in alignment_table.columns]],
+            localized_workflow_frame(alignment_table[[column for column in alignment_columns if column in alignment_table.columns]]),
             use_container_width=True,
             hide_index=True,
         )
@@ -4112,9 +4232,9 @@ def display_variable_pool_update_result(summary: dict[str, Any]) -> None:
     if workbook_path_text:
         workbook_path = Path(workbook_path_text)
         if workbook_path.exists():
-            st.success(f"Data refresh and preparation workbook: {workbook_path}")
+            st.success(ui_text(f"Data refresh and preparation workbook: {workbook_path}", f"数据更新与准备工作簿：{workbook_path}"))
             st.download_button(
-                "Download Data Refresh and Preparation Workbook",
+                ui_text("Download Data Refresh and Preparation Workbook", "下载数据更新与准备工作簿"),
                 data=workbook_path.read_bytes(),
                 file_name=workbook_path.name,
                 mime=_download_mime(workbook_path),
@@ -4122,16 +4242,19 @@ def display_variable_pool_update_result(summary: dict[str, Any]) -> None:
                 use_container_width=True,
             )
         else:
-            st.warning(f"Data refresh and preparation workbook was expected but is missing: {workbook_path}")
+            st.warning(ui_text(
+                f"Data refresh and preparation workbook was expected but is missing: {workbook_path}",
+                f"应生成的数据更新与准备工作簿不存在：{workbook_path}",
+            ))
     if expanded is not None:
-        st.write("Expanded variable pool preview")
-        st.dataframe(expanded.tail(20), use_container_width=True)
+        st.write(ui_text("Expanded variable pool preview", "扩展变量池预览"))
+        st.dataframe(localized_workflow_frame(expanded.tail(20)), use_container_width=True)
     if status is not None:
-        st.write("Download status log")
-        st.dataframe(status, use_container_width=True)
+        st.write(ui_text("Download status log", "下载状态日志"))
+        st.dataframe(localized_workflow_frame(status), use_container_width=True)
     if quality is not None:
-        st.write("Quality filter report")
-        st.dataframe(quality, use_container_width=True)
+        st.write(ui_text("Quality filter report", "质量筛选报告"))
+        st.dataframe(localized_workflow_frame(quality), use_container_width=True)
 
 
 def quality_filtered_explanatory_variables(
@@ -4722,7 +4845,7 @@ def render_paper_replication_tab() -> None:
         )
     )
     summary_for_method_note = load_excel_if_exists(PATHS["paper_summary"])
-    vmd_k_note = "selected K"
+    vmd_k_note = ui_text("selected K", "所选 K")
     if summary_for_method_note is not None and {"Item", "Value"}.issubset(summary_for_method_note.columns):
         value = summary_for_method_note.loc[summary_for_method_note["Item"].astype(str).eq("VMD K"), "Value"]
         if not value.empty:
@@ -5010,7 +5133,7 @@ def render_downloadable_table(
         st.info(ui_text(f"{title} is not available yet.", f"{title} 尚未生成。"))
         return
     display_table = table.tail(max_rows) if max_rows and len(table) > max_rows else table
-    st.dataframe(display_table, use_container_width=True)
+    st.dataframe(localized_workflow_frame(display_table), use_container_width=True)
 
 
 def render_downloadable_image(title: str, path: Path, description: str | None = None) -> None:
@@ -5076,7 +5199,10 @@ def render_upload_controls(options: dict[str, Any]) -> None:
         upload_status = st.session_state.pop("local_upload_status_message", None)
         if upload_status:
             status_level = upload_status.get("level", "success")
-            status_text = upload_status.get("text", "")
+            status_text = ui_text(
+                str(upload_status.get("text_en", upload_status.get("text", ""))),
+                str(upload_status.get("text_zh", upload_status.get("text", ""))),
+            )
             if status_level == "warning":
                 st.warning(status_text)
             elif status_level == "error":
@@ -5111,26 +5237,30 @@ def render_upload_controls(options: dict[str, Any]) -> None:
                         preview = read_uploaded_file_to_dataframe(uploaded_file)
                     except Exception as exc:  # noqa: BLE001 - keep other uploads configurable.
                         error_text = safe_exception_text(exc)
-                        st.error(f"Could not read this file: {error_text}")
+                        st.error(ui_text(f"Could not read this file: {error_text}", f"无法读取此文件：{error_text}"))
                         preprocess_rows.append(uploaded_preprocess_failure_row(safe_name, error_text))
                         continue
                     if preview.empty:
-                        st.error("This file is empty.")
+                        st.error(ui_text("This file is empty.", "此文件为空。"))
                         preprocess_rows.append(uploaded_preprocess_failure_row(safe_name, "This file is empty."))
                         continue
                     columns = [str(column) for column in preview.columns]
                     try:
                         date_column, value_column = automatic_uploaded_column_mapping(columns)
                     except ValueError as exc:
-                        st.error(str(exc))
+                        st.error(ui_text(
+                            str(exc),
+                            "列映射失败：文件必须恰好包含两列，第一列为日期，第二列为数值。",
+                        ))
                         preprocess_rows.append(uploaded_preprocess_failure_row(safe_name, str(exc)))
                         continue
                     value_values = coerce_uploaded_numeric_series(preview[value_column])
                     if value_values.notna().sum() == 0:
-                        st.error(
+                        st.error(ui_text(
                             "The second column could not be parsed as numeric values. "
-                            "Use numeric values such as 72.35, 1,234.5, or 2.3%."
-                        )
+                            "Use numeric values such as 72.35, 1,234.5, or 2.3%.",
+                            "第 2 列无法解析为数值。请使用 72.35、1,234.5 或 2.3% 等数值格式。",
+                        ))
                         preprocess_rows.append(
                             uploaded_preprocess_failure_row(
                                 safe_name,
@@ -5157,18 +5287,21 @@ def render_upload_controls(options: dict[str, Any]) -> None:
                     try:
                         sanitized_variable_name = sanitize_variable_name(variable_name)
                     except ValueError as exc:
-                        st.error(str(exc))
+                        st.error(ui_text(
+                            str(exc),
+                            "变量名称无效，请使用字母和数字组成一个唯一名称。",
+                        ))
                         preprocess_rows.append(uploaded_preprocess_failure_row(safe_name, str(exc), variable_name))
                         continue
                     if sanitized_variable_name in seen_upload_variable_names:
                         duplicate_note = f"Duplicate variable name '{sanitized_variable_name}'. Use a unique name for each file."
-                        st.error(duplicate_note)
+                        st.error(ui_text(duplicate_note, f"变量名称“{sanitized_variable_name}”重复，请为每个文件使用唯一名称。"))
                         preprocess_rows.append(
                             uploaded_preprocess_failure_row(safe_name, duplicate_note, sanitized_variable_name)
                         )
                         continue
                     seen_upload_variable_names.add(sanitized_variable_name)
-                    st.caption("Preprocessed preview")
+                    st.caption(ui_text("Preprocessed preview", "预处理预览"))
                     st.dataframe(mapped_preview, use_container_width=True, hide_index=True)
                     preprocess_rows.append(
                         uploaded_preprocess_summary_row(
@@ -5191,13 +5324,19 @@ def render_upload_controls(options: dict[str, Any]) -> None:
                         }
                     )
             if preprocess_rows:
-                st.subheader("Preprocessing Confirmation")
-                st.dataframe(pd.DataFrame(preprocess_rows), use_container_width=True, hide_index=True)
+                st.subheader(ui_text("Preprocessing Confirmation", "确认预处理结果"))
+                st.dataframe(localized_workflow_frame(pd.DataFrame(preprocess_rows)), use_container_width=True, hide_index=True)
                 if len(upload_jobs) < len(uploaded_files):
-                    st.warning("Only files with Ready status will be added to the variable pool after confirmation.")
-            if st.button("Confirm and Add to Variable Pool", use_container_width=True, disabled=not upload_jobs):
+                    st.warning(ui_text(
+                        "Only files with Ready status will be added to the variable pool after confirmation.",
+                        "确认后，只有状态为“就绪”的文件会加入变量池。",
+                    ))
+            if st.button(ui_text("Confirm and Add to Variable Pool", "确认并加入变量池"), use_container_width=True, disabled=not upload_jobs):
                 if not upload_jobs:
-                    st.warning("No valid upload is ready. Check that each file has exactly two columns: Date and Value.")
+                    st.warning(ui_text(
+                        "No valid upload is ready. Check that each file has exactly two columns: Date and Value.",
+                        "没有可用的上传文件。请确认每个文件恰好包含两列：日期和值。",
+                    ))
                     return
                 saved_paths, upload_report = save_standardized_uploaded_variables(
                     upload_jobs,
@@ -5216,30 +5355,37 @@ def render_upload_controls(options: dict[str, Any]) -> None:
                         )
                     st.session_state["local_upload_status_message"] = {
                         "level": "success",
-                        "text": (
+                        "text_en": (
                             "Uploaded variables saved, registered, and selectors refreshed: "
                             + ", ".join(path.stem for path in saved_paths)
                             + "."
                             + merge_note
                         ),
+                        "text_zh": "上传变量已保存并注册，变量选择器已更新："
+                        + ", ".join(path.stem for path in saved_paths)
+                        + "。",
                     }
-                    st.dataframe(upload_report, use_container_width=True)
+                    st.dataframe(localized_workflow_frame(upload_report), use_container_width=True)
                     if (upload_report["Coverage"] < float(options["min_data_coverage"])).any():
-                        st.warning(
+                        st.warning(ui_text(
                             "At least one uploaded variable has lower coverage than the current minimum data coverage. "
-                            "It is saved, but quality filtering may drop it during analysis."
-                        )
+                            "It is saved, but quality filtering may drop it during analysis.",
+                            "至少一个上传变量的覆盖率低于当前最低要求。文件已保存，但分析时可能被质量筛选剔除。",
+                        ))
                     st.rerun()
                 elif not upload_report.empty:
-                    st.error("No uploaded variable was saved. Review the validation report below.")
-                    st.dataframe(upload_report, use_container_width=True)
+                    st.error(ui_text("No uploaded variable was saved. Review the validation report below.", "未保存任何上传变量，请检查下方验证报告。"))
+                    st.dataframe(localized_workflow_frame(upload_report), use_container_width=True)
                 else:
-                    st.warning("No uploaded variable was saved. Check that at least one configured upload is valid.")
+                    st.warning(ui_text(
+                        "No uploaded variable was saved. Check that at least one configured upload is valid.",
+                        "未保存任何上传变量，请确认至少有一个已配置文件有效。",
+                    ))
         else:
             existing_manifest = load_excel_if_exists(PATHS["uploaded_variable_manifest"])
             if existing_manifest is not None and not existing_manifest.empty:
-                st.write("Registered uploaded variables")
-                st.dataframe(existing_manifest, use_container_width=True)
+                st.write(ui_text("Registered uploaded variables", "已注册的上传变量"))
+                st.dataframe(localized_workflow_frame(existing_manifest), use_container_width=True)
 
 
 def render_run_pipeline_tab(options: dict[str, Any]) -> None:
@@ -5457,7 +5603,10 @@ def render_run_pipeline_tab(options: dict[str, Any]) -> None:
                 status_box.warning(ui_text("Data refresh review is ready. Confirm below before VMD starts.", "数据更新审查已就绪，请确认后开始 VMD。"))
                 st.info(ui_text("Review the workbook, period table, and variable coverage, then confirm to continue.", "请检查工作簿、期间表和变量覆盖情况，然后确认继续。"))
             except Exception as exc:  # noqa: BLE001 - keep Streamlit page alive.
-                st.error(f"Net-impact analysis failed: {safe_exception_text(exc)}")
+                st.error(ui_text(
+                    f"Net-impact analysis failed: {safe_exception_text(exc)}",
+                    f"净影响分析失败：{safe_exception_text(exc)}",
+                ))
 
         pending_setup = st.session_state.get(NET_IMPACT_CONFIRMATION_STATE)
         if pending_setup:
@@ -5470,12 +5619,13 @@ def render_run_pipeline_tab(options: dict[str, Any]) -> None:
                 st.session_state.pop(NET_IMPACT_CONFIRMATION_STATE, None)
                 st.session_state.pop(NET_IMPACT_VMD_CONFIRMATION_STATE, None)
                 st.session_state.pop(NET_IMPACT_TVP_CONFIRMATION_STATE, None)
-                st.warning(
+                st.warning(ui_text(
                     "The pending run was cleared because it used variables that are no longer available "
-                    "in the daily-only variable pool: "
-                    + ", ".join(unavailable_pending)
-                    + ". Re-run the analysis with the current selections."
-                )
+                    "in the daily-only variable pool: " + ", ".join(unavailable_pending)
+                    + ". Re-run the analysis with the current selections.",
+                    "待处理分析已清除，因为以下变量已不在日频变量池中：" + ", ".join(unavailable_pending)
+                    + "。请使用当前选择重新运行分析。",
+                ))
                 pending_setup = None
         if pending_setup:
             with st.container(border=True):
@@ -5492,24 +5642,32 @@ def render_run_pipeline_tab(options: dict[str, Any]) -> None:
                 effective_event_end = str(
                     variable_summary.get("effective_event_end_date") or pending_options.get("end_date", "")
                 )
-                st.caption(
+                st.caption(ui_text(
                     "Pending run: effective "
                     f"{effective_event_start} to {effective_event_end} "
-                    f"(initially selected {initial_start} to {initial_end}) | "
-                    "Targets: "
+                    f"(initially selected {initial_start} to {initial_end}) | Targets: "
                     + (", ".join(saved_targets) if saved_targets else "none")
                     + " | Explanatory variables: "
-                    + (", ".join(saved_explanatory) if saved_explanatory else "none")
-                )
+                    + (", ".join(saved_explanatory) if saved_explanatory else "none"),
+                    "待处理分析：有效区间 "
+                    f"{effective_event_start} 至 {effective_event_end}"
+                    f"（最初选择 {initial_start} 至 {initial_end}） | 目标变量："
+                    + (", ".join(saved_targets) if saved_targets else "无")
+                    + " | 解释变量："
+                    + (", ".join(saved_explanatory) if saved_explanatory else "无"),
+                ))
                 display_variable_pool_update_result(variable_summary)
                 next_step_variables = variable_summary.get("candidate_variables_for_next_step", []) or []
                 dropped_variables = variable_summary.get("dropped_explanatory_variables", []) or []
                 if next_step_variables:
                     st.success(ui_text("Variables entering VMD/MRGC/FEVD: ", "将进入 VMD/MRGC/FEVD 的变量：") + ", ".join(next_step_variables))
                 else:
-                    st.error("No explanatory variable passed the quality filter, so the next step cannot run yet.")
+                    st.error(ui_text(
+                        "No explanatory variable passed the quality filter, so the next step cannot run yet.",
+                        "没有解释变量通过质量筛选，暂时无法进入下一步。",
+                    ))
                 if dropped_variables:
-                    st.warning("Dropped before VMD/MRGC/FEVD: " + ", ".join(dropped_variables))
+                    st.warning(ui_text("Dropped before VMD/MRGC/FEVD: ", "在 VMD/MRGC/FEVD 前已剔除：") + ", ".join(dropped_variables))
 
                 confirm_col, cancel_col = st.columns(2)
                 if confirm_col.button(
@@ -5531,10 +5689,12 @@ def render_run_pipeline_tab(options: dict[str, Any]) -> None:
                         status_box.warning(ui_text("VMD center-frequency review is ready. Confirm before h is determined.", "VMD 中心频率审查已就绪，请确认后确定 h。"))
                         st.info(ui_text("Review the VMD center-frequency table, then confirm.", "请检查 VMD 中心频率表，然后确认。"))
                     except Exception as exc:  # noqa: BLE001 - keep Streamlit page alive.
-                        st.error(
+                        st.error(ui_text(
                             "VMD decomposition review failed after variable confirmation: "
-                            f"{safe_exception_text(exc)}"
-                        )
+                            f"{safe_exception_text(exc)}",
+                            "确认变量后，VMD 分解审查失败："
+                            f"{safe_exception_text(exc)}",
+                        ))
                 if cancel_col.button(ui_text("Cancel Pending Analysis", "取消待处理分析"), use_container_width=True):
                     st.session_state.pop(NET_IMPACT_CONFIRMATION_STATE, None)
                     st.session_state.pop(NET_IMPACT_VMD_CONFIRMATION_STATE, None)
@@ -5547,11 +5707,12 @@ def render_run_pipeline_tab(options: dict[str, Any]) -> None:
                 st.subheader(ui_text("Confirm VMD Decomposition Before h Review", "在 h 审查前确认 VMD 分解"))
                 pending_options = pending_vmd_setup.get("options", {})
                 vmd_k = int(pending_options.get("vmd_imf_count", 4))
-                st.caption(
+                st.caption(ui_text(
                     "Pending VMD review: "
-                    f"K = {vmd_k} | "
-                    f"{pending_options.get('start_date', '')} to {pending_options.get('end_date', '')}"
-                )
+                    f"K = {vmd_k} | {pending_options.get('start_date', '')} to {pending_options.get('end_date', '')}",
+                    "待处理 VMD 审查："
+                    f"K = {vmd_k} | {pending_options.get('start_date', '')} 至 {pending_options.get('end_date', '')}",
+                ))
                 vmd_review = pending_vmd_setup.get("vmd_center_frequencies")
                 vmd_review_df = (
                     vmd_review
@@ -5559,14 +5720,14 @@ def render_run_pipeline_tab(options: dict[str, Any]) -> None:
                     else pd.DataFrame(vmd_review or [])
                 )
                 if vmd_review_df.empty:
-                    st.error("VMD center-frequency table is empty. Re-run the previous step.")
+                    st.error(ui_text("VMD center-frequency table is empty. Re-run the previous step.", "VMD 中心频率表为空，请重新运行上一步。"))
                 else:
                     ok_count = int(vmd_review_df.get("Status", pd.Series(dtype=str)).astype(str).eq("OK").sum())
                     failed_count = int((vmd_review_df.get("Status", pd.Series(dtype=str)).astype(str) != "OK").sum())
                     c1, c2, c3 = st.columns(3)
-                    c1.metric("VMD K", vmd_k)
-                    c2.metric("IMF rows OK", ok_count)
-                    c3.metric("Rows needing review", failed_count)
+                    c1.metric(ui_text("VMD K", "VMD 分量数量"), vmd_k)
+                    c2.metric(ui_text("IMF rows OK", "正常 IMF 行数"), ok_count)
+                    c3.metric(ui_text("Rows needing review", "需要审查的行数"), failed_count)
                     display_columns = [
                         "Variable",
                         "IMF",
@@ -5580,15 +5741,18 @@ def render_run_pipeline_tab(options: dict[str, Any]) -> None:
                         "Note",
                     ]
                     st.dataframe(
-                        vmd_review_df[[column for column in display_columns if column in vmd_review_df.columns]],
+                        localized_workflow_frame(vmd_review_df[[column for column in display_columns if column in vmd_review_df.columns]]),
                         use_container_width=True,
                         hide_index=True,
                     )
                     if "Status" in vmd_review_df.columns and not vmd_review_df["Status"].astype(str).eq("OK").all():
-                        st.warning("Some selected variables could not be decomposed cleanly. Review the table before continuing.")
+                        st.warning(ui_text(
+                            "Some selected variables could not be decomposed cleanly. Review the table before continuing.",
+                            "部分所选变量未能正常完成分解，请检查表格后再继续。",
+                        ))
                 next_step_variables = pending_vmd_setup.get("candidate_variables_for_next_step", []) or []
                 if next_step_variables:
-                    st.success("Variables that will enter MRGC and h review: " + ", ".join(next_step_variables))
+                    st.success(ui_text("Variables that will enter MRGC and h review: ", "将进入 MRGC 与 h 审查的变量：") + ", ".join(next_step_variables))
                 confirm_col, cancel_col = st.columns(2)
                 can_continue_vmd = bool(next_step_variables) and not vmd_review_df.empty
                 if confirm_col.button(
@@ -5610,7 +5774,10 @@ def render_run_pipeline_tab(options: dict[str, Any]) -> None:
                         st.session_state.pop(NET_IMPACT_VMD_CONFIRMATION_STATE, None)
                         st.info(ui_text("Review the FEVD horizon h table, then confirm to start TVP/FEVD.", "请检查 FEVD 预测期 h 表，然后确认开始 TVP/FEVD。"))
                     except Exception as exc:  # noqa: BLE001 - keep Streamlit page alive.
-                        st.error(f"FEVD h review failed after VMD confirmation: {safe_exception_text(exc)}")
+                        st.error(ui_text(
+                            f"FEVD h review failed after VMD confirmation: {safe_exception_text(exc)}",
+                            f"确认 VMD 后，FEVD 预测期 h 审查失败：{safe_exception_text(exc)}",
+                        ))
                 if cancel_col.button(ui_text("Cancel Pending VMD Analysis", "取消待处理 VMD 分析"), use_container_width=True):
                     st.session_state.pop(NET_IMPACT_VMD_CONFIRMATION_STATE, None)
                     st.session_state.pop(NET_IMPACT_TVP_CONFIRMATION_STATE, None)
@@ -5621,10 +5788,12 @@ def render_run_pipeline_tab(options: dict[str, Any]) -> None:
             with st.container(border=True):
                 st.subheader(ui_text("Confirm FEVD h Before TVP/FEVD", "在 TVP/FEVD 前确认 FEVD h"))
                 pending_options = pending_tvp_setup.get("options", {})
-                st.caption(
+                st.caption(ui_text(
                     "Pending h review: "
-                    f"{pending_options.get('start_date', '')} to {pending_options.get('end_date', '')}"
-                )
+                    f"{pending_options.get('start_date', '')} to {pending_options.get('end_date', '')}",
+                    "待处理 h 审查："
+                    f"{pending_options.get('start_date', '')} 至 {pending_options.get('end_date', '')}",
+                ))
                 h_review = pending_tvp_setup.get("h_review")
                 h_review_df = (
                     h_review
@@ -5632,7 +5801,7 @@ def render_run_pipeline_tab(options: dict[str, Any]) -> None:
                     else pd.DataFrame(h_review or [])
                 )
                 if h_review_df.empty:
-                    st.error("FEVD horizon h table is empty. Re-run the previous step.")
+                    st.error(ui_text("FEVD horizon h table is empty. Re-run the previous step.", "FEVD 预测期 h 表为空，请重新运行上一步。"))
                 else:
                     display_columns = [
                         "Target",
@@ -5648,21 +5817,23 @@ def render_run_pipeline_tab(options: dict[str, Any]) -> None:
                     ]
                     h_values = pd.to_numeric(h_review_df.get("FEVD_h", pd.Series(dtype=float)), errors="coerce")
                     c1, c2, c3 = st.columns(3)
-                    c1.metric("Targets ready", int(h_values.notna().sum()))
-                    c2.metric("Minimum h", int(h_values.min()) if h_values.notna().any() else "NA")
-                    c3.metric("Maximum h", int(h_values.max()) if h_values.notna().any() else "NA")
+                    c1.metric(ui_text("Targets ready", "已就绪目标变量"), int(h_values.notna().sum()))
+                    c2.metric(ui_text("Minimum h", "最小 h"), int(h_values.min()) if h_values.notna().any() else "NA")
+                    c3.metric(ui_text("Maximum h", "最大 h"), int(h_values.max()) if h_values.notna().any() else "NA")
                     st.dataframe(
-                        h_review_df[[column for column in display_columns if column in h_review_df.columns]],
+                        localized_workflow_frame(h_review_df[[column for column in display_columns if column in h_review_df.columns]]),
                         use_container_width=True,
                         hide_index=True,
                     )
-                    st.info(
+                    st.info(ui_text(
                         "TVP/VAR FEVD will use FEVD_h as the forecast-error variance "
-                        "decomposition horizon. Confirm this table to start the final step."
-                    )
+                        "decomposition horizon. Confirm this table to start the final step.",
+                        "TVP/VAR FEVD 将使用表中的 FEVD 预测期 h 作为预测误差方差分解期数。"
+                        "请确认该表以开始最后一步。",
+                    ))
                     if PATHS["paper_h_review"].exists():
                         st.download_button(
-                            "Download FEVD h Review",
+                            ui_text("Download FEVD h Review", "下载 FEVD h 审查表"),
                             data=PATHS["paper_h_review"].read_bytes(),
                             file_name=PATHS["paper_h_review"].name,
                             mime=_download_mime(PATHS["paper_h_review"]),
@@ -5672,7 +5843,7 @@ def render_run_pipeline_tab(options: dict[str, Any]) -> None:
 
                 next_step_variables = pending_tvp_setup.get("candidate_variables_for_next_step", []) or []
                 if next_step_variables:
-                    st.success("Variables that will enter TVP/FEVD: " + ", ".join(next_step_variables))
+                    st.success(ui_text("Variables that will enter TVP/FEVD: ", "将进入 TVP/FEVD 的变量：") + ", ".join(next_step_variables))
                 confirm_col, cancel_col = st.columns(2)
                 can_continue_tvp = bool(next_step_variables) and not h_review_df.empty
                 if confirm_col.button(
@@ -5696,7 +5867,10 @@ def render_run_pipeline_tab(options: dict[str, Any]) -> None:
                             st.dataframe(result["net_impacts"], use_container_width=True)
                         st.info(ui_text("Open Net-Impact Results to review all tables and figures.", "打开“净影响结果”查看全部表格与图形。"))
                     except Exception as exc:  # noqa: BLE001 - keep Streamlit page alive.
-                        st.error(f"TVP/FEVD analysis failed after h confirmation: {safe_exception_text(exc)}")
+                        st.error(ui_text(
+                            f"TVP/FEVD analysis failed after h confirmation: {safe_exception_text(exc)}",
+                            f"确认 h 后，TVP/FEVD 分析失败：{safe_exception_text(exc)}",
+                        ))
                 if cancel_col.button(ui_text("Cancel Pending TVP/FEVD Analysis", "取消待处理 TVP/FEVD 分析"), use_container_width=True):
                     st.session_state.pop(NET_IMPACT_TVP_CONFIRMATION_STATE, None)
                     st.rerun()

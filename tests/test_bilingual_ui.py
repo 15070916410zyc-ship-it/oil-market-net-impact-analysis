@@ -33,6 +33,28 @@ class BilingualUITests(unittest.TestCase):
         )
         self.assertEqual(localized_runtime_message(message, "en"), message)
 
+    def test_analysis_workflow_statuses_are_fully_localized_in_chinese(self) -> None:
+        from app.streamlit_app import localized_runtime_message
+
+        cases = {
+            "Data refresh completed. Clean market data range: 2024-01-01 to 2024-03-31.":
+                "数据更新完成。清洗后市场数据范围：2024-01-01 至 2024-03-31。",
+            "Core market data freshness check passed. Latest complete core-market row before strict cleaning: 2024-03-29.":
+                "核心市场数据新鲜度检查通过。严格清洗前最新完整核心市场数据日期：2024-03-29。",
+            "Expanded variable pool refreshed and merged into model-ready data. Additional candidate columns: VIX, SP500.":
+                "扩展变量池已更新并合并到模型数据。新增候选变量：VIX, SP500。",
+            "Running VMD decomposition review with K = 4...":
+                "正在运行 VMD 分解审查，K = 4……",
+            "Determining selected-scale extrema and FEVD horizon h before TVP/FEVD...":
+                "正在确定所选尺度极值与 FEVD 预测期 h，随后进入 TVP/FEVD……",
+            "Data refresh and preparation workbook created: data_refresh_and_preparation.xlsx.":
+                "数据更新与准备工作簿已生成：data_refresh_and_preparation.xlsx。",
+        }
+
+        for english, chinese in cases.items():
+            with self.subTest(message=english):
+                self.assertEqual(localized_runtime_message(english, "zh"), chinese)
+
     def test_variable_name_follows_selected_language(self) -> None:
         from app.streamlit_app import format_variable_option
 
