@@ -2,10 +2,66 @@
 
 from __future__ import annotations
 
+import math
+from pathlib import Path
 from typing import Any, Iterable
 
 import matplotlib.pyplot as plt
 import pandas as pd
+
+
+DEFAULT_RASTER_PIXEL_BUDGET = 6_000_000
+
+
+def apply_publication_plot_style(**overrides: Any) -> None:
+    """Apply a portable publication style without requesting system fonts.
+
+    Matplotlib ships DejaVu Serif on every supported platform, including the
+    Linux image used by Streamlit Community Cloud.  Using it prevents the
+    thousands of repeated ``findfont`` warnings emitted for Times New Roman.
+    """
+    settings: dict[str, Any] = {
+        "font.family": "DejaVu Serif",
+        "axes.facecolor": "white",
+        "figure.facecolor": "white",
+        "savefig.facecolor": "white",
+    }
+    settings.update(overrides)
+    plt.rcParams.update(settings)
+
+
+def safe_raster_dpi(
+    figure: plt.Figure,
+    requested_dpi: int = 600,
+    max_pixels: int = DEFAULT_RASTER_PIXEL_BUDGET,
+) -> int:
+    """Return a DPI that keeps rasterization within a fixed pixel budget."""
+    width_inches, height_inches = figure.get_size_inches()
+    area_inches = max(float(width_inches) * float(height_inches), 1.0)
+    budget_dpi = int(math.floor(math.sqrt(max(1, int(max_pixels)) / area_inches)))
+    return max(1, min(int(requested_dpi), budget_dpi))
+
+
+def save_figure_pair(
+    figure: plt.Figure,
+    png_path: str | Path,
+    pdf_path: str | Path,
+    requested_dpi: int = 600,
+) -> None:
+    """Save raster/vector copies and always release the Matplotlib figure."""
+    png = Path(png_path)
+    pdf = Path(pdf_path)
+    png.parent.mkdir(parents=True, exist_ok=True)
+    pdf.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        figure.savefig(
+            png,
+            dpi=safe_raster_dpi(figure, requested_dpi=requested_dpi),
+            bbox_inches="tight",
+        )
+        figure.savefig(pdf, bbox_inches="tight")
+    finally:
+        plt.close(figure)
 
 
 def normalise_plot_date(value: Any) -> pd.Timestamp | None:

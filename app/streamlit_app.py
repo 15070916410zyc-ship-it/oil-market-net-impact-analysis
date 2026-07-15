@@ -32,7 +32,7 @@ from src.api_credentials import (  # noqa: E402 - project root is added above.
 DEFAULT_PRE_EVENT_WINDOW_TRADING_DAYS = 300
 DEFAULT_VARIABLE_SELECTION_VERSION = "full-pool-no-bdti-v7-compact-selector"
 MIN_VMD_IMF_COUNT = 1
-MAX_VMD_IMF_COUNT = 100
+MAX_VMD_IMF_COUNT = 30
 CORE_MARKET_FRESHNESS_COLUMNS = ["WTI", "Brent", "Gold", "OVX", "DollarIndex", "TNote10Y", "GPRD"]
 NET_IMPACT_CONFIRMATION_STATE = "net_impact_pending_variable_update_confirmation"
 NET_IMPACT_VMD_CONFIRMATION_STATE = "net_impact_pending_vmd_confirmation"
@@ -5506,8 +5506,8 @@ def render_run_pipeline_tab(options: dict[str, Any]) -> None:
                     ),
                     step=1,
                     help=ui_text(
-                        "Allowed range: 1 to 100. Large values require substantially more time and memory.",
-                        "允许范围：1 到 100。数值越大，计算时间和内存占用会明显增加。",
+                        "Allowed range: 1 to 30. Large values require substantially more time and memory.",
+                        "允许范围：1 到 30。数值越大，计算时间和内存占用会明显增加。",
                     ),
                     key="net_vmd_imf_count",
                 )

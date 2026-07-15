@@ -18,11 +18,13 @@ import re
 from typing import Any
 import warnings
 
+import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
 from src.mrgc_selector import run_mrgc_screening, significance_stars
+from src.plot_utils import apply_publication_plot_style, save_figure_pair
 from src.vmd_module import estimate_center_frequency, run_vmd
 
 
@@ -1195,18 +1197,14 @@ def _resolve_analysis_variables(
 
 def _setup_plot() -> None:
     """Apply paper-style matplotlib settings."""
-    plt.rcParams.update(
-        {
-            "font.family": "Times New Roman",
+    apply_publication_plot_style(
+        **{
             "font.size": 11,
             "axes.titlesize": 14,
             "axes.labelsize": 12,
             "xtick.labelsize": 10,
             "ytick.labelsize": 10,
             "legend.fontsize": 10,
-            "axes.facecolor": "white",
-            "figure.facecolor": "white",
-            "savefig.facecolor": "white",
             "axes.edgecolor": "#111827",
             "axes.linewidth": 0.9,
             "grid.color": "#D9D9D9",
@@ -1226,9 +1224,7 @@ def _save_fig(fig: plt.Figure, png: Path, pdf: Path) -> None:
             spine.set_linewidth(0.9)
     fig.align_labels()
     fig.tight_layout(pad=1.0)
-    fig.savefig(png, dpi=600, bbox_inches="tight")
-    fig.savefig(pdf, bbox_inches="tight")
-    plt.close(fig)
+    save_figure_pair(fig, png, pdf)
 
 
 def _safe_file_token(value: Any) -> str:
@@ -1449,27 +1445,86 @@ def _plot_vmd_decomposition_figures(
             warnings.warn(f"Could not plot VMD decomposition for {variable}: {exc}")
             continue
         plot_df = pd.concat([series_df[["Date", variable]], imfs], axis=1)
-        rows = vmd_k + 1
-        fig, axes = plt.subplots(rows, 1, figsize=(10, max(5.2, 1.35 * rows)), sharex=True)
-        axes = np.atleast_1d(axes)
-        axes[0].plot(plot_df["Date"], plot_df[variable], color="#111827", linewidth=1.2)
-        axes[0].set_ylabel(variable)
-        axes[0].set_title(f"VMD decomposition of {variable}")
-        for idx in range(1, vmd_k + 1):
-            column = f"{variable}_IMF{idx}"
-            axes[idx].plot(plot_df["Date"], plot_df[column], color="#64748B", linewidth=1.0)
-            axes[idx].set_ylabel(f"IMF{idx}")
-        for ax in axes:
-            ax.grid(True, color="#D9D9D9", linewidth=0.5, alpha=0.85)
+        fig = _create_vmd_decomposition_figure(plot_df, variable, vmd_k)
+        date_axis = fig.axes[1] if vmd_k > 12 else fig.axes[-1]
         _mark_start_end_dates(
-            axes[-1],
+            date_axis,
             plot_df["Date"],
             start_date=start_date or plot_df["Date"].min(),
             end_date=end_date or plot_df["Date"].max(),
         )
-        axes[-1].set_xlabel("Date")
+        date_axis.set_xlabel("Date")
         png, pdf = _figure_variant_paths(f"paper_vmd_decomposition_{_safe_file_token(variable)}")
         _save_fig(fig, png, pdf)
+
+
+def _create_vmd_decomposition_figure(
+    plot_df: pd.DataFrame,
+    variable: str,
+    vmd_k: int,
+) -> plt.Figure:
+    """Create a readable VMD figure with bounded complexity for high K."""
+    if vmd_k <= 12:
+        rows = vmd_k + 1
+        fig, axes = plt.subplots(
+            rows,
+            1,
+            figsize=(10, max(5.2, 1.35 * rows)),
+            sharex=True,
+        )
+        axes = np.atleast_1d(axes)
+        axes[0].plot(plot_df["Date"], plot_df[variable], color="#111827", linewidth=1.2)
+        axes[0].set_ylabel(variable)
+        axes[0].set_title(f"VMD decomposition of {variable}")
+        for mode_index in range(1, vmd_k + 1):
+            column = f"{variable}_IMF{mode_index}"
+            axes[mode_index].plot(
+                plot_df["Date"],
+                plot_df[column],
+                color="#64748B",
+                linewidth=1.0,
+            )
+            axes[mode_index].set_ylabel(f"IMF{mode_index}")
+        for axis in axes:
+            axis.grid(True, color="#D9D9D9", linewidth=0.5, alpha=0.85)
+        return fig
+
+    fig, (source_axis, heatmap_axis) = plt.subplots(
+        2,
+        1,
+        figsize=(10, 7.5),
+        gridspec_kw={"height_ratios": [1, 3]},
+        sharex=True,
+    )
+    source_axis.plot(plot_df["Date"], plot_df[variable], color="#111827", linewidth=1.2)
+    source_axis.set_ylabel(variable)
+    source_axis.set_title(f"VMD decomposition of {variable}")
+    source_axis.grid(True, color="#D9D9D9", linewidth=0.5, alpha=0.85)
+
+    mode_columns = [f"{variable}_IMF{mode_index}" for mode_index in range(1, vmd_k + 1)]
+    mode_matrix = plot_df[mode_columns].to_numpy(dtype=float).T
+    row_means = np.nanmean(mode_matrix, axis=1, keepdims=True)
+    row_scales = np.nanstd(mode_matrix, axis=1, keepdims=True)
+    row_scales[~np.isfinite(row_scales) | (row_scales <= 1e-12)] = 1.0
+    normalized_modes = np.clip((mode_matrix - row_means) / row_scales, -3, 3)
+    date_values = mdates.date2num(pd.to_datetime(plot_df["Date"]).to_numpy())
+    image = heatmap_axis.imshow(
+        normalized_modes,
+        aspect="auto",
+        interpolation="nearest",
+        cmap="RdBu_r",
+        vmin=-3,
+        vmax=3,
+        extent=[date_values[0], date_values[-1], vmd_k + 0.5, 0.5],
+    )
+    tick_modes = np.unique(np.linspace(1, vmd_k, min(8, vmd_k), dtype=int))
+    heatmap_axis.set_yticks(tick_modes)
+    heatmap_axis.set_yticklabels([f"IMF{mode_index}" for mode_index in tick_modes])
+    heatmap_axis.set_ylabel("Normalized IMF")
+    heatmap_axis.xaxis_date()
+    colorbar = fig.colorbar(image, ax=heatmap_axis, pad=0.02)
+    colorbar.set_label("Standard deviations")
+    return fig
 
 
 def _plot_hht_imf1_frequency(
