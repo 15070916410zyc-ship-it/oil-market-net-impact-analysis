@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import importlib
 import hashlib
 from io import BytesIO
@@ -5403,9 +5404,17 @@ def render_downloadable_image(title: str, path: Path, description: str | None = 
     path = Path(path)
     if not path.exists():
         return
+    encoded_image = base64.b64encode(path.read_bytes()).decode("ascii")
     image_col, action_col = st.columns([0.78, 0.22])
     with image_col:
-        st.image(path.read_bytes(), use_container_width=True)
+        st.markdown(
+            (
+                '<img src="data:image/png;base64,'
+                f'{encoded_image}" alt="Analysis result figure" '
+                'style="display:block;width:100%;height:auto;object-fit:contain;" />'
+            ),
+            unsafe_allow_html=True,
+        )
         if description:
             st.caption(description)
     with action_col:
