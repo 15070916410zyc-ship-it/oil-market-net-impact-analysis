@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 from contextlib import nullcontext
 from io import BytesIO
 import hashlib
@@ -14,23 +15,34 @@ from zipfile import ZipFile
 
 
 class CloudWorkspaceBehaviorTests(unittest.TestCase):
-    def test_result_image_preview_uses_bytes_instead_of_cloud_file_path(self) -> None:
+    def test_result_image_preview_is_embedded_without_streamlit_media_route(self) -> None:
         from app import streamlit_app as app
 
         with tempfile.TemporaryDirectory() as temp_dir:
             image_path = Path(temp_dir) / "event.png"
-            image_bytes = b"\x89PNG\r\n\x1a\ncloud-preview"
+            image_bytes = base64.b64decode(
+                "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk"
+                "/w8AAusB9Y9Z4aQAAAAASUVORK5CYII="
+            )
             image_path.write_bytes(image_bytes)
             with (
                 patch.object(app.st, "columns", return_value=(nullcontext(), nullcontext())),
                 patch.object(app.st, "image") as image,
+                patch.object(app.st, "markdown") as markdown,
                 patch.object(app.st, "caption"),
                 patch.object(app.st, "write"),
                 patch.object(app, "render_artifact_download_button"),
             ):
                 app.render_downloadable_image("Event chart", image_path, "Description")
 
-        image.assert_called_once_with(image_bytes, use_container_width=True)
+        image.assert_not_called()
+        markdown.assert_called_once()
+        html = markdown.call_args.args[0]
+        self.assertIn(
+            "data:image/png;base64," + base64.b64encode(image_bytes).decode("ascii"),
+            html,
+        )
+        self.assertTrue(markdown.call_args.kwargs["unsafe_allow_html"])
 
     def test_cloud_runtime_detection_supports_override_and_streamlit_marker(self) -> None:
         from app.streamlit_app import is_cloud_runtime
