@@ -6,11 +6,11 @@ import unittest
 
 
 class BilingualUITests(unittest.TestCase):
-    def test_vmd_imf_range_is_one_to_one_hundred(self) -> None:
+    def test_vmd_imf_range_is_one_to_thirty(self) -> None:
         from app.streamlit_app import MAX_VMD_IMF_COUNT, MIN_VMD_IMF_COUNT
 
         self.assertEqual(MIN_VMD_IMF_COUNT, 1)
-        self.assertEqual(MAX_VMD_IMF_COUNT, 100)
+        self.assertEqual(MAX_VMD_IMF_COUNT, 30)
 
     def test_localized_text_selects_chinese(self) -> None:
         from app.streamlit_app import localized_text

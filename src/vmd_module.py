@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from src.plot_utils import mark_start_end_dates
+from src.plot_utils import apply_publication_plot_style, mark_start_end_dates, save_figure_pair
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -134,11 +134,6 @@ def run_vmd(
         IMF matrix with shape ``T x K``. The columns preserve the raw VMD
         output order and are not reordered by center frequency.
     """
-    try:
-        from vmdpy import VMD
-    except ImportError as exc:
-        raise ImportError("Please install vmdpy: pip install vmdpy") from exc
-
     values = np.asarray(series, dtype=float).reshape(-1)
     original_length = len(values)
     if values.ndim != 1 or original_length == 0:
@@ -153,7 +148,7 @@ def run_vmd(
     if original_length % 2 == 1:
         analysis_values = np.append(values, values[-1])
 
-    u, _, _ = VMD(analysis_values, alpha, tau, K, DC, init, tol)
+    u = _run_vmd_memory_efficient(analysis_values, alpha, tau, K, DC, init, tol)
     imf_matrix = np.asarray(u, dtype=float).T[:original_length, :]
 
     if imf_matrix.shape[1] != K:
@@ -164,6 +159,128 @@ def run_vmd(
         )
 
     return imf_matrix
+
+
+def _run_vmd_memory_efficient(
+    signal: np.ndarray,
+    alpha: float,
+    tau: float,
+    mode_count: int,
+    dc_mode: int,
+    init: int,
+    tolerance: float,
+) -> np.ndarray:
+    """Run the vmdpy algorithm using two iteration buffers instead of 500.
+
+    ``vmdpy.VMD`` retains every complex spectrum for every iteration.  Its
+    allocation therefore grows as ``500 * samples * modes`` and can exceed a
+    hosted Streamlit worker's memory when the UI requests many modes.  The
+    recurrence only needs the current and previous iteration, so two buffers
+    preserve the numerical result with bounded memory.
+    """
+    values = np.asarray(signal, dtype=float).reshape(-1)
+    if mode_count < 1:
+        raise ValueError("K must be at least 1.")
+    if len(values) % 2:
+        values = values[:-1]
+
+    sampling_frequency = 1.0 / len(values)
+    half_length = len(values) // 2
+    mirrored = np.append(np.flip(values[:half_length]), values)
+    mirrored = np.append(mirrored, np.flip(values[-half_length:]))
+    sample_count = len(mirrored)
+    time = np.arange(1, sample_count + 1) / sample_count
+    frequencies = time - 0.5 - (1 / sample_count)
+    max_iterations = 500
+    alpha_by_mode = float(alpha) * np.ones(mode_count)
+
+    signal_spectrum = np.fft.fftshift(np.fft.fft(mirrored))
+    positive_spectrum = np.copy(signal_spectrum)
+    positive_spectrum[: sample_count // 2] = 0
+
+    previous_omega = np.zeros(mode_count)
+    if init == 1:
+        previous_omega = np.arange(mode_count, dtype=float) * (0.5 / mode_count)
+    elif init == 2:
+        previous_omega = np.sort(
+            np.exp(
+                np.log(sampling_frequency)
+                + (np.log(0.5) - np.log(sampling_frequency))
+                * np.random.rand(mode_count)
+            )
+        )
+    if dc_mode:
+        previous_omega[0] = 0
+
+    current_omega = np.zeros_like(previous_omega)
+    previous_modes = np.zeros((sample_count, mode_count), dtype=complex)
+    current_modes = np.zeros_like(previous_modes)
+    previous_dual = np.zeros(sample_count, dtype=complex)
+    current_dual = np.zeros_like(previous_dual)
+    mode_sum: float | np.ndarray = 0.0
+    difference = tolerance + np.spacing(1)
+    iteration = 0
+
+    while difference > tolerance and iteration < max_iterations - 1:
+        mode_sum = previous_modes[:, mode_count - 1] + mode_sum - previous_modes[:, 0]
+        current_modes[:, 0] = (
+            positive_spectrum - mode_sum - previous_dual / 2
+        ) / (1 + alpha_by_mode[0] * (frequencies - previous_omega[0]) ** 2)
+        if not dc_mode:
+            positive = current_modes[sample_count // 2 :, 0]
+            power = np.abs(positive) ** 2
+            current_omega[0] = np.dot(frequencies[sample_count // 2 :], power) / np.sum(power)
+
+        for mode_index in range(1, mode_count):
+            mode_sum = (
+                current_modes[:, mode_index - 1]
+                + mode_sum
+                - previous_modes[:, mode_index]
+            )
+            current_modes[:, mode_index] = (
+                positive_spectrum - mode_sum - previous_dual / 2
+            ) / (
+                1
+                + alpha_by_mode[mode_index]
+                * (frequencies - previous_omega[mode_index]) ** 2
+            )
+            positive = current_modes[sample_count // 2 :, mode_index]
+            power = np.abs(positive) ** 2
+            current_omega[mode_index] = (
+                np.dot(frequencies[sample_count // 2 :], power) / np.sum(power)
+            )
+
+        current_dual[:] = previous_dual + tau * (
+            np.sum(current_modes, axis=1) - positive_spectrum
+        )
+        iteration += 1
+        difference = np.spacing(1)
+        for mode_index in range(mode_count):
+            delta = current_modes[:, mode_index] - previous_modes[:, mode_index]
+            difference += (1 / sample_count) * np.dot(delta, np.conj(delta))
+        difference = float(np.abs(difference))
+
+        previous_modes, current_modes = current_modes, previous_modes
+        previous_omega, current_omega = current_omega, previous_omega
+        previous_dual, current_dual = current_dual, previous_dual
+
+    # Match vmdpy's post-processing, which reconstructs from the penultimate
+    # stored iteration (the buffer now named current_modes after the swap).
+    final_modes = current_modes
+    reverse_indices = np.flip(np.arange(1, sample_count // 2 + 1))
+    full_spectrum = np.zeros((sample_count, mode_count), dtype=complex)
+    full_spectrum[sample_count // 2 :, :] = final_modes[sample_count // 2 :, :]
+    full_spectrum[reverse_indices, :] = np.conj(
+        final_modes[sample_count // 2 :, :]
+    )
+    full_spectrum[0, :] = np.conj(full_spectrum[-1, :])
+
+    decomposed = np.zeros((mode_count, sample_count))
+    for mode_index in range(mode_count):
+        decomposed[mode_index, :] = np.real(
+            np.fft.ifft(np.fft.ifftshift(full_spectrum[:, mode_index]))
+        )
+    return decomposed[:, sample_count // 4 : 3 * sample_count // 4]
 
 
 def decompose_vmd(
@@ -281,14 +398,7 @@ def plot_wti_vmd(vmd_df: pd.DataFrame) -> None:
     imf_columns = imf_columns_from_frame(vmd_df, prefix="WTI_IMF")
     validate_imf_frame(vmd_df, expected_modes=len(imf_columns), prefix="WTI_IMF")
 
-    plt.rcParams.update(
-        {
-            "font.family": "Times New Roman",
-            "axes.facecolor": "white",
-            "figure.facecolor": "white",
-            "savefig.facecolor": "white",
-        }
-    )
+    apply_publication_plot_style()
 
     plot_items = [("WTI", "WTI")]
     plot_items.extend((column, column.replace("WTI_", "")) for column in imf_columns)
@@ -314,9 +424,7 @@ def plot_wti_vmd(vmd_df: pd.DataFrame) -> None:
     mark_start_end_dates(axes[-1], dates, line_axes=axes)
 
     FIGURE_PNG_PATH.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(FIGURE_PNG_PATH, dpi=600, bbox_inches="tight")
-    fig.savefig(FIGURE_PDF_PATH, bbox_inches="tight")
-    plt.close(fig)
+    save_figure_pair(fig, FIGURE_PNG_PATH, FIGURE_PDF_PATH)
 
 
 def decompose_wti_change_vmd(
@@ -416,14 +524,7 @@ def plot_wti_change_vmd(vmd_df: pd.DataFrame) -> None:
     imf_columns = imf_columns_from_frame(vmd_df, prefix="Delta_IMF")
     validate_imf_frame(vmd_df, expected_modes=len(imf_columns), prefix="Delta_IMF")
 
-    plt.rcParams.update(
-        {
-            "font.family": "Times New Roman",
-            "axes.facecolor": "white",
-            "figure.facecolor": "white",
-            "savefig.facecolor": "white",
-        }
-    )
+    apply_publication_plot_style()
 
     plot_items = [("Delta_WTI", "Delta WTI")]
     plot_items.extend((column, column.replace("Delta_", "")) for column in imf_columns)
@@ -448,9 +549,7 @@ def plot_wti_change_vmd(vmd_df: pd.DataFrame) -> None:
     mark_start_end_dates(axes[-1], dates, line_axes=axes)
 
     CHANGE_FIGURE_PNG_PATH.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(CHANGE_FIGURE_PNG_PATH, dpi=600, bbox_inches="tight")
-    fig.savefig(CHANGE_FIGURE_PDF_PATH, bbox_inches="tight")
-    plt.close(fig)
+    save_figure_pair(fig, CHANGE_FIGURE_PNG_PATH, CHANGE_FIGURE_PDF_PATH)
 
 
 def validate_imf_frame(
