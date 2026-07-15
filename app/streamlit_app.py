@@ -257,6 +257,15 @@ RUNTIME_TRANSLATIONS = {
         "正在使用已确认的 h 运行最终 TVP/VAR FEVD 贡献分析并生成图形",
     "Running final TVP/VAR FEVD contribution": "正在运行最终 TVP/VAR FEVD 贡献分析",
     "No explanatory variable passed the data-quality filter": "没有解释变量通过数据质量筛选",
+    "Selected variables do not share an overlapping non-missing date window":
+        "所选变量不存在共同的非缺失日期窗口",
+    "No usable values were found for: ": "以下变量未找到可用值：",
+    "No auto-download variables are selected, or registry fields are unavailable":
+        "未选择自动下载变量，或变量注册表字段不可用",
+    "Download status log is missing Variable or Status columns":
+        "下载状态日志缺少“变量”或“状态”列",
+    "Quality filter report is missing Variable or Action columns":
+        "质量筛选报告缺少“变量”或“处理方式”列",
     "Dropped before": "在进入下一步前已剔除",
     "none": "无",
     "unavailable": "不可用",
@@ -265,11 +274,136 @@ RUNTIME_TRANSLATIONS = {
 }
 
 
+WORKFLOW_VALUE_TRANSLATIONS = {
+    "Method": "方法",
+    "DataStartDate": "数据开始日期",
+    "DataEndDate": "数据结束日期",
+    "Targets": "目标变量",
+    "CandidateVariables": "候选变量",
+    "EventStartDate": "事件开始日期",
+    "VMD K": "VMD 分量数量",
+    "VMD penalty factor": "VMD 惩罚因子",
+    "VMD source": "VMD 数据来源",
+    "MRGC lag selection": "MRGC 滞后阶数选择",
+    "MRGC max lag": "MRGC 最大滞后阶数",
+    "Main scale rule": "主尺度选择规则",
+    "FEVD h rule": "FEVD 预测期 h 规则",
+    "VAR lag rule": "VAR 滞后阶数规则",
+    "Rolling window": "滚动窗口",
+    "Requested pre-event window": "请求的事件前窗口",
+    "Requested event window": "请求的事件窗口",
+    "Cleaned pre-event window": "清洗后的事件前窗口",
+    "Cleaned event window": "清洗后的事件窗口",
+    "Prepared common data window": "准备完成的公共数据窗口",
+    "Requested business-day window before strict complete-case cleaning.":
+        "严格完整样本清洗前请求的工作日窗口。",
+    "User-selected event window before strict complete-case cleaning.":
+        "严格完整样本清洗前由用户选择的事件窗口。",
+    "Rows retained after all selected variables are aligned and missing rows are removed.":
+        "对齐全部所选变量并剔除含缺失值的行后保留的窗口。",
+    "Rows retained inside the event window after strict complete-case cleaning.":
+        "严格完整样本清洗后在事件窗口内保留的观测。",
+    "Full prepared table after selected variables are retained and missing rows are removed.":
+        "保留所选变量并剔除含缺失值的行后得到的完整数据表。",
+    "EMTV-NEI paper replication: VMD + MRGC + core scale + rolling VAR FEVD":
+        "EMTV-NEI 论文方法复现：VMD + MRGC + 主尺度 + 滚动窗口 VAR FEVD",
+    "Python vmdpy recomputed for the selected sample.": "针对所选样本使用 Python vmdpy 重新计算。",
+    "MATLAB Step01 cached VMD results for exact thesis-sample replication.":
+        "使用 MATLAB 第一步缓存的 VMD 结果精确复现论文样本。",
+    "Selected by selected-scale MRGC/BIC Granger test at p < 0.10.":
+        "依据所选尺度的 MRGC/BIC Granger 检验结果选入，显著性水平为 p < 0.10。",
+    "Fallback to the selected candidate pool because selected-scale MRGC retained no drivers.":
+        "所选尺度 MRGC 未保留驱动变量，因此回退到已选候选变量池。",
+    "Fallback to the first available numeric candidate variables because MRGC and selected candidate pool were empty.":
+        "MRGC 与已选候选变量池均为空，因此回退到首批可用数值候选变量。",
+    "Selected by BIC within lags 1 to 5 for the current sample.":
+        "针对当前样本，在 1 至 5 阶滞后中依据 BIC 选择。",
+    "Selected by BIC within lags 1 to 5 for the current sample":
+        "针对当前样本，在 1 至 5 阶滞后中依据 BIC 选择",
+    "External weights are taken from the selected-scale maximum date only, not averaged over the interval.":
+        "外部权重仅取所选尺度最大值日期，不对区间进行平均。",
+    "FEVD horizon h follows the selected-scale min-to-max trading-day interval; contribution weights use the selected-scale maximum date only.":
+        "FEVD 预测期 h 取所选尺度最小值至最大值的交易日间隔；贡献权重仅使用所选尺度最大值日期。",
+    "Trading-day interval between event-window selected-scale minimum and maximum dates":
+        "事件窗口内所选尺度最小值与最大值日期之间的交易日间隔",
+    "FEVD horizon h is the trading-day interval between the selected main mode extrema; the calendar-day interval is reported only as a reference.":
+        "FEVD 预测期 h 为所选主模态两个极值之间的交易日间隔；自然日间隔仅供参考。",
+    "Pending manual confirmation before TVP/VAR FEVD": "等待人工确认后运行 TVP/VAR FEVD",
+    "Available": "有可用数据",
+    "NoData": "无可用数据",
+    "NoOverlap": "无重叠区间",
+    "Confirmed": "已确认",
+    "Ready": "已就绪",
+    "Failed": "失败",
+    "Skipped": "已跳过",
+    "TVP/VAR FEVD completed": "TVP/VAR FEVD 已完成",
+    "Too few observations or near-zero variance for VMD.": "观测数不足或序列方差接近零，无法进行 VMD。",
+    "High-frequency disturbance": "高频扰动",
+    "Short-run adjustment": "短期调整",
+    "Medium-run adjustment": "中期调整",
+    "Low-frequency trend layer": "低频趋势层",
+    "Highest-frequency VMD component": "最高频 VMD 分量",
+    "Lowest-frequency VMD component": "最低频 VMD 分量",
+    "Intermediate-frequency VMD component": "中频 VMD 分量",
+    "VMD component": "VMD 分量",
+}
+
+
 def localized_runtime_message(message: str, language: LanguageCode) -> str:
     """Translate common dynamic workflow messages while preserving values and dates."""
     text = str(message)
     if language == "en":
         return text
+    coverage_match = re.fullmatch(
+        r"Prepared common data window (\S+) to (\S+) does not fully cover the "
+        r"initially selected analysis window (\S+) to (\S+)\.",
+        text,
+    )
+    if coverage_match:
+        common_start, common_end, selected_start, selected_end = coverage_match.groups()
+        return (
+            f"准备好的公共数据窗口为 {common_start} 至 {common_end}，未完全覆盖最初选择的"
+            f"分析窗口 {selected_start} 至 {selected_end}。"
+        )
+    shortfall_match = re.fullmatch(
+        r"The selected pre-event window \((\S+) to (\S+)\) contains (\d+) business days "
+        r"before strict cleaning, but only (\d+) complete observations remain after strict "
+        r"missing-data removal\.",
+        text,
+    )
+    if shortfall_match:
+        start, end, requested_days, retained_days = shortfall_match.groups()
+        return (
+            f"所选事件前窗口（{start} 至 {end}）在严格清洗前包含 {requested_days} 个工作日，"
+            f"但严格剔除缺失值后仅剩 {retained_days} 个完整观测。"
+        )
+    gap_match = re.fullmatch(
+        r"There are (\d+) business days between the pre-event window end \((\S+)\) and the "
+        r"event window start \((\S+)\)\. These dates were removed before period splitting "
+        r"because at least one selected retained variable was missing\.",
+        text,
+    )
+    if gap_match:
+        gap_days, window_end, event_start = gap_match.groups()
+        return (
+            f"事件前窗口结束日期（{window_end}）与事件窗口开始日期（{event_start}）之间有 "
+            f"{gap_days} 个工作日。由于至少一个已选保留变量存在缺失值，这些日期已在划分窗口前剔除。"
+        )
+    alignment_match = re.fullmatch(
+        r"Common window starts at the latest first available date \((\S+), limited by (.+?)\) "
+        r"and ends at the earliest last available date \((\S+), limited by (.+?)\)\."
+        r"(?: Strict complete-case cleaning was applied before the pre-event and event windows were split\.)?",
+        text,
+    )
+    if alignment_match:
+        start, start_limiters, end, end_limiters = alignment_match.groups()
+        translated = (
+            f"公共数据窗口从各变量最晚的首个有效日期开始（{start}，受 {start_limiters} 限制），"
+            f"到各变量最早的最后有效日期结束（{end}，受 {end_limiters} 限制）。"
+        )
+        if "Strict complete-case cleaning was applied" in text:
+            translated += "在划分事件前窗口与事件窗口之前，已执行严格完整样本清洗。"
+        return translated
     for english, chinese in sorted(RUNTIME_TRANSLATIONS.items(), key=lambda item: len(item[0]), reverse=True):
         text = text.replace(english, chinese)
     text = text.replace("...", "……")
@@ -279,6 +413,13 @@ def localized_runtime_message(message: str, language: LanguageCode) -> str:
 
 
 WORKFLOW_COLUMN_TRANSLATIONS = {
+    "Item": "项目",
+    "Value": "值",
+    "Period": "期间",
+    "Start": "开始日期",
+    "End": "结束日期",
+    "TradingDays": "交易日数",
+    "Basis": "计算依据",
     "Variable": "变量",
     "AutoDownload": "自动下载",
     "UpdateResult": "更新结果",
@@ -317,7 +458,96 @@ WORKFLOW_COLUMN_TRANSLATIONS = {
     "TradingDayInterval": "交易日间隔",
     "CalendarDayInterval": "自然日间隔",
     "FEVD_h": "FEVD 预测期 h",
+    "IncludedDrivers": "纳入的驱动变量",
+    "DriverSelectionRule": "驱动变量选择规则",
+    "LagSelectionRule": "滞后阶数选择规则",
+    "LagOrder": "滞后阶数",
+    "LagCriterion": "滞后阶数准则",
+    "VARLag": "VAR 滞后阶数",
+    "VMDSource": "VMD 数据来源",
+    "RollingWindow": "滚动窗口",
+    "MethodNote": "方法说明",
+    "NextStep": "下一步",
+    "ExternalVariable": "外部变量",
+    "ExternalRelativeWeight": "外部相对权重",
+    "ExternalRelativeWeightPercent": "外部相对权重百分比",
+    "NetContribution": "净贡献",
+    "OneDayNetContribution": "单日净贡献",
+    "OneDayDate": "单日日期",
+    "NarrowImpact": "狭义影响",
+    "BroadImpact": "广义影响",
+    "MinimumDate": "最小值日期",
+    "MaximumDate": "最大值日期",
+    "MinDate": "最小值日期",
+    "MaxDate": "最大值日期",
+    "Cause": "原因变量",
+    "BreakDate": "突变日期",
+    "BreakModelRSS": "突变模型残差平方和",
+    "CandidateBreakDate": "候选突变日期",
+    "CandidateBreakIndex": "候选突变位置",
+    "CorrelationWithOriginal": "与原始序列的相关系数",
+    "EconomicInterpretation": "经济含义",
+    "EventMaximum": "事件窗口最大值",
+    "EventMinimum": "事件窗口最小值",
+    "EventRange": "事件窗口极差",
+    "EventRangeShare": "事件窗口极差占比",
+    "FStat": "F 统计量",
+    "FStatistic": "F 统计量",
+    "FStatisticWithStars": "F 统计量及显著性标记",
+    "GPRDSignificant": "GPRD 是否显著",
+    "IncludedInContributionModel": "是否纳入贡献模型",
+    "IncludedInModel": "是否纳入模型",
+    "Lag": "滞后阶数",
+    "LevelShift": "水平跃迁",
+    "MaxLag": "最大滞后阶数",
+    "MaximumValue": "最大值",
+    "MeanPeriod": "平均周期",
+    "MinimumValue": "最小值",
+    "NEI": "净影响指数（NEI）",
+    "NEI_M": "多尺度净影响指数（NEI-M）",
+    "NormalizedFrequency": "归一化频率",
+    "OriginalMaxDate": "原始最大值日期",
+    "OriginalMaxValue": "原始最大值",
+    "OriginalMinDate": "原始最小值日期",
+    "OriginalMinValue": "原始最小值",
+    "OriginalTotalResponse": "原始总响应",
+    "PValue": "p 值",
+    "PostBreakSlope": "突变后斜率",
+    "PreBreakSlope": "突变前斜率",
+    "RestrictedRSS": "受限模型残差平方和",
+    "SelectedScaleMaximumValue": "主尺度最大值",
+    "SelectedScaleMinimumValue": "主尺度最小值",
+    "SelectionReason": "选择依据",
+    "ShareInOriginalResponse": "原始响应占比",
+    "Significance": "显著性",
+    "SlopeChange": "斜率变化",
+    "VarianceContributionPercent": "方差贡献率",
+    "GPRDWeight": "GPRD 权重",
+    "GPRDWeightPercent": "GPRD 权重百分比",
+    "GPRDGoldOVXWeight": "战争相关变量组合权重",
+    "GPRD_Gold_OVX_WeightPercent": "战争相关变量组合权重百分比",
 }
+
+
+def localized_workflow_value(value: Any, language: LanguageCode) -> Any:
+    """Localize known result-table explanations without changing data values."""
+    if language == "en" or not isinstance(value, str):
+        return value
+    if value in WORKFLOW_VALUE_TRANSLATIONS:
+        return WORKFLOW_VALUE_TRANSLATIONS[value]
+    dynamic_scale_rule = re.fullmatch(
+        r"Dynamic paper-style selection from (.+) using MRGC/GPRD significance, "
+        r"event-window range share, variance contribution, and correlation; "
+        r"one or multiple IMFs may be retained",
+        value,
+    )
+    if dynamic_scale_rule:
+        levels = dynamic_scale_rule.group(1)
+        return (
+            f"依据 MRGC/GPRD 显著性、事件窗口振幅占比、方差贡献和相关性，"
+            f"从 {levels} 中按论文方法动态选择；可保留一个或多个 IMF"
+        )
+    return localized_runtime_message(value, language)
 
 
 def localized_workflow_frame(frame: pd.DataFrame, language: LanguageCode | None = None) -> pd.DataFrame:
@@ -325,12 +555,17 @@ def localized_workflow_frame(frame: pd.DataFrame, language: LanguageCode | None 
     active_language = current_language() if language is None else language
     if active_language == "en":
         return frame.rename(columns=lambda column: str(column).replace("_", " ").replace("^", ""))
-    return frame.rename(
+    localized = frame.rename(
         columns=lambda column: WORKFLOW_COLUMN_TRANSLATIONS.get(
             str(column),
             str(column).replace("_", " ").replace("^", ""),
         )
     )
+    for column in localized.columns:
+        localized[column] = localized[column].map(
+            lambda value: localized_workflow_value(value, active_language)
+        )
+    return localized
 
 
 def render_language_switcher() -> None:
@@ -4910,13 +5145,19 @@ def render_paper_replication_tab() -> None:
             with st.expander(ui_text(f"VMD decomposition figures ({len(vmd_figures)})", f"VMD 分解图（{len(vmd_figures)}）"), expanded=False):
                 for figure_path in vmd_figures:
                     label = figure_path.stem.replace("paper_vmd_decomposition_", "").replace("_", " ").upper()
-                    render_downloadable_image(f"VMD decomposition: {label}", figure_path)
+                    render_downloadable_image(
+                        ui_text(f"VMD decomposition: {label}", f"VMD 分解：{label}"),
+                        figure_path,
+                    )
         else:
             st.info(ui_text("VMD decomposition figures are not available yet. Re-run the analysis.", "VMD 分解图尚未生成，请重新运行分析。"))
         render_downloadable_image(
             ui_text("HHT IMF1 instantaneous frequency", "HHT IMF1 瞬时频率"),
             PATHS["paper_hht_imf1_figure"],
-            "Corresponds to the paper's IMF1 instantaneous-frequency diagnostic.",
+            ui_text(
+                "Corresponds to the paper's IMF1 instantaneous-frequency diagnostic.",
+                "对应论文中的 IMF1 瞬时频率诊断。",
+            ),
         )
 
     with st.container(border=True):
@@ -4926,13 +5167,19 @@ def render_paper_replication_tab() -> None:
         render_downloadable_table(
             ui_text("FEVD horizon h review", "FEVD 预测期 h 审查"),
             PATHS["paper_h_review"],
-            description="This is the manual-confirmation table shown before TVP/FEVD starts.",
+            description=ui_text(
+                "This is the manual-confirmation table shown before TVP/FEVD starts.",
+                "这是 TVP/FEVD 开始前显示的人工确认表。",
+            ),
         )
         render_downloadable_image(ui_text("Scale statistics figure", "尺度统计图"), PATHS["paper_scale_statistics_figure"])
         render_downloadable_image(
             ui_text("Selected-scale trend figure", "所选尺度趋势图"),
             PATHS["paper_selected_scale_figure"],
-            "This is the chart in your screenshot. It is kept because it validates the selected response scale and marks the extrema used to calculate FEVD_h.",
+            ui_text(
+                "Validates the selected response scale and marks the extrema used to calculate FEVD_h.",
+                "用于验证所选响应尺度，并标记计算 FEVD 预测期 h 所用的极值。",
+            ),
         )
 
     with st.container(border=True):
@@ -4958,13 +5205,25 @@ def render_paper_replication_tab() -> None:
                 render_downloadable_image(
                     title,
                     figure_path,
-                    "Paper Fig. 4.11/4.12 style external relative contribution chart.",
+                    ui_text(
+                        "Paper Fig. 4.11/4.12 style external relative contribution chart.",
+                        "论文图 4.11/4.12 风格的外部相对贡献图。",
+                    ),
                 )
             if PATHS["paper_contribution_figure"].exists():
-                with st.expander("Combined external-contribution overview", expanded=False):
-                    render_downloadable_image("External contribution overview", PATHS["paper_contribution_figure"])
+                with st.expander(
+                    ui_text("Combined external-contribution overview", "外部贡献综合概览"),
+                    expanded=False,
+                ):
+                    render_downloadable_image(
+                        ui_text("External contribution overview", "外部贡献概览"),
+                        PATHS["paper_contribution_figure"],
+                    )
         else:
-            render_downloadable_image("External contribution figure", PATHS["paper_contribution_figure"])
+            render_downloadable_image(
+                ui_text("External contribution figure", "外部贡献图"),
+                PATHS["paper_contribution_figure"],
+            )
         render_downloadable_image(ui_text("Net-impact figure", "净影响图"), PATHS["paper_net_impact_figure"])
 
     with st.container(border=True):
@@ -4973,7 +5232,10 @@ def render_paper_replication_tab() -> None:
         render_downloadable_table(
             ui_text("Optimal-break RSS profile", "最优突变点 RSS 曲线"),
             PATHS["paper_optimal_break_rss"],
-            description="Supports the paper's optimal-break RSS profile figures.",
+            description=ui_text(
+                "Supports the paper's optimal-break RSS profile figures.",
+                "用于生成论文中的最优突变点 RSS 曲线。",
+            ),
             max_rows=120,
         )
         render_downloadable_image(ui_text("Event-start trend-break fit", "事件起点趋势突变拟合"), PATHS["paper_break_figure"])
@@ -5143,7 +5405,7 @@ def render_downloadable_image(title: str, path: Path, description: str | None = 
         return
     image_col, action_col = st.columns([0.78, 0.22])
     with image_col:
-        st.image(str(path), use_container_width=True)
+        st.image(path.read_bytes(), use_container_width=True)
         if description:
             st.caption(description)
     with action_col:
@@ -5165,6 +5427,19 @@ def _safe_figure_token(value: Any) -> str:
     return token or "figure"
 
 
+def external_contribution_figure_title(
+    target: str,
+    selected_scale: str,
+    language: LanguageCode,
+) -> str:
+    """Return a localized title for one external-contribution figure."""
+    return localized_text(
+        f"{target} {selected_scale} external relative contribution",
+        f"{target} {selected_scale} 外部相对贡献",
+        language,
+    )
+
+
 def paper_external_contribution_figure_items() -> list[tuple[str, Path]]:
     """Return paper-style single-target external contribution figures."""
     contribution = load_excel_if_exists(PATHS["paper_contribution_weights"])
@@ -5180,12 +5455,25 @@ def paper_external_contribution_figure_items() -> list[tuple[str, Path]]:
                 f"{_safe_figure_token(target)}_{_safe_figure_token(selected_scale)}.png"
             )
             if path.exists():
-                items.append((f"{target} {selected_scale} external relative contribution", path))
+                items.append(
+                    (
+                        external_contribution_figure_title(
+                            target,
+                            selected_scale,
+                            current_language(),
+                        ),
+                        path,
+                    )
+                )
     if items:
         return items
     return [
         (
-            path.stem.replace("paper_external_contribution_", "").replace("_", " ").upper(),
+            ui_text(
+                path.stem.replace("paper_external_contribution_", "").replace("_", " ").upper(),
+                path.stem.replace("paper_external_contribution_", "").replace("_", " ").upper()
+                + " 外部相对贡献",
+            ),
             path,
         )
         for path in sorted(figures_dir.glob("paper_external_contribution_*_*.png"))

@@ -4,8 +4,126 @@ from __future__ import annotations
 
 import unittest
 
+import pandas as pd
+
 
 class BilingualUITests(unittest.TestCase):
+    def test_result_table_headings_and_explanations_are_localized(self) -> None:
+        from app.streamlit_app import localized_workflow_frame
+
+        frame = pd.DataFrame(
+            [
+                {
+                    "IncludedDrivers": "OVX, Gold",
+                    "DriverSelectionRule": (
+                        "Selected by selected-scale MRGC/BIC Granger test at p < 0.10."
+                    ),
+                    "VMDSource": "Python vmdpy recomputed for the selected sample.",
+                }
+            ]
+        )
+
+        localized = localized_workflow_frame(frame, "zh")
+
+        self.assertEqual(
+            list(localized.columns),
+            ["纳入的驱动变量", "驱动变量选择规则", "VMD 数据来源"],
+        )
+        self.assertEqual(localized.loc[0, "纳入的驱动变量"], "OVX, Gold")
+        self.assertEqual(
+            localized.loc[0, "驱动变量选择规则"],
+            "依据所选尺度的 MRGC/BIC Granger 检验结果选入，显著性水平为 p < 0.10。",
+        )
+        self.assertEqual(
+            localized.loc[0, "VMD 数据来源"],
+            "针对所选样本使用 Python vmdpy 重新计算。",
+        )
+
+    def test_external_contribution_figure_title_follows_selected_language(self) -> None:
+        from app.streamlit_app import external_contribution_figure_title
+
+        self.assertEqual(
+            external_contribution_figure_title("WTI", "IMF3+IMF4", "zh"),
+            "WTI IMF3+IMF4 外部相对贡献",
+        )
+        self.assertEqual(
+            external_contribution_figure_title("WTI", "IMF3+IMF4", "en"),
+            "WTI IMF3+IMF4 external relative contribution",
+        )
+
+    def test_dynamic_window_warnings_use_natural_chinese_word_order(self) -> None:
+        from app.streamlit_app import localized_runtime_message
+
+        cases = {
+            (
+                "Prepared common data window 2024-01-02 to 2026-03-20 does not fully "
+                "cover the initially selected analysis window 2024-01-01 to 2026-03-20."
+            ): (
+                "准备好的公共数据窗口为 2024-01-02 至 2026-03-20，未完全覆盖最初选择的"
+                "分析窗口 2024-01-01 至 2026-03-20。"
+            ),
+            (
+                "The selected pre-event window (2022-11-26 to 2025-01-10) contains "
+                "555 business days before strict cleaning, but only 520 complete "
+                "observations remain after strict missing-data removal."
+            ): (
+                "所选事件前窗口（2022-11-26 至 2025-01-10）在严格清洗前包含 555 个工作日，"
+                "但严格剔除缺失值后仅剩 520 个完整观测。"
+            ),
+            (
+                "There are 3 business days between the pre-event window end (2025-01-08) "
+                "and the event window start (2025-01-13). These dates were removed before "
+                "period splitting because at least one selected retained variable was missing."
+            ): (
+                "事件前窗口结束日期（2025-01-08）与事件窗口开始日期（2025-01-13）之间有 "
+                "3 个工作日。由于至少一个已选保留变量存在缺失值，这些日期已在划分窗口前剔除。"
+            ),
+        }
+
+        for english, chinese in cases.items():
+            with self.subTest(message=english):
+                self.assertEqual(localized_runtime_message(english, "zh"), chinese)
+
+    def test_period_summary_rows_are_localized_as_complete_phrases(self) -> None:
+        from app.streamlit_app import localized_workflow_frame
+
+        frame = pd.DataFrame(
+            [
+                {
+                    "Period": "Requested pre-event window",
+                    "Start": "2022-11-26",
+                    "End": "2025-01-10",
+                    "TradingDays": 555,
+                    "Basis": "Requested business-day window before strict complete-case cleaning.",
+                }
+            ]
+        )
+
+        localized = localized_workflow_frame(frame, "zh")
+
+        self.assertEqual(list(localized.columns), ["期间", "开始日期", "结束日期", "交易日数", "计算依据"])
+        self.assertEqual(localized.loc[0, "期间"], "请求的事件前窗口")
+        self.assertEqual(
+            localized.loc[0, "计算依据"],
+            "严格完整样本清洗前请求的工作日窗口。",
+        )
+
+    def test_dynamic_alignment_note_is_localized_without_losing_limiters(self) -> None:
+        from app.streamlit_app import localized_runtime_message
+
+        english = (
+            "Common window starts at the latest first available date (2024-01-02, limited by WTI) "
+            "and ends at the earliest last available date (2026-03-20, limited by Brent, OVX). "
+            "Strict complete-case cleaning was applied before the pre-event and event windows were split."
+        )
+
+        self.assertEqual(
+            localized_runtime_message(english, "zh"),
+            "公共数据窗口从各变量最晚的首个有效日期开始（2024-01-02，受 WTI 限制），"
+            "到各变量最早的最后有效日期结束（2026-03-20，受 Brent, OVX 限制）。"
+            "在划分事件前窗口与事件窗口之前，已执行严格完整样本清洗。",
+        )
+
     def test_vmd_imf_range_is_one_to_thirty(self) -> None:
         from app.streamlit_app import MAX_VMD_IMF_COUNT, MIN_VMD_IMF_COUNT
 
