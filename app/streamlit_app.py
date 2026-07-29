@@ -1775,41 +1775,42 @@ def apply_custom_css() -> None:
         hr {
             border-color: rgba(35, 35, 32, 0.09) !important;
         }
-        /* Petroleum editorial system: warm canvas, deep ink, one mineral-green accent. */
+        /* Graphite research terminal: dark canvas, cool hierarchy, one copper accent. */
         :root {
-            --oil-ink: #17241F;
-            --oil-muted: #647069;
-            --oil-accent: #23705B;
-            --oil-accent-dark: #174E40;
-            --oil-canvas: #F3F1EA;
-            --oil-surface: #FBFAF6;
-            --oil-line: rgba(23, 36, 31, 0.12);
+            --oil-ink: #EDF2F4;
+            --oil-muted: #97A4AB;
+            --oil-accent: #E58A4A;
+            --oil-accent-dark: #C96F35;
+            --oil-canvas: #0C1114;
+            --oil-surface: #151D21;
+            --oil-surface-raised: #1A2429;
+            --oil-line: rgba(237, 242, 244, 0.11);
         }
         html, body, .stApp, [data-testid="stAppViewContainer"] {
             background:
-                radial-gradient(circle at 74% -12%, rgba(35, 112, 91, 0.13), transparent 34rem),
-                radial-gradient(circle at 100% 40%, rgba(194, 179, 145, 0.12), transparent 28rem),
+                radial-gradient(circle at 82% -18%, rgba(229, 138, 74, 0.10), transparent 30rem),
+                radial-gradient(circle at -8% 42%, rgba(70, 91, 101, 0.12), transparent 30rem),
                 var(--oil-canvas) !important;
             color: var(--oil-ink) !important;
             font-family: "Aptos", "Segoe UI Variable", "PingFang SC", "Microsoft YaHei UI", sans-serif !important;
         }
         [data-testid="stHeader"] {
-            background: rgba(243, 241, 234, 0.84) !important;
-            border-bottom-color: rgba(23, 36, 31, 0.07) !important;
+            background: rgba(12, 17, 20, 0.88) !important;
+            border-bottom-color: var(--oil-line) !important;
         }
         .block-container {
             max-width: 1320px;
             padding-top: 2.35rem;
         }
         [data-testid="stSidebar"] {
-            background: rgba(235, 233, 224, 0.94) !important;
+            background: #10171A !important;
             border-right-color: var(--oil-line) !important;
         }
         [data-testid="stSidebar"] [data-testid="stVerticalBlockBorderWrapper"] {
-            background: rgba(251, 250, 246, 0.76) !important;
+            background: rgba(26, 36, 41, 0.72) !important;
             border: 0 !important;
-            border-radius: 18px 8px 18px 8px !important;
-            box-shadow: inset 0 0 0 1px var(--oil-line), 0 14px 35px rgba(23, 36, 31, 0.045) !important;
+            border-radius: 14px !important;
+            box-shadow: inset 0 0 0 1px var(--oil-line) !important;
         }
         .sidebar-kicker,
         .section-kicker,
@@ -1821,25 +1822,25 @@ def apply_custom_css() -> None:
             letter-spacing: 0.14em !important;
         }
         .dashboard-header {
-            min-height: 188px;
-            padding: 2.15rem 2.5rem 2.45rem !important;
+            min-height: 174px;
+            padding: 2rem 2.35rem 2.2rem !important;
             background:
-                radial-gradient(circle at 92% 12%, rgba(35, 112, 91, 0.19), transparent 24rem),
-                linear-gradient(112deg, rgba(251, 250, 246, 0.98), rgba(247, 246, 240, 0.86)) !important;
+                radial-gradient(circle at 94% 12%, rgba(229, 138, 74, 0.15), transparent 22rem),
+                linear-gradient(112deg, #192226, #12191C) !important;
             border: 0 !important;
-            border-radius: 30px 10px 30px 10px !important;
-            box-shadow: inset 0 0 0 1px var(--oil-line), 0 26px 65px rgba(23, 36, 31, 0.075) !important;
+            border-radius: 16px !important;
+            box-shadow: inset 0 0 0 1px var(--oil-line), 0 18px 42px rgba(0, 0, 0, 0.24) !important;
         }
         .dashboard-header::before {
             width: 360px;
             height: 360px;
             right: -90px;
             top: -205px;
-            background: radial-gradient(circle, rgba(35, 112, 91, 0.34), transparent 64%);
-            opacity: 0.7;
+            background: radial-gradient(circle, rgba(229, 138, 74, 0.25), transparent 64%);
+            opacity: 0.55;
         }
         .dashboard-header::after {
-            background: linear-gradient(110deg, rgba(251, 250, 246, 0.78) 32%, transparent 100%);
+            background: linear-gradient(110deg, rgba(25, 34, 38, 0.65) 32%, transparent 100%);
         }
         .dashboard-header h1 {
             max-width: 900px;
@@ -1860,32 +1861,40 @@ def apply_custom_css() -> None:
             margin: 1.45rem 0 1.7rem;
             padding: 0.33rem;
             gap: 0.28rem;
-            background: rgba(227, 226, 217, 0.72);
+            background: #11191C;
             border: 0 !important;
-            border-radius: 15px 7px 15px 7px;
-            box-shadow: inset 0 0 0 1px rgba(23, 36, 31, 0.07);
+            border-radius: 12px;
+            box-shadow: inset 0 0 0 1px var(--oil-line);
         }
         .stTabs [data-baseweb="tab"] {
             flex: 1 1 0;
             min-height: 2.8rem;
             justify-content: center;
-            border-radius: 11px 5px 11px 5px;
+            border-radius: 9px;
             transition: transform 180ms ease, background 180ms ease, box-shadow 180ms ease;
         }
         .stTabs [data-baseweb="tab"]:hover {
-            background: rgba(251, 250, 246, 0.58);
+            background: rgba(237, 242, 244, 0.055);
         }
         .stTabs [aria-selected="true"] {
-            background: var(--oil-surface) !important;
-            box-shadow: 0 5px 16px rgba(23, 36, 31, 0.09) !important;
+            background: var(--oil-surface-raised) !important;
+            box-shadow: inset 0 -2px 0 var(--oil-accent) !important;
+        }
+        .stTabs .stTabs [data-baseweb="tab-list"] {
+            width: fit-content;
+            min-width: min(100%, 30rem);
+            margin-top: 0.35rem;
+            margin-bottom: 1.25rem;
+            padding: 0.25rem;
         }
         .stTabs [data-testid="stRadio"] > div {
             justify-content: flex-start;
             width: 100%;
             margin: 0 0 1.35rem;
             padding: 0.38rem;
-            background: rgba(227, 226, 217, 0.82);
-            border-radius: 16px 7px 16px 7px;
+            background: #11191C;
+            border-radius: 12px;
+            box-shadow: inset 0 0 0 1px var(--oil-line);
         }
         .stTabs [data-testid="stRadio"] [role="radiogroup"] {
             width: 100%;
@@ -1895,27 +1904,27 @@ def apply_custom_css() -> None:
             flex: 1 1 0;
             justify-content: center;
             min-height: 3rem;
-            border-radius: 12px 5px 12px 5px;
+            border-radius: 9px;
             transition: transform 180ms ease, background 180ms ease, box-shadow 180ms ease;
         }
         .stTabs [data-testid="stRadio"] label:has(input:checked) {
-            background: var(--oil-ink) !important;
-            box-shadow: 0 8px 20px rgba(23, 36, 31, 0.18);
+            background: var(--oil-accent) !important;
+            box-shadow: 0 8px 20px rgba(229, 138, 74, 0.17);
         }
         .stTabs [data-testid="stRadio"] label:has(input:checked) p {
-            color: #FFFFFF !important;
+            color: #101416 !important;
         }
         div[data-testid="stVerticalBlockBorderWrapper"] {
-            background: rgba(251, 250, 246, 0.86) !important;
+            background: rgba(21, 29, 33, 0.88) !important;
             border: 0 !important;
-            border-radius: 22px 8px 22px 8px !important;
-            box-shadow: inset 0 0 0 1px var(--oil-line), 0 16px 38px rgba(23, 36, 31, 0.045) !important;
+            border-radius: 14px !important;
+            box-shadow: inset 0 0 0 1px var(--oil-line), 0 12px 28px rgba(0, 0, 0, 0.12) !important;
         }
         div[data-testid="stMetric"] {
-            background: rgba(251, 250, 246, 0.88) !important;
+            background: var(--oil-surface) !important;
             border: 0 !important;
-            border-radius: 18px 7px 18px 7px !important;
-            box-shadow: inset 0 0 0 1px var(--oil-line), 0 12px 28px rgba(23, 36, 31, 0.045) !important;
+            border-radius: 12px !important;
+            box-shadow: inset 0 0 0 1px var(--oil-line) !important;
         }
         div[data-testid="stMetricValue"] div,
         div[data-testid="stMetricValue"] span {
@@ -1926,13 +1935,14 @@ def apply_custom_css() -> None:
         div[data-testid="stButton"] button[kind="primary"] {
             background: var(--oil-accent) !important;
             border-color: var(--oil-accent) !important;
-            border-radius: 13px 5px 13px 5px !important;
-            box-shadow: 0 9px 24px rgba(35, 112, 91, 0.22);
+            border-radius: 10px !important;
+            box-shadow: 0 8px 20px rgba(229, 138, 74, 0.18);
+            color: #101416 !important;
         }
         div[data-testid="stButton"] button[kind="primary"]:hover {
             background: var(--oil-accent-dark) !important;
             border-color: var(--oil-accent-dark) !important;
-            transform: translateY(-2px);
+            transform: translateY(-1px);
         }
         div[data-testid="stButton"] button:active,
         div[data-testid="stDownloadButton"] button:active {
@@ -1940,11 +1950,12 @@ def apply_custom_css() -> None:
         }
         div[data-testid="stButton"] button:focus-visible,
         div[data-testid="stDownloadButton"] button:focus-visible {
-            box-shadow: 0 0 0 3px rgba(35, 112, 91, 0.23) !important;
+            box-shadow: 0 0 0 3px rgba(229, 138, 74, 0.24) !important;
         }
         div[data-testid="stExpander"] {
+            background: var(--oil-surface) !important;
             border: 0 !important;
-            border-radius: 16px 6px 16px 6px !important;
+            border-radius: 12px !important;
             box-shadow: inset 0 0 0 1px var(--oil-line);
         }
         .empty-state {
@@ -1955,9 +1966,9 @@ def apply_custom_css() -> None:
             margin-top: 1rem;
             padding: 2.5rem;
             background:
-                radial-gradient(circle at 50% 18%, rgba(35, 112, 91, 0.12), transparent 12rem),
-                rgba(251, 250, 246, 0.65);
-            border-radius: 28px 10px 28px 10px;
+                radial-gradient(circle at 50% 18%, rgba(229, 138, 74, 0.09), transparent 12rem),
+                rgba(21, 29, 33, 0.78);
+            border-radius: 14px;
             box-shadow: inset 0 0 0 1px var(--oil-line);
         }
         .empty-state span {
@@ -1974,9 +1985,194 @@ def apply_custom_css() -> None:
             margin: 0;
             color: var(--oil-muted) !important;
         }
+        h1, h2, h3, h4, h5, h6, p, label,
+        [data-testid="stMarkdownContainer"], [data-testid="stCaptionContainer"],
+        [data-testid="stMetricLabel"], [data-testid="stMetricValue"] {
+            color: var(--oil-ink) !important;
+            -webkit-text-fill-color: var(--oil-ink) !important;
+        }
+        h1 *, h2 *, h3 *, h4 *, h5 *, h6 * {
+            color: var(--oil-ink) !important;
+            -webkit-text-fill-color: var(--oil-ink) !important;
+        }
+        [data-testid="stCaptionContainer"], [data-testid="stCaptionContainer"] p,
+        [data-testid="stWidgetLabel"] p, .stTabs [data-baseweb="tab"] p {
+            color: var(--oil-muted) !important;
+        }
+        .stTabs [aria-selected="true"] p { color: var(--oil-ink) !important; }
+        div[data-testid="stTextInput"] input,
+        div[data-testid="stNumberInput"] input,
+        div[data-testid="stDateInput"] input,
+        div[data-baseweb="input"], div[data-baseweb="textarea"],
+        div[data-testid="stSelectbox"] div[data-baseweb="select"],
+        div[data-testid="stMultiSelect"] div[data-baseweb="select"] {
+            background: #182125 !important;
+            border-color: var(--oil-line) !important;
+            color: var(--oil-ink) !important;
+            border-radius: 10px !important;
+        }
+        [data-testid="stSidebar"] label,
+        [data-testid="stSidebar"] p,
+        [data-testid="stSidebar"] span,
+        [data-testid="stSidebar"] [data-testid="stWidgetLabel"] * {
+            color: var(--oil-ink) !important;
+            -webkit-text-fill-color: var(--oil-ink) !important;
+        }
+        div[data-testid="stDateInput"] label,
+        div[data-testid="stDateInput"] label *,
+        div[data-testid="stDateInput"] [data-testid="stWidgetLabel"],
+        div[data-testid="stDateInput"] [data-testid="stWidgetLabel"] * {
+            background: transparent !important;
+            color: var(--oil-ink) !important;
+            -webkit-text-fill-color: var(--oil-ink) !important;
+        }
+        [data-testid="stSidebar"] div[data-baseweb="input"],
+        [data-testid="stSidebar"] div[data-baseweb="input"] *,
+        [data-testid="stSidebar"] div[data-baseweb="select"],
+        [data-testid="stSidebar"] div[data-baseweb="select"] *,
+        [data-testid="stSidebar"] input,
+        div[data-testid="stDateInput"] div[data-baseweb="input"],
+        div[data-testid="stDateInput"] div[data-baseweb="input"] *,
+        div[data-testid="stDateInput"] input,
+        div[data-testid="stSelectbox"], div[data-testid="stSelectbox"] *,
+        div[data-baseweb="select"], div[data-baseweb="select"] * {
+            background: #182125 !important;
+            color: var(--oil-ink) !important;
+            -webkit-text-fill-color: var(--oil-ink) !important;
+            border-color: var(--oil-line) !important;
+        }
+        div[data-baseweb="select"] svg,
+        div[data-baseweb="select"] svg * {
+            fill: var(--oil-muted) !important;
+            stroke: var(--oil-muted) !important;
+            color: var(--oil-muted) !important;
+        }
+        span[data-baseweb="tag"], span[data-baseweb="tag"] * {
+            background: rgba(229, 138, 74, 0.14) !important;
+            color: #F0B589 !important;
+            -webkit-text-fill-color: #F0B589 !important;
+        }
+        div[data-testid="stTextInput"] input::placeholder,
+        div[data-testid="stNumberInput"] input::placeholder { color: #718087 !important; }
+        div[data-testid="stButton"] button:not([kind="primary"]),
+        div[data-testid="stDownloadButton"] button,
+        button[data-testid="stBaseButton-secondary"] {
+            background: #182125 !important;
+            border-color: var(--oil-line) !important;
+            color: var(--oil-ink) !important;
+            border-radius: 10px !important;
+        }
+        div[data-testid="stButton"] button:not([kind="primary"]):hover,
+        div[data-testid="stDownloadButton"] button:hover {
+            border-color: rgba(229, 138, 74, 0.55) !important;
+            color: var(--oil-accent) !important;
+        }
+        div[data-testid="stButton"] button[kind="primary"] p,
+        div[data-testid="stButton"] button[kind="primary"] span {
+            color: #101416 !important;
+        }
+        body div[data-baseweb="popover"], body div[data-baseweb="menu"],
+        body ul[role="listbox"], body div[role="dialog"] {
+            background: #172025 !important;
+            border-color: var(--oil-line) !important;
+            color: var(--oil-ink) !important;
+        }
+        body li[role="option"], body div[role="option"] { color: var(--oil-ink) !important; }
+        body li[role="option"]:hover, body div[role="option"]:hover {
+            background: rgba(229, 138, 74, 0.11) !important;
+        }
+        body [data-testid="stPopoverBody"] > div {
+            background: #172025 !important;
+        }
+        body div[data-baseweb="popover"] > div,
+        body div[data-baseweb="popover"] > div > div {
+            background: #172025 !important;
+        }
+        body [data-testid="stPopoverBody"] p,
+        body [data-testid="stPopoverBody"] label,
+        body [data-testid="stPopoverBody"] strong,
+        body [data-testid="stPopoverBody"] span {
+            color: var(--oil-ink) !important;
+            -webkit-text-fill-color: var(--oil-ink) !important;
+        }
+        body [data-testid="stPopoverBody"] a,
+        body [data-testid="stPopoverBody"] a * {
+            color: #F0A36B !important;
+            -webkit-text-fill-color: #F0A36B !important;
+        }
+        body [data-testid="stPopoverBody"] [data-testid="stForm"],
+        body [data-testid="stPopoverBody"] div[data-baseweb="input"],
+        body [data-testid="stPopoverBody"] div[data-baseweb="input"] *,
+        body [data-testid="stPopoverBody"] input {
+            background: #10171A !important;
+            border-color: var(--oil-line) !important;
+            color: var(--oil-ink) !important;
+            -webkit-text-fill-color: var(--oil-ink) !important;
+        }
+        body [data-testid="stPopoverBody"] button {
+            background: var(--oil-surface-raised) !important;
+            border-color: var(--oil-line) !important;
+            color: var(--oil-ink) !important;
+        }
+        div[data-testid="stExpander"] details,
+        div[data-testid="stExpander"] summary,
+        div[data-testid="stExpander"] summary *,
+        div[data-testid="stExpander"] * {
+            background: var(--oil-surface) !important;
+            color: var(--oil-ink) !important;
+            -webkit-text-fill-color: var(--oil-ink) !important;
+        }
+        body [data-testid="stPopoverBody"] .api-status-badge.missing {
+            color: #FFAAA4 !important;
+            -webkit-text-fill-color: #FFAAA4 !important;
+            background: rgba(239, 83, 80, 0.12) !important;
+            border-color: rgba(239, 83, 80, 0.32) !important;
+        }
+        body [data-testid="stPopoverBody"] .api-status-badge.configured {
+            color: #86D5B0 !important;
+            -webkit-text-fill-color: #86D5B0 !important;
+            background: rgba(58, 158, 112, 0.12) !important;
+            border-color: rgba(58, 158, 112, 0.32) !important;
+        }
+        body [data-testid="stPopoverBody"] .api-status-badge.warning {
+            color: #F7C36F !important;
+            -webkit-text-fill-color: #F7C36F !important;
+            background: rgba(229, 138, 74, 0.12) !important;
+            border-color: rgba(229, 138, 74, 0.34) !important;
+        }
+        div[data-testid="stAlert"], div[data-baseweb="notification"] {
+            background: var(--oil-surface-raised) !important;
+            border-color: var(--oil-line) !important;
+            color: var(--oil-ink) !important;
+        }
+        [data-testid="stDataFrame"], [data-testid="stTable"] {
+            border-color: var(--oil-line) !important;
+            border-radius: 12px !important;
+            overflow: hidden;
+        }
+        .top-tool-menu + div button, [data-testid="stPopover"] button {
+            min-height: 2.8rem;
+            white-space: nowrap;
+        }
+        div[data-testid="stPopover"] button,
+        div[data-testid="stPopover"] button:hover {
+            background: var(--oil-accent) !important;
+            border-color: var(--oil-accent) !important;
+            color: #101416 !important;
+            border-radius: 10px !important;
+        }
+        div[data-testid="stPopover"] button p,
+        div[data-testid="stPopover"] button span,
+        div[data-testid="stPopover"] button svg {
+            color: #101416 !important;
+            -webkit-text-fill-color: #101416 !important;
+            fill: #101416 !important;
+            stroke: #101416 !important;
+        }
+        hr { border-color: var(--oil-line) !important; }
         @media (max-width: 760px) {
             .block-container { padding-left: 1rem; padding-right: 1rem; }
-            .dashboard-header { min-height: auto; padding: 1.6rem !important; border-radius: 18px !important; }
+            .dashboard-header { min-height: auto; padding: 1.6rem !important; border-radius: 14px !important; }
             .dashboard-header h1 { font-size: 2.35rem; }
             .stTabs [data-baseweb="tab-list"] { width: 100%; }
             .stTabs [data-baseweb="tab"] { padding: 0.5rem 0.35rem; }
@@ -1996,7 +2192,7 @@ def render_main_header() -> None:
         "Net impact · Brent forecast · five-day risk signal",
         "净影响 · Brent 价格预测 · 五日风险信号",
     )
-    title_col, tools_col = st.columns([0.94, 0.06])
+    title_col, tools_col = st.columns([0.79, 0.21])
     with title_col:
         st.markdown(
             f"""
@@ -2563,28 +2759,23 @@ def render_api_settings_panel(status: dict[str, Any], *, browser_persistence: bo
     st.markdown(
         ui_text(
         """
-        **API keys**
+        **Enter data-source API keys here**
 
-        FRED API key: Federal Reserve Economic Data. It is the preferred source
-        for several U.S. financial and macro variables. The app also has
-        automatic fallbacks for many variables, including Yahoo Finance, U.S.
-        Treasury yield-curve data, New York Fed EFFR, and policyuncertainty.com.
-        Register at
-        [fred.stlouisfed.org](https://fred.stlouisfed.org/docs/api/api_key.html).
+        Paste your **FRED** key for macro and financial data, and your **EIA** key
+        for energy data. GPRD does not require a key.
 
-        EIA API key: U.S. Energy Information Administration Open Data. Used for WTI
-        futures data refreshes. Register at
-        [eia.gov/opendata](https://www.eia.gov/opendata/register.php).
-
-        GPRD does not need an API key. It updates from the official Caldara-Iacoviello
-        daily GPR file.
+        Get keys: [FRED](https://fred.stlouisfed.org/docs/api/api_key.html) ·
+        [EIA](https://www.eia.gov/opendata/register.php)
 
         """,
         """
-        **API 密钥**
+        **这里是填写数据源 API 密钥的地方**
 
-        每位用户填写自己的 FRED 与 EIA 密钥，用于市场和宏观数据更新；
-        GPRD 不需要密钥。若启用浏览器保存，密钥仅在当前浏览器中恢复。
+        在下方粘贴你自己的 **FRED** 密钥（宏观与金融数据）和 **EIA** 密钥
+        （能源数据）。GPRD 不需要密钥。
+
+        申请密钥：[FRED](https://fred.stlouisfed.org/docs/api/api_key.html) ·
+        [EIA](https://www.eia.gov/opendata/register.php)
 
         """,
         )
@@ -2603,7 +2794,12 @@ def render_api_settings_panel(status: dict[str, Any], *, browser_persistence: bo
         elif validation_status == "invalid":
             st.error(validation_message)
         elif validation_status == "unverified":
-            st.warning(validation_message)
+            st.warning(
+                ui_text(
+                    "The FRED key is saved, but the current network could not verify it. Check the network only if a data refresh fails.",
+                    "FRED 密钥已保存，但当前网络无法完成验证；仅在数据更新失败时检查网络。",
+                )
+            )
     if eia_status.get("configured"):
         st.caption(
             ui_text(
@@ -2700,16 +2896,12 @@ def render_cloud_api_tool_menu() -> None:
         badge_text = ui_text("Your API keys are ready", "你的 API 密钥已就绪")
 
     st.markdown('<div class="top-tool-menu">', unsafe_allow_html=True)
-    with st.popover("⋯", use_container_width=False):
+    with st.popover(ui_text("Enter API keys", "填写 API 密钥"), use_container_width=True):
         st.markdown(
             f'<span class="api-status-badge {badge_class}">{badge_text}</span>',
             unsafe_allow_html=True,
         )
-        with st.expander(
-            ui_text("My API keys", "我的 API 密钥"),
-            expanded=api_missing or api_invalid,
-        ):
-            render_api_settings_panel(status_info, browser_persistence=True)
+        render_api_settings_panel(status_info, browser_persistence=True)
 
 
 def render_top_tool_menu() -> None:
@@ -2735,25 +2927,12 @@ def render_top_tool_menu() -> None:
         badge_text = ui_text("API configured", "API 已配置")
 
     st.markdown('<div class="top-tool-menu">', unsafe_allow_html=True)
-    with st.popover("⋯", use_container_width=False):
+    with st.popover(ui_text("API data source settings", "API 数据源设置"), use_container_width=True):
         st.markdown(
             f'<span class="api-status-badge {badge_class}">{badge_text}</span>',
             unsafe_allow_html=True,
         )
-        api_button_label = ui_text("API setup required", "需要配置 API") if api_missing or api_invalid else ui_text("API settings", "API 设置")
-        if st.button(
-            api_button_label,
-            type="primary" if api_missing or api_invalid else "secondary",
-            use_container_width=True,
-            key="open_api_settings",
-        ):
-            st.session_state["api_settings_expanded"] = True
-
-        with st.expander(
-            ui_text("API Settings", "API 设置"),
-            expanded=api_missing or api_invalid or bool(st.session_state.get("api_settings_expanded", False)),
-        ):
-            render_api_settings_panel(status_info)
+        render_api_settings_panel(status_info)
 
         st.divider()
         st.markdown(ui_text("**Cleanup**", "**清理**"))
@@ -6392,6 +6571,22 @@ def render_professional_pipeline_tab(options: dict[str, Any]) -> None:
     render_upload_controls(net_options)
 
 
+def _apply_dark_plot_theme(figure: Any) -> Any:
+    """Apply the dashboard's graphite theme to interactive Plotly figures."""
+    figure.update_layout(
+        template="plotly_dark",
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(color="#C9D3D8"),
+        title_font=dict(color="#EDF2F4"),
+        legend=dict(bgcolor="rgba(0,0,0,0)"),
+        hoverlabel=dict(bgcolor="#1A2429", bordercolor="#36444B", font_color="#EDF2F4"),
+    )
+    figure.update_xaxes(gridcolor="rgba(237,242,244,0.08)", zerolinecolor="rgba(237,242,244,0.10)")
+    figure.update_yaxes(gridcolor="rgba(237,242,244,0.08)", zerolinecolor="rgba(237,242,244,0.10)")
+    return figure
+
+
 def _render_quick_mode_results(result: dict[str, Any]) -> None:
     """Render quick-mode outputs with interactive paper-channel charts."""
     import plotly.express as px
@@ -6451,6 +6646,7 @@ def _render_quick_mode_results(result: dict[str, Any]) -> None:
                 margin=dict(l=20, r=20, t=70, b=20),
                 height=440,
             )
+            _apply_dark_plot_theme(figure)
             st.plotly_chart(figure, use_container_width=True, key=f"quick_channel_pie_{target}")
 
     if not imf_summary.empty and "EventRangeShare" in imf_summary.columns:
@@ -6474,6 +6670,7 @@ def _render_quick_mode_results(result: dict[str, Any]) -> None:
             },
         )
         figure.update_layout(height=430, margin=dict(l=20, r=20, t=60, b=20))
+        _apply_dark_plot_theme(figure)
         st.plotly_chart(figure, use_container_width=True, key="quick_imf_event_response")
 
     table_columns = [
@@ -6719,6 +6916,7 @@ def _render_warning_results(payload: dict[str, Any]) -> None:
             hovermode="x unified",
             legend=dict(orientation="h", y=1.08),
         )
+        _apply_dark_plot_theme(figure)
         st.plotly_chart(figure, use_container_width=True, key="warning_attention_timeline")
 
     channels = result.channel_scores.copy()
@@ -6734,6 +6932,7 @@ def _render_warning_results(payload: dict[str, Any]) -> None:
         )
         channel_figure.update_traces(texttemplate="%{label}<br>%{value:.1f}%")
         channel_figure.update_layout(height=440, margin=dict(l=20, r=20, t=70, b=20))
+        _apply_dark_plot_theme(channel_figure)
         st.plotly_chart(channel_figure, use_container_width=True, key="warning_channel_pie")
 
     st.info(ui_text(payload.get("trends_note", ""), payload.get("trends_note", "")))
@@ -6751,7 +6950,7 @@ def _save_price_forecast_workbook(result: Any) -> None:
         pd.DataFrame([result.metrics]).to_excel(writer, sheet_name="Validation", index=False)
 
 
-def render_price_forecast_tab() -> None:
+def render_brent_forecast_panel() -> None:
     """Render a discoverable, runnable Brent price forecast result page."""
     import plotly.graph_objects as go
 
@@ -6847,27 +7046,28 @@ def render_price_forecast_tab() -> None:
     figure = go.Figure()
     figure.add_trace(go.Scatter(
         x=history["Date"], y=history["Actual"], name=ui_text("Actual", "实际价格"),
-        line=dict(color="#18382F", width=2.2), hovertemplate="%{x|%Y-%m-%d}<br>$%{y:.2f}<extra></extra>",
+        line=dict(color="#D9E2E6", width=2.2), hovertemplate="%{x|%Y-%m-%d}<br>$%{y:.2f}<extra></extra>",
     ))
     figure.add_trace(go.Scatter(
         x=forecast["Date"], y=forecast["Upper80"], showlegend=False,
-        line=dict(color="rgba(35, 112, 91, 0.05)"), hoverinfo="skip",
+        line=dict(color="rgba(229, 138, 74, 0.05)"), hoverinfo="skip",
     ))
     figure.add_trace(go.Scatter(
         x=forecast["Date"], y=forecast["Lower80"], name=ui_text("Empirical 80% band", "经验 80% 区间"),
-        fill="tonexty", fillcolor="rgba(35, 112, 91, 0.14)",
-        line=dict(color="rgba(35, 112, 91, 0.08)"), hoverinfo="skip",
+        fill="tonexty", fillcolor="rgba(229, 138, 74, 0.15)",
+        line=dict(color="rgba(229, 138, 74, 0.08)"), hoverinfo="skip",
     ))
     figure.add_trace(go.Scatter(
         x=forecast["Date"], y=forecast["PointForecast"], name=ui_text("Forecast", "预测价格"),
-        line=dict(color="#23705B", width=2.5, dash="dash"),
+        line=dict(color="#E58A4A", width=2.5, dash="dash"),
         hovertemplate="%{x|%Y-%m-%d}<br>$%{y:.2f}<extra></extra>",
     ))
     figure.update_layout(
         height=500, margin=dict(l=12, r=12, t=30, b=10), hovermode="x unified",
         legend=dict(orientation="h", y=1.08), xaxis_title=None,
-        yaxis_title=ui_text("USD / barrel", "美元/桶"), template="plotly_white",
+        yaxis_title=ui_text("USD / barrel", "美元/桶"),
     )
+    _apply_dark_plot_theme(figure)
     st.plotly_chart(figure, use_container_width=True, key="brent_price_forecast_chart")
 
     with st.expander(ui_text("IMF models and forecast table", "IMF 模型与预测明细")):
@@ -7040,6 +7240,22 @@ def render_run_pipeline_tab(options: dict[str, Any]) -> None:
         render_professional_pipeline_tab(run_options)
 
 
+def render_price_forecast_tab(options: dict[str, Any]) -> None:
+    """Group Brent forecasting and crisis warning in one forecast workspace."""
+    st.markdown(
+        f'<p class="section-kicker">{ui_text("FORECAST WORKSPACE", "预测工作区")}</p>',
+        unsafe_allow_html=True,
+    )
+    forecast_tabs = st.tabs([
+        ui_text("Brent forecast", "Brent 价格预测"),
+        ui_text("Crisis warning", "危机预警"),
+    ])
+    with forecast_tabs[0]:
+        render_brent_forecast_panel()
+    with forecast_tabs[1]:
+        render_crisis_warning_tab(options)
+
+
 def main() -> None:
     """Run the Streamlit application."""
     configure_page()
@@ -7054,16 +7270,13 @@ def main() -> None:
         ui_text("Run analysis", "运行分析"),
         ui_text("Price forecast", "价格预测"),
         ui_text("Analysis results", "分析结果"),
-        ui_text("Crisis signal", "危机预警"),
     ])
     with tabs[0]:
         render_run_pipeline_tab(options)
     with tabs[1]:
-        render_price_forecast_tab()
+        render_price_forecast_tab(options)
     with tabs[2]:
         render_paper_replication_tab()
-    with tabs[3]:
-        render_crisis_warning_tab(options)
 
 
 if __name__ == "__main__":
