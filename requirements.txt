@@ -18,3 +18,5 @@ python-docx>=1.1
 pyyaml>=6.0
 akshare>=1.18
 PyMuPDF>=1.24
+plotly>=5.24
+pytrends>=4.9.2

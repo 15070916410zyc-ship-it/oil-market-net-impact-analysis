@@ -29,6 +29,14 @@ from src.api_credentials import (  # noqa: E402 - project root is added above.
     encrypt_api_keys,
     set_session_api_keys,
 )
+from src.quick_analysis import (  # noqa: E402
+    IMF_CHANNELS,
+    QUICK_ESTIMATION_TRADING_DAYS,
+    automatic_estimation_window,
+    build_channel_contribution_summary,
+    build_quick_imf_summary,
+    group_variables,
+)
 
 DEFAULT_PRE_EVENT_WINDOW_TRADING_DAYS = 300
 DEFAULT_VARIABLE_SELECTION_VERSION = "full-pool-no-bdti-v7-compact-selector"
@@ -73,6 +81,7 @@ VARIABLE_CHINESE_NAMES: dict[str, str] = {
     "EPU": "美国经济政策不确定性指数",
     "TPU": "贸易政策不确定性指数",
     "EMV": "股票市场波动新闻指数",
+    "CrudeStocks": "美国商业原油库存",
 }
 
 VARIABLE_SHORT_CHINESE_NAMES: dict[str, str] = {
@@ -99,6 +108,7 @@ VARIABLE_SHORT_CHINESE_NAMES: dict[str, str] = {
     "EPU": "经济政策不确定性",
     "TPU": "贸易政策不确定性",
     "EMV": "股票市场波动新闻",
+    "CrudeStocks": "美国原油库存",
 }
 
 SOURCE_DISPLAY_NAMES: dict[str, tuple[str, str]] = {
@@ -111,6 +121,7 @@ SOURCE_DISPLAY_NAMES: dict[str, tuple[str, str]] = {
     "exchange_futures_daily": ("Official futures exchange", "期货交易所"),
     "sina_main_futures": ("Sina Finance", "新浪财经"),
     "policy_uncertainty_daily": ("Policy Uncertainty Database", "政策不确定性数据库"),
+    "eia_excel": ("U.S. Energy Information Administration", "美国能源信息署"),
 }
 
 
@@ -154,6 +165,10 @@ PATHS = {
     "upload_original_dir": PROJECT_ROOT / "data" / "raw" / "uploads" / "originals",
     "uploaded_variable_manifest": PROJECT_ROOT / "outputs" / "tables" / "uploaded_variable_manifest.xlsx",
     "uploaded_variable_quality_report": PROJECT_ROOT / "outputs" / "tables" / "uploaded_variable_quality_report.xlsx",
+    "quick_imf_channel_summary": PROJECT_ROOT / "outputs" / "tables" / "quick_imf_channel_summary.xlsx",
+    "quick_channel_contribution_summary": PROJECT_ROOT / "outputs" / "tables" / "quick_channel_contribution_summary.xlsx",
+    "warning_results": PROJECT_ROOT / "outputs" / "tables" / "crisis_warning_results.xlsx",
+    "google_trends_cache": PROJECT_ROOT / "data" / "raw" / "google_trends_crisis_timeline.csv",
 }
 
 
@@ -2926,10 +2941,32 @@ def load_uploaded_variable_names() -> list[str]:
 def render_sidebar() -> dict[str, Any]:
     """Render sidebar controls."""
     st.sidebar.header(ui_text("Analysis Settings", "分析设置"))
+    analysis_mode = st.sidebar.radio(
+        ui_text("Run mode", "运行模式"),
+        options=["quick", "professional"],
+        index=1,
+        format_func=lambda value: {
+            "quick": ui_text("Quick mode", "快速模式"),
+            "professional": ui_text("Professional mode", "专业模式"),
+        }[value],
+        help=ui_text(
+            "Quick mode fixes five IMFs, sets the estimation window automatically, and runs without intermediate confirmations. Professional mode preserves the original workflow.",
+            "快速模式固定为 5 个 IMF、自动设置估计窗并无中途确认；专业模式保留原有完整流程。",
+        ),
+        key="net_impact_analysis_mode",
+    )
     st.sidebar.caption(
         ui_text(
-            "Set the analysis/event window. Variables and method settings are configured on the Run Analysis page.",
-            "设置分析与事件窗口；变量和方法参数在“运行分析”页面配置。",
+            (
+                "Set the event window. Variables and method settings are configured on the Run Analysis page."
+                if analysis_mode == "quick"
+                else "Set the analysis/event window. Variables and method settings are configured on the Run Analysis page."
+            ),
+            (
+                "设置事件窗口；变量和方法参数在“运行分析”页面配置。"
+                if analysis_mode == "quick"
+                else "设置分析与事件窗口；变量和方法参数在“运行分析”页面配置。"
+            ),
         )
     )
     local_start, local_end = get_complete_market_date_range_if_exists(PATHS["clean_market"])
@@ -2940,7 +2977,11 @@ def render_sidebar() -> dict[str, Any]:
     if local_start is not None and default_start < local_start:
         default_start = local_start
     with st.sidebar.container(border=True):
-        st.markdown(ui_text("**Analysis Window**", "**分析窗口**"))
+        st.markdown(
+            ui_text("**Event Window**", "**事件窗口**")
+            if analysis_mode == "quick"
+            else ui_text("**Analysis Window**", "**分析窗口**")
+        )
         start_picker_key = "analysis_start_date_picker"
         end_picker_key = "analysis_end_date_picker"
         if start_picker_key not in st.session_state:
@@ -2965,41 +3006,64 @@ def render_sidebar() -> dict[str, Any]:
             start_timestamp = default_start
             end_timestamp = default_end
         requested_window_end = (start_timestamp - pd.offsets.BDay(1)).normalize()
-        default_window_dates = pd.bdate_range(
-            end=requested_window_end,
-            periods=DEFAULT_PRE_EVENT_WINDOW_TRADING_DAYS,
-        )
-        default_window_start = pd.Timestamp(default_window_dates.min()).normalize()
-        window_start_picker_key = "pre_event_window_start_date_picker"
-        if window_start_picker_key not in st.session_state:
-            st.session_state[window_start_picker_key] = default_window_start.date()
-        current_window_start = pd.to_datetime(
-            st.session_state.get(window_start_picker_key, default_window_start.date()),
-            errors="coerce",
-        )
-        if pd.isna(current_window_start) or current_window_start.normalize() > requested_window_end:
-            st.session_state[window_start_picker_key] = default_window_start.date()
-        window_start_date = st.date_input(
-            ui_text("Window period start date", "事件前窗口开始日期"),
-            format="YYYY/MM/DD",
-            max_value=requested_window_end.date(),
-            key=window_start_picker_key,
-        )
-        window_start_timestamp = pd.Timestamp(window_start_date).normalize()
-        if window_start_timestamp > requested_window_end:
-            window_start_timestamp = default_window_start
-            st.session_state[window_start_picker_key] = default_window_start.date()
-            st.warning(ui_text("Window period start date must be before the event start date. The default start date is used.", "事件前窗口开始日期必须早于事件开始日期，已使用默认日期。"))
-        window_trading_days = max(1, business_day_count(window_start_timestamp, requested_window_end))
-        st.caption(ui_text(f"Selected window: {start_timestamp:%Y-%m-%d} to {end_timestamp:%Y-%m-%d}", f"已选分析窗口：{start_timestamp:%Y-%m-%d} 至 {end_timestamp:%Y-%m-%d}"))
-        st.caption(ui_text(f"Pre-event window: {window_start_timestamp:%Y-%m-%d} to {requested_window_end:%Y-%m-%d}.", f"事件前窗口：{window_start_timestamp:%Y-%m-%d} 至 {requested_window_end:%Y-%m-%d}。"))
-        st.caption(ui_text(f"Selected pre-event length: {window_trading_days} business days before cleaning.", f"清洗前事件窗口长度：{window_trading_days} 个工作日。"))
-        st.caption(
-            ui_text(
-                "The pre-event length is the baseline window used before the event; it is not the event start date or the data-cleaning start date.",
-                "事件前长度是事件发生前的基准窗口，并非事件开始日期或数据清洗开始日期。",
+        if analysis_mode == "quick":
+            window_start_timestamp, requested_window_end = automatic_estimation_window(
+                start_timestamp,
+                available_start=local_start,
             )
-        )
+            window_trading_days = max(1, business_day_count(window_start_timestamp, requested_window_end))
+            st.caption(
+                ui_text(
+                    f"Event window: {start_timestamp:%Y-%m-%d} to {end_timestamp:%Y-%m-%d}",
+                    f"事件窗口：{start_timestamp:%Y-%m-%d} 至 {end_timestamp:%Y-%m-%d}",
+                )
+            )
+            st.info(
+                ui_text(
+                    f"Quick mode automatically uses {window_start_timestamp:%Y-%m-%d} to "
+                    f"{requested_window_end:%Y-%m-%d} as the estimation window "
+                    f"({window_trading_days} business days; target {QUICK_ESTIMATION_TRADING_DAYS}).",
+                    f"快速模式自动使用 {window_start_timestamp:%Y-%m-%d} 至 "
+                    f"{requested_window_end:%Y-%m-%d} 作为估计窗"
+                    f"（{window_trading_days} 个工作日；目标长度 {QUICK_ESTIMATION_TRADING_DAYS}）。",
+                )
+            )
+        else:
+            default_window_dates = pd.bdate_range(
+                end=requested_window_end,
+                periods=DEFAULT_PRE_EVENT_WINDOW_TRADING_DAYS,
+            )
+            default_window_start = pd.Timestamp(default_window_dates.min()).normalize()
+            window_start_picker_key = "pre_event_window_start_date_picker"
+            if window_start_picker_key not in st.session_state:
+                st.session_state[window_start_picker_key] = default_window_start.date()
+            current_window_start = pd.to_datetime(
+                st.session_state.get(window_start_picker_key, default_window_start.date()),
+                errors="coerce",
+            )
+            if pd.isna(current_window_start) or current_window_start.normalize() > requested_window_end:
+                st.session_state[window_start_picker_key] = default_window_start.date()
+            window_start_date = st.date_input(
+                ui_text("Window period start date", "事件前窗口开始日期"),
+                format="YYYY/MM/DD",
+                max_value=requested_window_end.date(),
+                key=window_start_picker_key,
+            )
+            window_start_timestamp = pd.Timestamp(window_start_date).normalize()
+            if window_start_timestamp > requested_window_end:
+                window_start_timestamp = default_window_start
+                st.session_state[window_start_picker_key] = default_window_start.date()
+                st.warning(ui_text("Window period start date must be before the event start date. The default start date is used.", "事件前窗口开始日期必须早于事件开始日期，已使用默认日期。"))
+            window_trading_days = max(1, business_day_count(window_start_timestamp, requested_window_end))
+            st.caption(ui_text(f"Selected window: {start_timestamp:%Y-%m-%d} to {end_timestamp:%Y-%m-%d}", f"已选分析窗口：{start_timestamp:%Y-%m-%d} 至 {end_timestamp:%Y-%m-%d}"))
+            st.caption(ui_text(f"Pre-event window: {window_start_timestamp:%Y-%m-%d} to {requested_window_end:%Y-%m-%d}.", f"事件前窗口：{window_start_timestamp:%Y-%m-%d} 至 {requested_window_end:%Y-%m-%d}。"))
+            st.caption(ui_text(f"Selected pre-event length: {window_trading_days} business days before cleaning.", f"清洗前事件窗口长度：{window_trading_days} 个工作日。"))
+            st.caption(
+                ui_text(
+                    "The pre-event length is the baseline window used before the event; it is not the event start date or the data-cleaning start date.",
+                    "事件前长度是事件发生前的基准窗口，并非事件开始日期或数据清洗开始日期。",
+                )
+            )
         if local_start is not None and local_end is not None:
             st.caption(ui_text(f"Local complete core market data currently covers {local_start:%Y-%m-%d} to {local_end:%Y-%m-%d}.", f"本地完整核心市场数据覆盖 {local_start:%Y-%m-%d} 至 {local_end:%Y-%m-%d}。"))
     st.sidebar.divider()
@@ -3031,6 +3095,7 @@ def render_sidebar() -> dict[str, Any]:
     show_selected_variables = True
 
     return {
+        "analysis_mode": analysis_mode,
         "start_date": start_timestamp.strftime("%Y-%m-%d"),
         "end_date": end_timestamp.strftime("%Y-%m-%d"),
         "window_start_date": window_start_timestamp.strftime("%Y-%m-%d"),
@@ -5685,13 +5750,13 @@ def render_upload_controls(options: dict[str, Any]) -> None:
                 st.dataframe(localized_workflow_frame(existing_manifest), use_container_width=True)
 
 
-def render_run_pipeline_tab(options: dict[str, Any]) -> None:
-    """Render the net-impact analysis execution tab."""
-    st.header(ui_text("Run Net-Impact Analysis", "运行净影响分析"))
+def render_professional_pipeline_tab(options: dict[str, Any]) -> None:
+    """Render the unchanged confirmation-based professional workflow."""
+    st.header(ui_text("Professional Net-Impact Analysis", "专业模式：净影响分析"))
     st.write(
         ui_text(
-            "Configure targets and explanatory variables, then run EMTV-NEI multiscale screening and net-impact measurement.",
-            "配置目标变量与解释变量，然后运行 EMTV-NEI 多尺度筛选和净影响测度。",
+            "The original EMTV-NEI workflow is preserved, including all data, VMD, and FEVD confirmation gates.",
+            "保留原有 EMTV-NEI 完整流程，包括数据、VMD 与 FEVD 的全部确认节点。",
         )
     )
 
@@ -6175,6 +6240,509 @@ def render_run_pipeline_tab(options: dict[str, Any]) -> None:
     render_upload_controls(net_options)
 
 
+def _render_quick_mode_results(result: dict[str, Any]) -> None:
+    """Render quick-mode outputs with interactive paper-channel charts."""
+    import plotly.express as px
+
+    language = current_language()
+    imf_summary = build_quick_imf_summary(result.get("scale_statistics", pd.DataFrame()), language)
+    channel_summary = build_channel_contribution_summary(
+        result.get("contribution_weights", pd.DataFrame()),
+        language,
+    )
+    PATHS["quick_imf_channel_summary"].parent.mkdir(parents=True, exist_ok=True)
+    imf_summary.to_excel(PATHS["quick_imf_channel_summary"], index=False)
+    channel_summary.to_excel(PATHS["quick_channel_contribution_summary"], index=False)
+
+    st.subheader(ui_text("Quick-Mode Results", "快速模式结果"))
+    net_impacts = result.get("net_impacts", pd.DataFrame())
+    if isinstance(net_impacts, pd.DataFrame) and not net_impacts.empty:
+        metric_columns = st.columns(min(3, max(1, len(net_impacts))))
+        for index, (_, row) in enumerate(net_impacts.iterrows()):
+            metric_columns[index % len(metric_columns)].metric(
+                ui_text(f"{row.get('Target', '')} net event impact", f"{row.get('Target', '')} 净事件影响"),
+                f"{float(row.get('NEI', 0.0)):.4f}",
+                help=ui_text(
+                    "Signed selected-scale change between the event-window minimum and maximum.",
+                    "事件窗所选尺度最小值与最大值之间的有符号变化。",
+                ),
+            )
+
+    if not channel_summary.empty:
+        st.markdown(ui_text("#### Economic-channel contribution", "#### 经济渠道贡献"))
+        for target, target_frame in channel_summary.groupby("Target"):
+            figure = px.pie(
+                target_frame,
+                names="Channel",
+                values="WeightPercent",
+                hole=0.48,
+                color="IMF",
+                color_discrete_map={
+                    "IMF1": "#D95D39",
+                    "IMF2": "#2F6690",
+                    "IMF3": "#3A7D44",
+                    "IMF4": "#8E6C8A",
+                    "IMF5": "#D4A72C",
+                },
+                title=ui_text(
+                    f"{target} FEVD contribution by economic channel",
+                    f"{target} 按经济渠道汇总的 FEVD 贡献",
+                ),
+            )
+            figure.update_traces(
+                textposition="inside",
+                texttemplate="%{label}<br>%{value:.1f}%",
+                hovertemplate="%{label}<br>%{value:.2f}%<extra></extra>",
+            )
+            figure.update_layout(
+                legend_title_text="IMF",
+                margin=dict(l=20, r=20, t=70, b=20),
+                height=440,
+            )
+            st.plotly_chart(figure, use_container_width=True, key=f"quick_channel_pie_{target}")
+
+    if not imf_summary.empty and "EventRangeShare" in imf_summary.columns:
+        st.markdown(ui_text("#### Five-IMF event response", "#### 五个 IMF 的事件响应"))
+        plot_frame = imf_summary.copy()
+        plot_frame["EventRangeShare"] = pd.to_numeric(plot_frame["EventRangeShare"], errors="coerce").fillna(0)
+        figure = px.bar(
+            plot_frame,
+            x="IMF",
+            y="EventRangeShare",
+            color="Channel",
+            facet_col="Target" if "Target" in plot_frame.columns else None,
+            hover_data=[
+                column
+                for column in ["MeanPeriod", "VarianceContributionPercent", "IncludedInModel", "Explanation"]
+                if column in plot_frame.columns
+            ],
+            labels={
+                "EventRangeShare": ui_text("Event-range share (%)", "事件波动区间占比（%）"),
+                "Channel": ui_text("Economic channel", "经济渠道"),
+            },
+        )
+        figure.update_layout(height=430, margin=dict(l=20, r=20, t=60, b=20))
+        st.plotly_chart(figure, use_container_width=True, key="quick_imf_event_response")
+
+    table_columns = [
+        column
+        for column in [
+            "Target",
+            "IMF",
+            "Channel",
+            "Explanation",
+            "MeanPeriod",
+            "VarianceContributionPercent",
+            "EventRangeShare",
+            "IncludedInModel",
+        ]
+        if column in imf_summary.columns
+    ]
+    st.dataframe(imf_summary[table_columns], use_container_width=True, hide_index=True)
+    download_columns = st.columns(2)
+    download_columns[0].download_button(
+        ui_text("Download five-IMF interpretation", "下载五 IMF 经济解释表"),
+        data=PATHS["quick_imf_channel_summary"].read_bytes(),
+        file_name=PATHS["quick_imf_channel_summary"].name,
+        mime=_download_mime(PATHS["quick_imf_channel_summary"]),
+        use_container_width=True,
+        key="download_quick_imf_summary",
+    )
+    download_columns[1].download_button(
+        ui_text("Download channel contributions", "下载经济渠道贡献表"),
+        data=PATHS["quick_channel_contribution_summary"].read_bytes(),
+        file_name=PATHS["quick_channel_contribution_summary"].name,
+        mime=_download_mime(PATHS["quick_channel_contribution_summary"]),
+        use_container_width=True,
+        key="download_quick_channel_summary",
+    )
+
+
+def render_quick_pipeline_tab(options: dict[str, Any]) -> None:
+    """Render the one-click five-IMF quick workflow."""
+    st.header(ui_text("Quick Five-Channel Analysis", "快速模式：五渠道分析"))
+    st.write(
+        ui_text(
+            "Choose only the event window in the sidebar. The estimation window, five IMFs, data refresh, VMD, MRGC, h, and FEVD are handled automatically.",
+            "只需在侧边栏选择事件窗口；估计窗、5 个 IMF、数据更新、VMD、MRGC、h 与 FEVD 均自动处理。",
+        )
+    )
+    st.warning(
+        ui_text(
+            "The IMF-to-channel mapping follows the supplied paper. It is an economic interpretation framework, not a causal identification result.",
+            "IMF 与渠道的映射沿用所提供论文；它是经济解释框架，不等同于因果识别结果。",
+        )
+    )
+    variable_options, default_pool = load_variable_pool_options()
+    preferred_targets = [item for item in ["Brent", "WTI"] if item in variable_options]
+    target_options = preferred_targets or variable_options
+    target = st.selectbox(
+        ui_text("Oil-price target", "原油价格目标"),
+        options=target_options,
+        index=0,
+        format_func=lambda variable: localized_variable_name(
+            variable,
+            load_variable_registry_metadata(),
+            current_language(),
+        ),
+        key="quick_target_variable",
+    )
+    explanatory_candidates = [item for item in default_pool if item != target]
+    grouped = group_variables(explanatory_candidates)
+    selected_explanatory: list[str] = []
+    st.markdown(ui_text("#### Variables grouped by economic interpretation", "#### 按经济解释分组的变量"))
+    group_columns = st.columns(5)
+    for index, (imf, variables) in enumerate(grouped.items()):
+        details = IMF_CHANNELS[imf]
+        channel_name = details["channel_zh" if current_language() == "zh" else "channel_en"]
+        with group_columns[index]:
+            st.markdown(f"**{imf} · {channel_name}**")
+            st.caption(details["explanation_zh" if current_language() == "zh" else "explanation_en"])
+            selected = st.multiselect(
+                ui_text("Included variables", "纳入变量"),
+                options=variables,
+                default=variables,
+                key=f"quick_variables_{imf}",
+                label_visibility="collapsed",
+            )
+            selected_explanatory.extend(selected)
+
+    quick_options = options.copy()
+    quick_options.update(
+        {
+            "analysis_mode": "quick",
+            "vmd_imf_count": 5,
+            "paper_target_variables": [target],
+            "paper_explanatory_variables": list(dict.fromkeys(selected_explanatory)),
+            "selected_variable_pool": list(dict.fromkeys([target, *selected_explanatory])),
+            "auto_download_expanded_variable_pool": True,
+            "use_uploaded_local_data_first": True,
+        }
+    )
+    start, end = automatic_estimation_window(
+        quick_options["start_date"],
+        available_start=get_date_range_if_exists(PATHS["clean_market"])[0],
+    )
+    quick_options["window_start_date"] = start.strftime("%Y-%m-%d")
+    quick_options["window_end_date"] = end.strftime("%Y-%m-%d")
+    quick_options["window_trading_days"] = business_day_count(start, end)
+
+    st.info(
+        ui_text(
+            f"Automatic estimation window: {quick_options['window_start_date']} to "
+            f"{quick_options['window_end_date']} | fixed K = 5 | no intermediate confirmation.",
+            f"自动估计窗：{quick_options['window_start_date']} 至 "
+            f"{quick_options['window_end_date']} | 固定 K = 5 | 无中途确认。",
+        )
+    )
+    if st.button(
+        ui_text("Run Quick Analysis", "一键运行快速分析"),
+        type="primary",
+        use_container_width=True,
+        key="run_quick_analysis",
+    ):
+        if not selected_explanatory:
+            st.error(ui_text("Keep at least one explanatory variable.", "请至少保留一个解释变量。"))
+        else:
+            progress = st.progress(0)
+            status = st.empty()
+
+            def report(message: str, step: int, total: int, level: str = "info") -> None:
+                progress.progress(min(step / max(total, 1), 1.0))
+                translated = localized_runtime_message(message, current_language())
+                if level == "warning":
+                    status.warning(translated)
+                elif level == "error":
+                    status.error(translated)
+                elif level == "success":
+                    status.success(translated)
+                else:
+                    status.info(translated)
+
+            try:
+                setup = run_paper_replication_setup_workflow(quick_options, status_callback=report)
+                prepared_options = setup.get("options", quick_options)
+                candidates = setup.get("variable_pool_summary", {}).get("candidate_variables_for_next_step", [])
+                if not candidates:
+                    raise ValueError("No explanatory variable passed the automatic data-quality filter.")
+                vmd_setup = run_paper_replication_vmd_review(
+                    prepared_options,
+                    setup["paper_sample_start"],
+                    status_callback=report,
+                )
+                h_setup = run_paper_replication_h_review(
+                    vmd_setup.get("options", prepared_options),
+                    vmd_setup["paper_sample_start"],
+                    status_callback=report,
+                )
+                result = run_paper_replication_after_variable_confirmation(
+                    h_setup.get("options", prepared_options),
+                    h_setup["paper_sample_start"],
+                    status_callback=report,
+                )
+                progress.progress(1.0)
+                status.success(ui_text("Quick analysis completed.", "快速分析已完成。"))
+                st.session_state["quick_last_result"] = result
+            except Exception as exc:  # noqa: BLE001
+                status.error(
+                    ui_text(
+                        f"Quick analysis failed: {safe_exception_text(exc)}",
+                        f"快速分析失败：{safe_exception_text(exc)}",
+                    )
+                )
+    quick_result = st.session_state.get("quick_last_result")
+    if isinstance(quick_result, dict):
+        _render_quick_mode_results(quick_result)
+
+
+def _render_warning_results(payload: dict[str, Any]) -> None:
+    """Render warning ranking, channel importance, and attention timeline."""
+    import plotly.express as px
+    import plotly.graph_objects as go
+    from plotly.subplots import make_subplots
+
+    result = payload["result"]
+    trends = payload.get("trends", pd.DataFrame())
+    st.subheader(ui_text("Five-Day Crisis Risk Ranking", "五日危机风险排序"))
+    metrics = st.columns(4)
+    metrics[0].metric(ui_text("Latest date", "最新日期"), f"{result.latest_date:%Y-%m-%d}")
+    metrics[1].metric(ui_text("Risk percentile", "风险百分位"), f"{result.risk_percentile:.1f}")
+    metrics[2].metric(ui_text("Alert threshold", "预警阈值"), f"{result.alert_threshold:.1f}")
+    metrics[3].metric(
+        ui_text("Current state", "当前状态"),
+        ui_text("Elevated", "风险抬升") if result.alert else ui_text("Below threshold", "低于阈值"),
+    )
+    if result.alert:
+        st.warning(ui_text("The current five-day risk ranking exceeds the historical alert threshold.", "当前五日风险排序超过历史预警阈值。"))
+    else:
+        st.success(ui_text("The current five-day risk ranking is below the historical alert threshold.", "当前五日风险排序低于历史预警阈值。"))
+    st.caption(ui_text(result.model_note, "该分数是五日快速时钟的历史风险排序百分位，不是经过校准的危机发生概率。"))
+
+    history = result.risk_history.copy()
+    if not history.empty:
+        figure = make_subplots(specs=[[{"secondary_y": True}]])
+        figure.add_trace(
+            go.Scatter(
+                x=history["Date"],
+                y=history["RiskScore"],
+                name=ui_text("Five-day risk score", "五日风险分数"),
+                line=dict(color="#D95D39", width=2),
+                hovertemplate="%{x|%Y-%m-%d}<br>%{y:.1f}<extra></extra>",
+            ),
+            secondary_y=False,
+        )
+        figure.add_hline(
+            y=result.alert_threshold,
+            line_dash="dash",
+            line_color="#7A1F1F",
+            annotation_text=ui_text("Alert threshold", "预警阈值"),
+        )
+        if isinstance(trends, pd.DataFrame) and not trends.empty:
+            figure.add_trace(
+                go.Scatter(
+                    x=trends["Date"],
+                    y=trends["AttentionIndex"],
+                    name=ui_text("Google Trends attention", "Google Trends 关注度"),
+                    line=dict(color="#2F6690", width=1.5),
+                    opacity=0.75,
+                    hovertemplate="%{x|%Y-%m-%d}<br>%{y:.1f}<extra></extra>",
+                ),
+                secondary_y=True,
+            )
+        events = result.event_catalog.copy()
+        if not events.empty:
+            event_points = pd.merge_asof(
+                events.sort_values("Date"),
+                history[["Date", "RiskScore"]].sort_values("Date"),
+                on="Date",
+                direction="nearest",
+                tolerance=pd.Timedelta(days=7),
+            ).dropna(subset=["RiskScore"])
+            figure.add_trace(
+                go.Scatter(
+                    x=event_points["Date"],
+                    y=event_points["RiskScore"],
+                    mode="markers",
+                    name=ui_text("Expanding-tail crisis onset", "扩张尾部危机起点"),
+                    marker=dict(size=8, color="#111827", symbol="diamond"),
+                    text=event_points["Event"],
+                    hovertemplate="%{x|%Y-%m-%d}<br>%{text}<extra></extra>",
+                ),
+                secondary_y=False,
+            )
+        figure.update_yaxes(title_text=ui_text("Risk percentile", "风险百分位"), range=[0, 102], secondary_y=False)
+        figure.update_yaxes(title_text=ui_text("Attention index", "关注度指数"), secondary_y=True)
+        figure.update_layout(
+            height=520,
+            margin=dict(l=20, r=20, t=40, b=20),
+            hovermode="x unified",
+            legend=dict(orientation="h", y=1.08),
+        )
+        st.plotly_chart(figure, use_container_width=True, key="warning_attention_timeline")
+
+    channels = result.channel_scores.copy()
+    if not channels.empty:
+        channels["Channel"] = channels["ChannelZH" if current_language() == "zh" else "ChannelEN"]
+        channel_figure = px.pie(
+            channels,
+            names="Channel",
+            values="ImportancePercent",
+            color="IMF",
+            hole=0.48,
+            title=ui_text("Warning-model importance by paper channel", "按论文渠道汇总的预警模型重要度"),
+        )
+        channel_figure.update_traces(texttemplate="%{label}<br>%{value:.1f}%")
+        channel_figure.update_layout(height=440, margin=dict(l=20, r=20, t=70, b=20))
+        st.plotly_chart(channel_figure, use_container_width=True, key="warning_channel_pie")
+
+    st.info(ui_text(payload.get("trends_note", ""), payload.get("trends_note", "")))
+
+
+def render_crisis_warning_tab(options: dict[str, Any]) -> None:
+    """Render automated five-day crisis warning and Google Trends timeline."""
+    st.header(ui_text("Crisis Warning and Attention Timeline", "危机预警与关注度时间轴"))
+    st.write(
+        ui_text(
+            "This workflow automatically refreshes oil and risk data, builds the validated five-day fast-clock risk ranking, and overlays Google Trends attention.",
+            "该流程自动更新油价与风险数据，构建已验证方向上的五日快速时钟风险排序，并叠加 Google Trends 关注度。",
+        )
+    )
+    st.warning(
+        ui_text(
+            "Method boundary: this is short-horizon risk ranking, not a calibrated crisis probability or a prediction of a specific war, pandemic, or disaster.",
+            "方法边界：这是短期风险排序，不是校准后的危机概率，也不预测某场战争、疫情或灾害的具体发生时间。",
+        )
+    )
+    keyword_text = st.text_input(
+        ui_text("Google Trends keywords (up to five, comma separated)", "Google Trends 关键词（最多五个，逗号分隔）"),
+        value="oil crisis, oil price, recession, war, supply disruption",
+        key="warning_google_keywords",
+    )
+    geo_label = st.selectbox(
+        ui_text("Google Trends region", "Google Trends 地区"),
+        options=["", "US", "CN", "GB"],
+        format_func=lambda value: {
+            "": ui_text("Worldwide", "全球"),
+            "US": ui_text("United States", "美国"),
+            "CN": ui_text("China", "中国"),
+            "GB": ui_text("United Kingdom", "英国"),
+        }[value],
+        key="warning_google_geo",
+    )
+    st.caption(
+        ui_text(
+            "Google's official Trends API remains limited-access alpha; this app uses best-effort public web access and automatically falls back to its local cache.",
+            "Google 官方 Trends API 仍是限量 Alpha；本应用采用尽力而为的公开网页访问，失败时自动回退到本地缓存。",
+        )
+    )
+    if st.button(
+        ui_text("Refresh Data and Run Warning", "自动更新数据并运行预警"),
+        type="primary",
+        use_container_width=True,
+        key="run_crisis_warning",
+    ):
+        status = st.status(ui_text("Refreshing warning data...", "正在更新预警数据……"), expanded=True)
+        try:
+            end = pd.to_datetime(options.get("end_date"), errors="coerce")
+            if pd.isna(end):
+                end = pd.Timestamp.today().normalize()
+            start = (end - pd.DateOffset(years=15)).normalize()
+            warning_options = options.copy()
+            warning_options["start_date"] = start.strftime("%Y-%m-%d")
+            warning_options["end_date"] = end.strftime("%Y-%m-%d")
+            status.write(ui_text("Refreshing core market data.", "正在更新核心市场数据。"))
+            run_update_market_data(warning_options)
+            run_prepare_model_data()
+
+            from src.crisis_warning import fetch_google_trends_timeline, run_five_day_warning
+            from src.variable_pool import build_expanded_variable_pool
+
+            available_variables, _ = load_variable_pool_options()
+            warning_variables = [
+                variable
+                for variable in [
+                    "Brent",
+                    "WTI",
+                    "OVX",
+                    "VIX",
+                    "GPRD",
+                    "EPU",
+                    "TPU",
+                    "EMV",
+                    "Gasoline",
+                    "HeatingOil",
+                    "CrudeStocks",
+                    "ShanghaiSC",
+                    "NaturalGas",
+                    "DollarIndex",
+                    "TNote10Y",
+                    "Copper",
+                ]
+                if variable in available_variables
+            ]
+            status.write(ui_text("Downloading and aligning warning variables.", "正在下载并对齐预警变量。"))
+            warning_data = build_expanded_variable_pool(
+                start_date=warning_options["start_date"],
+                end_date=warning_options["end_date"],
+                auto_download=True,
+                merge_to_model_ready=False,
+                min_coverage=0.50,
+                selected_variables=warning_variables,
+                protected_variables=["Brent"],
+                prefer_existing=True,
+                force_refresh=True,
+            )
+            result = run_five_day_warning(warning_data, price_column="Brent")
+            trend_start = max(result.latest_date - pd.DateOffset(years=5), warning_data["Date"].min())
+            terms = [item.strip() for item in keyword_text.split(",") if item.strip()][:5]
+            status.write(ui_text("Refreshing Google Trends attention.", "正在更新 Google Trends 关注度。"))
+            trends, trends_note = fetch_google_trends_timeline(
+                terms,
+                trend_start,
+                result.latest_date,
+                geo=geo_label,
+                cache_path=PATHS["google_trends_cache"],
+            )
+            PATHS["warning_results"].parent.mkdir(parents=True, exist_ok=True)
+            with pd.ExcelWriter(PATHS["warning_results"]) as writer:
+                result.risk_history.to_excel(writer, sheet_name="RiskHistory", index=False)
+                result.channel_scores.to_excel(writer, sheet_name="ChannelScores", index=False)
+                result.event_catalog.to_excel(writer, sheet_name="EventCatalog", index=False)
+                if not trends.empty:
+                    trends.to_excel(writer, sheet_name="GoogleTrends", index=False)
+            payload = {"result": result, "trends": trends, "trends_note": trends_note}
+            st.session_state["warning_last_result"] = payload
+            status.update(label=ui_text("Warning workflow completed.", "预警流程已完成。"), state="complete")
+        except Exception as exc:  # noqa: BLE001
+            status.update(label=ui_text("Warning workflow failed.", "预警流程失败。"), state="error")
+            st.error(
+                ui_text(
+                    f"Warning workflow failed: {safe_exception_text(exc)}",
+                    f"预警流程失败：{safe_exception_text(exc)}",
+                )
+            )
+    payload = st.session_state.get("warning_last_result")
+    if isinstance(payload, dict) and "result" in payload:
+        _render_warning_results(payload)
+        if PATHS["warning_results"].exists():
+            st.download_button(
+                ui_text("Download warning workbook", "下载预警结果工作簿"),
+                data=PATHS["warning_results"].read_bytes(),
+                file_name=PATHS["warning_results"].name,
+                mime=_download_mime(PATHS["warning_results"]),
+                use_container_width=True,
+                key="download_warning_results",
+            )
+
+
+def render_run_pipeline_tab(options: dict[str, Any]) -> None:
+    """Route the analysis entry to quick or professional mode."""
+    if options.get("analysis_mode") == "quick":
+        render_quick_pipeline_tab(options)
+    else:
+        render_professional_pipeline_tab(options)
+
+
 def main() -> None:
     """Run the Streamlit application."""
     configure_page()
@@ -6187,11 +6755,14 @@ def main() -> None:
 
     tabs = st.tabs([
         ui_text("Run Analysis", "运行分析"),
+        ui_text("Crisis Warning", "危机预警"),
         ui_text("Net-Impact Results", "净影响结果"),
     ])
     with tabs[0]:
         render_run_pipeline_tab(options)
     with tabs[1]:
+        render_crisis_warning_tab(options)
+    with tabs[2]:
         render_paper_replication_tab()
 
 
