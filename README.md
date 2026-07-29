@@ -8,18 +8,61 @@ the interface between Chinese and English.
 
 The app supports this workflow:
 
-1. Refresh daily market and explanatory-variable data.
-2. Clean data with complete-case handling, so any date with a missing selected
+1. Choose **Quick mode** or **Professional mode** for net-impact analysis.
+2. Refresh daily market and explanatory-variable data.
+3. Clean data with complete-case handling, so any date with a missing selected
    variable is removed before analysis windows are split.
-3. Confirm the effective common data window, event period, and pre-event window.
 4. Run VMD, MRGC screening, FEVD contribution analysis, net-impact calculation,
    and structural-break diagnostics.
 5. Review generated tables and figures in the dashboard.
-6. Upload optional local candidate-variable files.
+6. Run the separate five-day crisis-risk workflow and, when public access is
+   available, overlay a Google Trends attention timeline.
+7. Upload optional local candidate-variable files.
 
 The app is dedicated to the multiscale net-impact research workflow. It
 explains how selected market variables contribute to oil-market movements; it
 does not generate oil-price forecasts.
+
+## Quick and Professional Modes
+
+**Quick mode** asks only for the event window. It automatically:
+
+- sets a contiguous pre-event estimation window of up to 504 business days,
+  bounded by the available data;
+- fixes the decomposition at five IMFs;
+- groups explanatory variables by the paper-aligned channels;
+- runs data refresh, VMD review, MRGC, FEVD-h determination, and final FEVD
+  without intermediate confirmation;
+- renders interactive channel pies and IMF response charts.
+
+The fixed interpretation follows the supplied CRP-MIF-F paper:
+
+| IMF | Economic interpretation |
+| --- | --- |
+| IMF1 | Speculation |
+| IMF2 | OPEC+ production announcements |
+| IMF3 | Inventories |
+| IMF4 | Supply |
+| IMF5 | Demand |
+
+This mapping is an economic interpretation framework, not causal
+identification. **Professional mode preserves the original settings and all
+three manual confirmation gates** for data preparation, VMD review, and FEVD-h
+review.
+
+## Crisis Warning
+
+The Crisis Warning tab implements the currently supported part of the DC-CLOF
+extension: a five-business-day fast-clock Random Forest risk ranking based on
+expanding-tail oil-stress labels. The displayed score is a historical risk
+percentile, not a calibrated crisis probability. It must not be interpreted as
+predicting the date of a particular war, pandemic, or disaster.
+
+Google Trends is shown as a separate attention/nowcasting timeline and is not
+treated as a causal variable or long-horizon warning proof. Google's official
+Trends API is still limited-access alpha. The app therefore uses best-effort
+public web access and falls back to a local cache when the public endpoint is
+unavailable or rate limited.
 
 ## Data Sources
 
