@@ -169,6 +169,7 @@ PATHS = {
     "quick_channel_contribution_summary": PROJECT_ROOT / "outputs" / "tables" / "quick_channel_contribution_summary.xlsx",
     "warning_results": PROJECT_ROOT / "outputs" / "tables" / "crisis_warning_results.xlsx",
     "google_trends_cache": PROJECT_ROOT / "data" / "raw" / "google_trends_crisis_timeline.csv",
+    "price_forecast_results": PROJECT_ROOT / "outputs" / "tables" / "brent_price_forecast.xlsx",
 }
 
 
@@ -1774,11 +1775,212 @@ def apply_custom_css() -> None:
         hr {
             border-color: rgba(35, 35, 32, 0.09) !important;
         }
+        /* Petroleum editorial system: warm canvas, deep ink, one mineral-green accent. */
+        :root {
+            --oil-ink: #17241F;
+            --oil-muted: #647069;
+            --oil-accent: #23705B;
+            --oil-accent-dark: #174E40;
+            --oil-canvas: #F3F1EA;
+            --oil-surface: #FBFAF6;
+            --oil-line: rgba(23, 36, 31, 0.12);
+        }
+        html, body, .stApp, [data-testid="stAppViewContainer"] {
+            background:
+                radial-gradient(circle at 74% -12%, rgba(35, 112, 91, 0.13), transparent 34rem),
+                radial-gradient(circle at 100% 40%, rgba(194, 179, 145, 0.12), transparent 28rem),
+                var(--oil-canvas) !important;
+            color: var(--oil-ink) !important;
+            font-family: "Aptos", "Segoe UI Variable", "PingFang SC", "Microsoft YaHei UI", sans-serif !important;
+        }
+        [data-testid="stHeader"] {
+            background: rgba(243, 241, 234, 0.84) !important;
+            border-bottom-color: rgba(23, 36, 31, 0.07) !important;
+        }
+        .block-container {
+            max-width: 1320px;
+            padding-top: 2.35rem;
+        }
+        [data-testid="stSidebar"] {
+            background: rgba(235, 233, 224, 0.94) !important;
+            border-right-color: var(--oil-line) !important;
+        }
+        [data-testid="stSidebar"] [data-testid="stVerticalBlockBorderWrapper"] {
+            background: rgba(251, 250, 246, 0.76) !important;
+            border: 0 !important;
+            border-radius: 18px 8px 18px 8px !important;
+            box-shadow: inset 0 0 0 1px var(--oil-line), 0 14px 35px rgba(23, 36, 31, 0.045) !important;
+        }
+        .sidebar-kicker,
+        .section-kicker,
+        .dashboard-eyebrow {
+            margin: 0 0 0.65rem !important;
+            color: var(--oil-accent) !important;
+            font-size: 0.72rem !important;
+            font-weight: 750 !important;
+            letter-spacing: 0.14em !important;
+        }
+        .dashboard-header {
+            min-height: 188px;
+            padding: 2.15rem 2.5rem 2.45rem !important;
+            background:
+                radial-gradient(circle at 92% 12%, rgba(35, 112, 91, 0.19), transparent 24rem),
+                linear-gradient(112deg, rgba(251, 250, 246, 0.98), rgba(247, 246, 240, 0.86)) !important;
+            border: 0 !important;
+            border-radius: 30px 10px 30px 10px !important;
+            box-shadow: inset 0 0 0 1px var(--oil-line), 0 26px 65px rgba(23, 36, 31, 0.075) !important;
+        }
+        .dashboard-header::before {
+            width: 360px;
+            height: 360px;
+            right: -90px;
+            top: -205px;
+            background: radial-gradient(circle, rgba(35, 112, 91, 0.34), transparent 64%);
+            opacity: 0.7;
+        }
+        .dashboard-header::after {
+            background: linear-gradient(110deg, rgba(251, 250, 246, 0.78) 32%, transparent 100%);
+        }
+        .dashboard-header h1 {
+            max-width: 900px;
+            margin: 0 0 0.75rem !important;
+            color: var(--oil-ink) !important;
+            font-size: clamp(2.15rem, 3.4vw, 3.9rem);
+            font-weight: 620;
+            letter-spacing: -0.055em;
+        }
+        .dashboard-header .dashboard-subtitle {
+            max-width: 720px;
+            color: var(--oil-muted) !important;
+            font-size: 0.98rem;
+            letter-spacing: 0.015em;
+        }
+        .stTabs [data-baseweb="tab-list"] {
+            width: 100%;
+            margin: 1.45rem 0 1.7rem;
+            padding: 0.33rem;
+            gap: 0.28rem;
+            background: rgba(227, 226, 217, 0.72);
+            border: 0 !important;
+            border-radius: 15px 7px 15px 7px;
+            box-shadow: inset 0 0 0 1px rgba(23, 36, 31, 0.07);
+        }
+        .stTabs [data-baseweb="tab"] {
+            flex: 1 1 0;
+            min-height: 2.8rem;
+            justify-content: center;
+            border-radius: 11px 5px 11px 5px;
+            transition: transform 180ms ease, background 180ms ease, box-shadow 180ms ease;
+        }
+        .stTabs [data-baseweb="tab"]:hover {
+            background: rgba(251, 250, 246, 0.58);
+        }
+        .stTabs [aria-selected="true"] {
+            background: var(--oil-surface) !important;
+            box-shadow: 0 5px 16px rgba(23, 36, 31, 0.09) !important;
+        }
+        .stTabs [data-testid="stRadio"] > div {
+            justify-content: flex-start;
+            width: 100%;
+            margin: 0 0 1.35rem;
+            padding: 0.38rem;
+            background: rgba(227, 226, 217, 0.82);
+            border-radius: 16px 7px 16px 7px;
+        }
+        .stTabs [data-testid="stRadio"] [role="radiogroup"] {
+            width: 100%;
+            gap: 0.35rem;
+        }
+        .stTabs [data-testid="stRadio"] label {
+            flex: 1 1 0;
+            justify-content: center;
+            min-height: 3rem;
+            border-radius: 12px 5px 12px 5px;
+            transition: transform 180ms ease, background 180ms ease, box-shadow 180ms ease;
+        }
+        .stTabs [data-testid="stRadio"] label:has(input:checked) {
+            background: var(--oil-ink) !important;
+            box-shadow: 0 8px 20px rgba(23, 36, 31, 0.18);
+        }
+        .stTabs [data-testid="stRadio"] label:has(input:checked) p {
+            color: #FFFFFF !important;
+        }
+        div[data-testid="stVerticalBlockBorderWrapper"] {
+            background: rgba(251, 250, 246, 0.86) !important;
+            border: 0 !important;
+            border-radius: 22px 8px 22px 8px !important;
+            box-shadow: inset 0 0 0 1px var(--oil-line), 0 16px 38px rgba(23, 36, 31, 0.045) !important;
+        }
+        div[data-testid="stMetric"] {
+            background: rgba(251, 250, 246, 0.88) !important;
+            border: 0 !important;
+            border-radius: 18px 7px 18px 7px !important;
+            box-shadow: inset 0 0 0 1px var(--oil-line), 0 12px 28px rgba(23, 36, 31, 0.045) !important;
+        }
+        div[data-testid="stMetricValue"] div,
+        div[data-testid="stMetricValue"] span {
+            font-family: "Cascadia Mono", "SFMono-Regular", monospace !important;
+            font-variant-numeric: tabular-nums;
+            letter-spacing: -0.04em;
+        }
+        div[data-testid="stButton"] button[kind="primary"] {
+            background: var(--oil-accent) !important;
+            border-color: var(--oil-accent) !important;
+            border-radius: 13px 5px 13px 5px !important;
+            box-shadow: 0 9px 24px rgba(35, 112, 91, 0.22);
+        }
+        div[data-testid="stButton"] button[kind="primary"]:hover {
+            background: var(--oil-accent-dark) !important;
+            border-color: var(--oil-accent-dark) !important;
+            transform: translateY(-2px);
+        }
+        div[data-testid="stButton"] button:active,
+        div[data-testid="stDownloadButton"] button:active {
+            transform: translateY(1px) scale(0.99);
+        }
+        div[data-testid="stButton"] button:focus-visible,
+        div[data-testid="stDownloadButton"] button:focus-visible {
+            box-shadow: 0 0 0 3px rgba(35, 112, 91, 0.23) !important;
+        }
+        div[data-testid="stExpander"] {
+            border: 0 !important;
+            border-radius: 16px 6px 16px 6px !important;
+            box-shadow: inset 0 0 0 1px var(--oil-line);
+        }
+        .empty-state {
+            min-height: 265px;
+            display: grid;
+            place-content: center;
+            text-align: center;
+            margin-top: 1rem;
+            padding: 2.5rem;
+            background:
+                radial-gradient(circle at 50% 18%, rgba(35, 112, 91, 0.12), transparent 12rem),
+                rgba(251, 250, 246, 0.65);
+            border-radius: 28px 10px 28px 10px;
+            box-shadow: inset 0 0 0 1px var(--oil-line);
+        }
+        .empty-state span {
+            color: var(--oil-accent) !important;
+            font-family: "Cascadia Mono", monospace;
+            font-size: 0.78rem;
+            letter-spacing: 0.14em;
+        }
+        .empty-state h3 {
+            margin: 0.65rem 0 0.35rem;
+            font-size: 1.65rem;
+        }
+        .empty-state p {
+            margin: 0;
+            color: var(--oil-muted) !important;
+        }
         @media (max-width: 760px) {
             .block-container { padding-left: 1rem; padding-right: 1rem; }
             .dashboard-header { min-height: auto; padding: 1.6rem !important; border-radius: 18px !important; }
             .dashboard-header h1 { font-size: 2.35rem; }
             .stTabs [data-baseweb="tab-list"] { width: 100%; }
+            .stTabs [data-baseweb="tab"] { padding: 0.5rem 0.35rem; }
+            .stTabs [data-testid="stRadio"] [role="radiogroup"] { flex-wrap: wrap !important; }
         }
         </style>
         """,
@@ -1788,28 +1990,20 @@ def apply_custom_css() -> None:
 
 def render_main_header() -> None:
     """Render the dashboard header."""
-    title = ui_text("Multiscale Net-Impact Analysis System", "多尺度净影响分析系统")
+    eyebrow = ui_text("OIL MARKET RESEARCH LAB", "原油市场研究台")
+    title = ui_text("Crisis-aware oil market intelligence", "危机事件下的原油市场分析")
     subtitle = ui_text(
-        "A VMD-based EMTV-NEI website for measuring multiscale net impacts.",
-        "基于 VMD 的 EMTV-NEI 多尺度净影响分析网站。",
-    )
-    description = ui_text(
-        "The system updates market data, builds the variable pool, runs MRGC screening, selects main response scales, estimates FEVD contribution weights, and reports narrow and broad net impacts.",
-        "系统可更新市场数据、构建变量池、执行 MRGC 筛选、选择主要响应尺度、估计 FEVD 贡献权重，并报告狭义与广义净影响。",
-    )
-    risk_note = ui_text(
-        "For academic research demonstration only. Not investment advice.",
-        "仅供学术研究演示，不构成投资建议。",
+        "Net impact · Brent forecast · five-day risk signal",
+        "净影响 · Brent 价格预测 · 五日风险信号",
     )
     title_col, tools_col = st.columns([0.94, 0.06])
     with title_col:
         st.markdown(
             f"""
             <div class="dashboard-header">
+                <p class="dashboard-eyebrow">{eyebrow}</p>
                 <h1>{title}</h1>
                 <p class="dashboard-subtitle">{subtitle}</p>
-                <p class="dashboard-subtitle">{description}</p>
-                <p class="risk-note">{risk_note}</p>
             </div>
             """,
             unsafe_allow_html=True,
@@ -2940,35 +3134,11 @@ def load_uploaded_variable_names() -> list[str]:
 
 def render_sidebar() -> dict[str, Any]:
     """Render sidebar controls."""
-    st.sidebar.header(ui_text("Analysis Settings", "分析设置"))
-    analysis_mode = st.sidebar.radio(
-        ui_text("Run mode", "运行模式"),
-        options=["quick", "professional"],
-        index=1,
-        format_func=lambda value: {
-            "quick": ui_text("Quick mode", "快速模式"),
-            "professional": ui_text("Professional mode", "专业模式"),
-        }[value],
-        help=ui_text(
-            "Quick mode fixes five IMFs, sets the estimation window automatically, and runs without intermediate confirmations. Professional mode preserves the original workflow.",
-            "快速模式固定为 5 个 IMF、自动设置估计窗并无中途确认；专业模式保留原有完整流程。",
-        ),
-        key="net_impact_analysis_mode",
+    st.sidebar.markdown(
+        f'<p class="sidebar-kicker">{ui_text("TIME WINDOW", "时间范围")}</p>',
+        unsafe_allow_html=True,
     )
-    st.sidebar.caption(
-        ui_text(
-            (
-                "Set the event window. Variables and method settings are configured on the Run Analysis page."
-                if analysis_mode == "quick"
-                else "Set the analysis/event window. Variables and method settings are configured on the Run Analysis page."
-            ),
-            (
-                "设置事件窗口；变量和方法参数在“运行分析”页面配置。"
-                if analysis_mode == "quick"
-                else "设置分析与事件窗口；变量和方法参数在“运行分析”页面配置。"
-            ),
-        )
-    )
+    analysis_mode = st.session_state.get("net_impact_analysis_mode", "professional")
     local_start, local_end = get_complete_market_date_range_if_exists(PATHS["clean_market"])
     if local_start is None or local_end is None:
         local_start, local_end = get_date_range_if_exists(PATHS["clean_market"])
@@ -3012,22 +3182,10 @@ def render_sidebar() -> dict[str, Any]:
                 available_start=local_start,
             )
             window_trading_days = max(1, business_day_count(window_start_timestamp, requested_window_end))
-            st.caption(
-                ui_text(
-                    f"Event window: {start_timestamp:%Y-%m-%d} to {end_timestamp:%Y-%m-%d}",
-                    f"事件窗口：{start_timestamp:%Y-%m-%d} 至 {end_timestamp:%Y-%m-%d}",
-                )
-            )
-            st.info(
-                ui_text(
-                    f"Quick mode automatically uses {window_start_timestamp:%Y-%m-%d} to "
-                    f"{requested_window_end:%Y-%m-%d} as the estimation window "
-                    f"({window_trading_days} business days; target {QUICK_ESTIMATION_TRADING_DAYS}).",
-                    f"快速模式自动使用 {window_start_timestamp:%Y-%m-%d} 至 "
-                    f"{requested_window_end:%Y-%m-%d} 作为估计窗"
-                    f"（{window_trading_days} 个工作日；目标长度 {QUICK_ESTIMATION_TRADING_DAYS}）。",
-                )
-            )
+            st.caption(ui_text(
+                f"Estimation window · {window_start_timestamp:%Y-%m-%d} — {requested_window_end:%Y-%m-%d}",
+                f"自动估计窗 · {window_start_timestamp:%Y-%m-%d} — {requested_window_end:%Y-%m-%d}",
+            ))
         else:
             default_window_dates = pd.bdate_range(
                 end=requested_window_end,
@@ -3055,21 +3213,12 @@ def render_sidebar() -> dict[str, Any]:
                 st.session_state[window_start_picker_key] = default_window_start.date()
                 st.warning(ui_text("Window period start date must be before the event start date. The default start date is used.", "事件前窗口开始日期必须早于事件开始日期，已使用默认日期。"))
             window_trading_days = max(1, business_day_count(window_start_timestamp, requested_window_end))
-            st.caption(ui_text(f"Selected window: {start_timestamp:%Y-%m-%d} to {end_timestamp:%Y-%m-%d}", f"已选分析窗口：{start_timestamp:%Y-%m-%d} 至 {end_timestamp:%Y-%m-%d}"))
-            st.caption(ui_text(f"Pre-event window: {window_start_timestamp:%Y-%m-%d} to {requested_window_end:%Y-%m-%d}.", f"事件前窗口：{window_start_timestamp:%Y-%m-%d} 至 {requested_window_end:%Y-%m-%d}。"))
-            st.caption(ui_text(f"Selected pre-event length: {window_trading_days} business days before cleaning.", f"清洗前事件窗口长度：{window_trading_days} 个工作日。"))
-            st.caption(
-                ui_text(
-                    "The pre-event length is the baseline window used before the event; it is not the event start date or the data-cleaning start date.",
-                    "事件前长度是事件发生前的基准窗口，并非事件开始日期或数据清洗开始日期。",
-                )
-            )
+            st.caption(ui_text(
+                f"Baseline · {window_start_timestamp:%Y-%m-%d} — {requested_window_end:%Y-%m-%d} · {window_trading_days} days",
+                f"基准窗 · {window_start_timestamp:%Y-%m-%d} — {requested_window_end:%Y-%m-%d} · {window_trading_days} 个工作日",
+            ))
         if local_start is not None and local_end is not None:
-            st.caption(ui_text(f"Local complete core market data currently covers {local_start:%Y-%m-%d} to {local_end:%Y-%m-%d}.", f"本地完整核心市场数据覆盖 {local_start:%Y-%m-%d} 至 {local_end:%Y-%m-%d}。"))
-    st.sidebar.divider()
-    st.sidebar.subheader(ui_text("Workflow", "工作流程"))
-    st.sidebar.write(ui_text("This website runs the multiscale net-impact analysis workflow.", "本网站运行多尺度净影响分析流程。"))
-    st.sidebar.caption(ui_text("Open Run Analysis to choose targets, explanatory variables, and local uploads.", "在“运行分析”中选择目标变量、解释变量和本地上传文件。"))
+            st.caption(ui_text(f"Available data · {local_start:%Y-%m-%d} — {local_end:%Y-%m-%d}", f"可用数据 · {local_start:%Y-%m-%d} — {local_end:%Y-%m-%d}"))
 
     feature_selection_method = "mrgc_then_elasticnet"
     max_lag = 5
@@ -5138,23 +5287,34 @@ def render_data_tab(options: dict[str, Any], *, show_header: bool = True) -> Non
 
 def render_paper_replication_tab() -> None:
     """Render paper-method replication results."""
-    st.header(ui_text("Net-Impact Analysis Results", "净影响分析结果"))
-    st.write(
-        ui_text(
-            "This page reports the generalized EMTV-NEI workflow: VMD decomposition, multiresolution Granger causality, main-scale selection, rolling VAR FEVD contributions, net impacts, and structural-break diagnostics.",
-            "本页展示广义 EMTV-NEI 流程结果：VMD 分解、多分辨率 Granger 因果检验、主尺度选择、滚动 VAR FEVD 贡献、净影响与结构突变诊断。",
+    st.header(ui_text("Analysis results", "分析结果"))
+    st.caption(ui_text(
+        "Net impact, channel contribution and structural diagnostics.",
+        "净影响、渠道贡献与结构诊断。",
+    ))
+    if not PATHS["paper_summary"].exists() and not PATHS["paper_net_impacts"].exists():
+        st.markdown(
+            f"""
+            <div class="empty-state">
+                <span>02</span>
+                <h3>{ui_text("No analysis result yet", "尚未生成分析结果")}</h3>
+                <p>{ui_text("Run quick or professional analysis first.", "请先运行快速分析或专业分析。")}</p>
+            </div>
+            """,
+            unsafe_allow_html=True,
         )
-    )
+        return
     summary_for_method_note = load_excel_if_exists(PATHS["paper_summary"])
     vmd_k_note = ui_text("selected K", "所选 K")
     if summary_for_method_note is not None and {"Item", "Value"}.issubset(summary_for_method_note.columns):
         value = summary_for_method_note.loc[summary_for_method_note["Item"].astype(str).eq("VMD K"), "Value"]
         if not value.empty:
             vmd_k_note = str(value.iloc[0])
-    st.info(ui_text(
-        f"Method settings: VMD K = {vmd_k_note}, penalty factor = 1000, MRGC maximum lag = 5 selected by BIC, VAR lag selected by BIC, rolling window = 120, and FEVD horizon h determined by the trading-day interval between selected-scale extrema.",
-        f"方法设置：VMD K = {vmd_k_note}，惩罚因子 = 1000，MRGC 最大滞后阶数 5（BIC 选择），VAR 滞后阶数由 BIC 选择，滚动窗口 = 120，FEVD 预测期 h 由所选尺度极值之间的交易日间隔确定。",
-    ))
+    with st.expander(ui_text("Method settings", "方法设置")):
+        st.write(ui_text(
+            f"VMD K = {vmd_k_note}; penalty = 1000; MRGC max lag = 5; VAR lag by BIC; rolling window = 120; FEVD h follows the selected-scale extrema interval.",
+            f"VMD K = {vmd_k_note}；惩罚因子 = 1000；MRGC 最大滞后 = 5；VAR 滞后由 BIC 选择；滚动窗口 = 120；FEVD h 取所选尺度极值间隔。",
+        ))
 
     archive_bytes, archive_names = build_results_archive()
     with st.container(border=True):
@@ -5752,13 +5912,11 @@ def render_upload_controls(options: dict[str, Any]) -> None:
 
 def render_professional_pipeline_tab(options: dict[str, Any]) -> None:
     """Render the unchanged confirmation-based professional workflow."""
-    st.header(ui_text("Professional Net-Impact Analysis", "专业模式：净影响分析"))
-    st.write(
-        ui_text(
-            "The original EMTV-NEI workflow is preserved, including all data, VMD, and FEVD confirmation gates.",
-            "保留原有 EMTV-NEI 完整流程，包括数据、VMD 与 FEVD 的全部确认节点。",
-        )
-    )
+    st.header(ui_text("Professional analysis", "专业分析"))
+    st.caption(ui_text(
+        "Full EMTV-NEI workflow with data, VMD and FEVD review gates.",
+        "完整 EMTV-NEI 流程，保留数据、VMD 与 FEVD 确认节点。",
+    ))
 
     variable_pool_options, default_variable_pool = load_variable_pool_options()
     variable_metadata = load_variable_registry_metadata()
@@ -5766,13 +5924,7 @@ def render_professional_pipeline_tab(options: dict[str, Any]) -> None:
     variable_format = lambda variable: format_variable_option(variable, variable_metadata, language)
     net_options = options.copy()
     with st.container(border=True):
-        st.subheader(ui_text("Net-Impact Analysis Workflow", "净影响分析流程"))
-        st.write(
-            ui_text(
-                "The workflow refreshes data, runs MRGC, selects main scales, estimates FEVD contributions, and reports net impacts.",
-                "该流程更新数据、运行 MRGC、选择主尺度、估计 FEVD 贡献并报告净影响。",
-            )
-        )
+        st.subheader(ui_text("Model inputs", "模型输入"))
         default_targets = [
             variable
             for variable in options.get("paper_target_variables", ["WTI", "Brent"])
@@ -6360,19 +6512,11 @@ def _render_quick_mode_results(result: dict[str, Any]) -> None:
 
 def render_quick_pipeline_tab(options: dict[str, Any]) -> None:
     """Render the one-click five-IMF quick workflow."""
-    st.header(ui_text("Quick Five-Channel Analysis", "快速模式：五渠道分析"))
-    st.write(
-        ui_text(
-            "Choose only the event window in the sidebar. The estimation window, five IMFs, data refresh, VMD, MRGC, h, and FEVD are handled automatically.",
-            "只需在侧边栏选择事件窗口；估计窗、5 个 IMF、数据更新、VMD、MRGC、h 与 FEVD 均自动处理。",
-        )
-    )
-    st.warning(
-        ui_text(
-            "The IMF-to-channel mapping follows the supplied paper. It is an economic interpretation framework, not a causal identification result.",
-            "IMF 与渠道的映射沿用所提供论文；它是经济解释框架，不等同于因果识别结果。",
-        )
-    )
+    st.header(ui_text("Quick analysis", "快速分析"))
+    st.caption(ui_text(
+        "Select the event window and run. Five IMFs and the estimation window are configured automatically.",
+        "选择事件窗口后即可运行；五个 IMF 与估计窗均自动配置。",
+    ))
     variable_options, default_pool = load_variable_pool_options()
     preferred_targets = [item for item in ["Brent", "WTI"] if item in variable_options]
     target_options = preferred_targets or variable_options
@@ -6390,9 +6534,10 @@ def render_quick_pipeline_tab(options: dict[str, Any]) -> None:
     explanatory_candidates = [item for item in default_pool if item != target]
     grouped = group_variables(explanatory_candidates)
     selected_explanatory: list[str] = []
-    st.markdown(ui_text("#### Variables grouped by economic interpretation", "#### 按经济解释分组的变量"))
-    group_columns = st.columns(5)
-    for index, (imf, variables) in enumerate(grouped.items()):
+    st.markdown(ui_text("#### Five economic channels", "#### 五类经济渠道"))
+    group_items = list(grouped.items())
+    group_columns = [*st.columns(3), *st.columns(2)]
+    for index, (imf, variables) in enumerate(group_items):
         details = IMF_CHANNELS[imf]
         channel_name = details["channel_zh" if current_language() == "zh" else "channel_en"]
         with group_columns[index]:
@@ -6427,14 +6572,10 @@ def render_quick_pipeline_tab(options: dict[str, Any]) -> None:
     quick_options["window_end_date"] = end.strftime("%Y-%m-%d")
     quick_options["window_trading_days"] = business_day_count(start, end)
 
-    st.info(
-        ui_text(
-            f"Automatic estimation window: {quick_options['window_start_date']} to "
-            f"{quick_options['window_end_date']} | fixed K = 5 | no intermediate confirmation.",
-            f"自动估计窗：{quick_options['window_start_date']} 至 "
-            f"{quick_options['window_end_date']} | 固定 K = 5 | 无中途确认。",
-        )
-    )
+    st.caption(ui_text(
+        f"Estimation window · {quick_options['window_start_date']} — {quick_options['window_end_date']} · K = 5",
+        f"估计窗 · {quick_options['window_start_date']} — {quick_options['window_end_date']} · K = 5",
+    ))
     if st.button(
         ui_text("Run Quick Analysis", "一键运行快速分析"),
         type="primary",
@@ -6598,21 +6739,159 @@ def _render_warning_results(payload: dict[str, Any]) -> None:
     st.info(ui_text(payload.get("trends_note", ""), payload.get("trends_note", "")))
 
 
+def _save_price_forecast_workbook(result: Any) -> None:
+    """Persist the latest forecast tables for download."""
+    path = PATHS["price_forecast_results"]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with pd.ExcelWriter(path) as writer:
+        result.forecast.to_excel(writer, sheet_name="Forecast", index=False)
+        result.history.to_excel(writer, sheet_name="RecentHistory", index=False)
+        result.components.to_excel(writer, sheet_name="IMFComponents", index=False)
+        result.model_summary.to_excel(writer, sheet_name="ModelSummary", index=False)
+        pd.DataFrame([result.metrics]).to_excel(writer, sheet_name="Validation", index=False)
+
+
+def render_price_forecast_tab() -> None:
+    """Render a discoverable, runnable Brent price forecast result page."""
+    import plotly.graph_objects as go
+
+    st.header(ui_text("Brent price forecast", "Brent 价格预测"))
+    st.caption(ui_text(
+        "Five-IMF reconstruction with a holdout-validated forecast band.",
+        "五 IMF 重构，并用留出样本误差生成预测区间。",
+    ))
+    control_left, control_middle, control_right = st.columns([1, 1, 1.35])
+    horizon = control_left.selectbox(
+        ui_text("Forecast horizon", "预测期限"),
+        options=[5, 10, 20, 30],
+        index=2,
+        format_func=lambda value: ui_text(f"{value} business days", f"{value} 个交易日"),
+        key="price_forecast_horizon",
+    )
+    history_years = control_middle.selectbox(
+        ui_text("Training history", "训练样本"),
+        options=[3, 5, 8],
+        index=1,
+        format_func=lambda value: ui_text(f"{value} years", f"{value} 年"),
+        key="price_forecast_history_years",
+    )
+    with control_right:
+        st.write("")
+        run_forecast = st.button(
+            ui_text("Refresh data and forecast", "更新数据并生成预测"),
+            type="primary",
+            use_container_width=True,
+            key="run_price_forecast",
+        )
+
+    with st.expander(ui_text("Method and interpretation", "方法与解释")):
+        st.write(ui_text(
+            "The paper uses CEMD on weekly high/low intervals, BPNN for high-frequency IMFs, ACI for lower-frequency IMFs, and Google Trends only after an event is identified. This website currently has a daily Brent point series, so the displayed result is a five-IMF point-price baseline: BPNN for IMF1 and autoregressive ridge models for IMF2–IMF5. It is not the paper's full interval replication.",
+            "论文对周度最高价/最低价区间进行 CEMD 分解，高频 IMF 使用 BPNN，中低频 IMF 使用 ACI，并仅在事件已识别后引入 Google Trends。网站当前取得的是 Brent 日度点值，因此此处展示五 IMF 点预测基线：IMF1 使用 BPNN，IMF2–IMF5 使用自回归岭回归；它不是论文区间模型的完整复刻。",
+        ))
+
+    if run_forecast:
+        status = st.status(ui_text("Preparing Brent forecast...", "正在生成 Brent 预测……"), expanded=True)
+        try:
+            from src.data_fetcher import RAW_CACHE_FILES, SERIES_SOURCES, fetch_series_with_fallback
+            from src.price_forecast import run_brent_price_forecast
+
+            end = pd.Timestamp.today().normalize()
+            start = (end - pd.DateOffset(years=int(history_years))).normalize()
+            status.write(ui_text("Refreshing Brent data.", "正在更新 Brent 数据。"))
+            brent = fetch_series_with_fallback(
+                "Brent",
+                SERIES_SOURCES["Brent"],
+                start.strftime("%Y-%m-%d"),
+                end.strftime("%Y-%m-%d"),
+                RAW_CACHE_FILES["Brent"],
+                force_refresh=True,
+            )
+            if brent.empty or "Brent" not in brent or brent["Brent"].notna().sum() < 180:
+                raise ValueError(ui_text(
+                    "No sufficiently current Brent series is available. Check the network or data-source credentials.",
+                    "未取得足够的最新 Brent 数据，请检查网络或数据源凭据。",
+                ))
+            status.write(ui_text("Decomposing and validating five IMF models.", "正在分解并验证五个 IMF 模型。"))
+            result = run_brent_price_forecast(brent, horizon=int(horizon))
+            _save_price_forecast_workbook(result)
+            st.session_state["price_forecast_last_result"] = result
+            status.update(label=ui_text("Forecast ready", "预测已完成"), state="complete", expanded=False)
+        except Exception as exc:  # noqa: BLE001
+            status.update(label=ui_text("Forecast failed", "预测失败"), state="error")
+            st.error(safe_exception_text(exc))
+
+    result = st.session_state.get("price_forecast_last_result")
+    if result is None:
+        st.markdown(
+            f"""
+            <div class="empty-state">
+                <span>01</span>
+                <h3>{ui_text("No forecast yet", "尚未生成预测")}</h3>
+                <p>{ui_text("Choose a horizon, then refresh the data.", "选择预测期限，然后更新数据并运行。")}</p>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        return
+
+    metrics = result.metrics
+    metric_columns = st.columns(4)
+    metric_columns[0].metric(ui_text("Latest Brent", "最新 Brent"), f"${float(metrics['LatestPrice']):.2f}")
+    metric_columns[1].metric(ui_text("End forecast", "期末预测"), f"${float(metrics['ForecastEndPrice']):.2f}")
+    metric_columns[2].metric(ui_text("Projected change", "预测涨跌"), f"{float(metrics['ProjectedChangePercent']):+.1f}%")
+    metric_columns[3].metric(ui_text("Holdout MAE", "留出集 MAE"), f"${float(metrics['ValidationMAE']):.2f}")
+
+    history = result.history
+    forecast = result.forecast
+    figure = go.Figure()
+    figure.add_trace(go.Scatter(
+        x=history["Date"], y=history["Actual"], name=ui_text("Actual", "实际价格"),
+        line=dict(color="#18382F", width=2.2), hovertemplate="%{x|%Y-%m-%d}<br>$%{y:.2f}<extra></extra>",
+    ))
+    figure.add_trace(go.Scatter(
+        x=forecast["Date"], y=forecast["Upper80"], showlegend=False,
+        line=dict(color="rgba(35, 112, 91, 0.05)"), hoverinfo="skip",
+    ))
+    figure.add_trace(go.Scatter(
+        x=forecast["Date"], y=forecast["Lower80"], name=ui_text("Empirical 80% band", "经验 80% 区间"),
+        fill="tonexty", fillcolor="rgba(35, 112, 91, 0.14)",
+        line=dict(color="rgba(35, 112, 91, 0.08)"), hoverinfo="skip",
+    ))
+    figure.add_trace(go.Scatter(
+        x=forecast["Date"], y=forecast["PointForecast"], name=ui_text("Forecast", "预测价格"),
+        line=dict(color="#23705B", width=2.5, dash="dash"),
+        hovertemplate="%{x|%Y-%m-%d}<br>$%{y:.2f}<extra></extra>",
+    ))
+    figure.update_layout(
+        height=500, margin=dict(l=12, r=12, t=30, b=10), hovermode="x unified",
+        legend=dict(orientation="h", y=1.08), xaxis_title=None,
+        yaxis_title=ui_text("USD / barrel", "美元/桶"), template="plotly_white",
+    )
+    st.plotly_chart(figure, use_container_width=True, key="brent_price_forecast_chart")
+
+    with st.expander(ui_text("IMF models and forecast table", "IMF 模型与预测明细")):
+        summary = result.model_summary.copy()
+        summary["Channel"] = summary["ChannelZH" if current_language() == "zh" else "ChannelEN"]
+        st.dataframe(summary[["IMF", "Channel", "Model", "CenterFrequency"]], use_container_width=True, hide_index=True)
+        st.dataframe(forecast, use_container_width=True, hide_index=True)
+    if PATHS["price_forecast_results"].exists():
+        st.download_button(
+            ui_text("Download forecast workbook", "下载预测结果"),
+            data=PATHS["price_forecast_results"].read_bytes(),
+            file_name=PATHS["price_forecast_results"].name,
+            mime=_download_mime(PATHS["price_forecast_results"]),
+            key="download_price_forecast",
+        )
+
+
 def render_crisis_warning_tab(options: dict[str, Any]) -> None:
     """Render automated five-day crisis warning and Google Trends timeline."""
-    st.header(ui_text("Crisis Warning and Attention Timeline", "危机预警与关注度时间轴"))
-    st.write(
-        ui_text(
-            "This workflow automatically refreshes oil and risk data, builds the validated five-day fast-clock risk ranking, and overlays Google Trends attention.",
-            "该流程自动更新油价与风险数据，构建已验证方向上的五日快速时钟风险排序，并叠加 Google Trends 关注度。",
-        )
-    )
-    st.warning(
-        ui_text(
-            "Method boundary: this is short-horizon risk ranking, not a calibrated crisis probability or a prediction of a specific war, pandemic, or disaster.",
-            "方法边界：这是短期风险排序，不是校准后的危机概率，也不预测某场战争、疫情或灾害的具体发生时间。",
-        )
-    )
+    st.header(ui_text("Crisis signal", "危机预警"))
+    st.caption(ui_text(
+        "Five-day risk ranking with a separate Google Trends attention layer.",
+        "五日风险排序，并叠加独立的 Google Trends 关注度时间轴。",
+    ))
     keyword_text = st.text_input(
         ui_text("Google Trends keywords (up to five, comma separated)", "Google Trends 关键词（最多五个，逗号分隔）"),
         value="oil crisis, oil price, recession, war, supply disruption",
@@ -6737,10 +7016,28 @@ def render_crisis_warning_tab(options: dict[str, Any]) -> None:
 
 def render_run_pipeline_tab(options: dict[str, Any]) -> None:
     """Route the analysis entry to quick or professional mode."""
-    if options.get("analysis_mode") == "quick":
-        render_quick_pipeline_tab(options)
+    st.markdown(
+        f'<p class="section-kicker">{ui_text("ANALYSIS MODE", "分析模式")}</p>',
+        unsafe_allow_html=True,
+    )
+    analysis_mode = st.radio(
+        ui_text("Analysis mode", "分析模式"),
+        options=["quick", "professional"],
+        index=1,
+        format_func=lambda value: {
+            "quick": ui_text("Quick · automatic", "快速模式 · 自动运行"),
+            "professional": ui_text("Professional · full control", "专业模式 · 完整控制"),
+        }[value],
+        horizontal=True,
+        label_visibility="collapsed",
+        key="net_impact_analysis_mode",
+    )
+    run_options = options.copy()
+    run_options["analysis_mode"] = analysis_mode
+    if analysis_mode == "quick":
+        render_quick_pipeline_tab(run_options)
     else:
-        render_professional_pipeline_tab(options)
+        render_professional_pipeline_tab(run_options)
 
 
 def main() -> None:
@@ -6754,16 +7051,19 @@ def main() -> None:
     render_main_header()
 
     tabs = st.tabs([
-        ui_text("Run Analysis", "运行分析"),
-        ui_text("Crisis Warning", "危机预警"),
-        ui_text("Net-Impact Results", "净影响结果"),
+        ui_text("Run analysis", "运行分析"),
+        ui_text("Price forecast", "价格预测"),
+        ui_text("Analysis results", "分析结果"),
+        ui_text("Crisis signal", "危机预警"),
     ])
     with tabs[0]:
         render_run_pipeline_tab(options)
     with tabs[1]:
-        render_crisis_warning_tab(options)
+        render_price_forecast_tab()
     with tabs[2]:
         render_paper_replication_tab()
+    with tabs[3]:
+        render_crisis_warning_tab(options)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,42 @@
+from __future__ import annotations
+
+import numpy as np
+import pandas as pd
+import unittest
+
+from src.price_forecast import run_brent_price_forecast
+
+
+def synthetic_brent(rows: int = 420) -> pd.DataFrame:
+    dates = pd.bdate_range("2024-01-02", periods=rows)
+    x = np.arange(rows, dtype=float)
+    price = 76.0 + 0.025 * x + 2.4 * np.sin(x / 17.0) + 0.7 * np.sin(x / 3.2)
+    return pd.DataFrame({"Date": dates, "Brent": price})
+
+
+class PriceForecastTests(unittest.TestCase):
+    def test_forecast_returns_five_imfs_and_requested_horizon(self) -> None:
+        result = run_brent_price_forecast(synthetic_brent(), horizon=10, max_history=420)
+
+        self.assertEqual(len(result.forecast), 10)
+        self.assertEqual(list(result.forecast.columns), ["Date", "PointForecast", "Lower80", "Upper80"])
+        self.assertTrue(result.forecast[["PointForecast", "Lower80", "Upper80"]].notna().all().all())
+        self.assertTrue((result.forecast["Lower80"] < result.forecast["Upper80"]).all())
+        self.assertEqual(result.model_summary["IMF"].tolist(), ["IMF1", "IMF2", "IMF3", "IMF4", "IMF5"])
+        self.assertEqual(result.model_summary.loc[0, "Model"], "BPNN")
+        self.assertEqual(set(result.model_summary.loc[1:, "Model"]), {"AR-Ridge"})
+        self.assertEqual(result.components["Date"].nunique(), 10)
+        self.assertEqual(len(result.components), 50)
+
+    def test_validation_metrics_are_finite_and_future_dates_follow_history(self) -> None:
+        result = run_brent_price_forecast(synthetic_brent(), horizon=5, max_history=360)
+
+        self.assertGreaterEqual(float(result.metrics["ValidationMAE"]), 0)
+        self.assertGreaterEqual(float(result.metrics["ValidationRMSE"]), 0)
+        self.assertGreaterEqual(float(result.metrics["DirectionalAccuracyPercent"]), 0)
+        self.assertLessEqual(float(result.metrics["DirectionalAccuracyPercent"]), 100)
+        self.assertGreater(result.forecast["Date"].min(), result.history["Date"].max())
+
+    def test_forecast_rejects_short_series(self) -> None:
+        with self.assertRaisesRegex(ValueError, "180"):
+            run_brent_price_forecast(synthetic_brent(120), horizon=5)
