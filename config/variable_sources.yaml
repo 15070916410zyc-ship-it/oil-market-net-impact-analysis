@@ -326,3 +326,15 @@ variables:
         id: EMV
     cache_file: data/raw/variable_pool/EMV_policy_uncertainty_daily.csv
     note: Official policyuncertainty.com daily infectious-disease EMV index.
+
+  - name: CrudeStocks
+    description: U.S. commercial crude-oil stocks excluding the Strategic Petroleum Reserve.
+    auto_download: true
+    is_proxy: false
+    frequency: Weekly
+    daily_alignment: Official weekly EIA observations forward-filled to the daily analysis calendar.
+    sources:
+      - type: eia_excel
+        id: WCESTUS1
+    cache_file: data/raw/variable_pool/CrudeStocks_EIA_WCESTUS1.csv
+    note: Official EIA weekly commercial crude-oil inventories, excluding the Strategic Petroleum Reserve.
