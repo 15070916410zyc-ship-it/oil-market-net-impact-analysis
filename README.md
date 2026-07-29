@@ -17,11 +17,27 @@ The app supports this workflow:
 5. Review generated tables and figures in the dashboard.
 6. Run the separate five-day crisis-risk workflow and, when public access is
    available, overlay a Google Trends attention timeline.
-7. Upload optional local candidate-variable files.
+7. Generate a dedicated Brent point-price forecast from five frequency-ordered
+   IMFs, with a holdout-validated empirical forecast band.
+8. Upload optional local candidate-variable files.
 
-The app is dedicated to the multiscale net-impact research workflow. It
-explains how selected market variables contribute to oil-market movements; it
-does not generate oil-price forecasts.
+The website separates net-impact interpretation, price forecasting and crisis
+risk ranking into distinct result pages so that one output is not presented as
+another.
+
+## Brent Price Forecast
+
+The Price Forecast page is a runnable point-price baseline that stays connected
+to the supplied CRP-MIF-F paper: it decomposes the latest Brent series into five
+frequency-ordered IMFs, uses a BPNN for IMF1, autoregressive ridge baselines for
+IMF2-IMF5, and reconstructs the component forecasts. The shaded 80% band is
+scaled from a pre-forecast holdout error rather than claimed as a calibrated
+probability interval.
+
+This is not a full replication of the paper's weekly high/low interval model.
+The current automatic source provides a daily Brent point series, so the app
+labels the output accordingly and keeps the full method boundary in a collapsed
+note on the result page.
 
 ## Quick and Professional Modes
 
