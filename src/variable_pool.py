@@ -463,20 +463,27 @@ def _normalise_registry_entry(entry: dict[str, Any]) -> dict[str, Any]:
     sources = entry.get("sources") or []
     if isinstance(sources, dict):
         sources = [sources]
+    normalised_sources: list[dict[str, Any]] = []
+    for source in sources:
+        if not isinstance(source, dict):
+            continue
+        normalised_source = dict(source)
+        normalised_source["type"] = str(source.get("type", "")).strip()
+        normalised_source["id"] = str(source.get("id", "")).strip()
+        normalised_sources.append(normalised_source)
     return {
         "name": name,
+        "display_name": str(entry.get("display_name", "") or "").strip(),
         "description": str(entry.get("description", "")).strip(),
         "auto_download": bool(entry.get("auto_download", False)),
         "is_proxy": bool(entry.get("is_proxy", False)),
         "frequency": str(entry.get("frequency", "") or "").strip(),
         "daily_alignment": str(entry.get("daily_alignment", "") or "").strip(),
-        "sources": [
-            {"type": str(source.get("type", "")).strip(), "id": str(source.get("id", "")).strip()}
-            for source in sources
-            if isinstance(source, dict)
-        ],
+        "sources": normalised_sources,
         "cache_file": str(entry.get("cache_file", "") or "").strip(),
         "note": str(entry.get("note", "")).strip(),
+        "economic_category": str(entry.get("economic_category", "") or "").strip(),
+        "daily_fill_forward": bool(entry.get("daily_fill_forward", False)),
     }
 
 
@@ -513,6 +520,7 @@ def _load_uploaded_registry_entries() -> list[dict[str, Any]]:
 
 def load_variable_registry(
     registry_path: str | Path = CONFIG_PATH,
+    extra_entries: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     """Load the candidate-variable registry.
 
@@ -539,7 +547,8 @@ def load_variable_registry(
     normalised = [_normalise_registry_entry(entry) for entry in entries]
     uploaded_entries = [_normalise_registry_entry(entry) for entry in _load_uploaded_registry_entries()]
     merged: dict[str, dict[str, Any]] = {}
-    for entry in [*normalised, *uploaded_entries]:
+    request_entries = [_normalise_registry_entry(entry) for entry in (extra_entries or [])]
+    for entry in [*normalised, *uploaded_entries, *request_entries]:
         if entry["name"]:
             merged[entry["name"]] = entry
     return list(merged.values())
@@ -741,6 +750,24 @@ def _merge_variable(
             merged[variable] = merged[downloaded_column]
         merged = merged.drop(columns=[downloaded_column])
     return merged
+
+
+def _forward_fill_to_daily_calendar(
+    data: pd.DataFrame,
+    variable: str,
+    start_date: str,
+    end_date: str,
+) -> pd.DataFrame:
+    """Expand lower-frequency official observations to a daily calendar."""
+    if data.empty or "Date" not in data or variable not in data:
+        return data
+    prepared = data[["Date", variable]].copy()
+    prepared["Date"] = _normalise_date_series(prepared["Date"])
+    prepared[variable] = pd.to_numeric(prepared[variable], errors="coerce")
+    prepared = prepared.dropna(subset=["Date"]).drop_duplicates("Date", keep="last").set_index("Date")
+    calendar = pd.date_range(pd.to_datetime(start_date), pd.to_datetime(end_date), freq="D")
+    aligned = prepared.reindex(calendar).ffill().rename_axis("Date").reset_index()
+    return aligned[["Date", variable]]
 
 
 def _fetch_eia_excel_registry_variable(
@@ -1248,6 +1275,40 @@ def _fetch_registry_variable(
         return _fetch_exchange_main_futures_variable(entry, start_date, end_date, force_refresh=force_refresh)
     if any(source.get("type") == "eia_excel" for source in entry.get("sources", [])):
         return _fetch_eia_excel_registry_variable(entry, start_date, end_date)
+    eia_v2_source = next(
+        (source for source in entry.get("sources", []) if source.get("type") == "eia_v2"),
+        None,
+    )
+    if eia_v2_source:
+        try:
+            from src.api_variable_catalog import fetch_eia_v2_series
+
+            data = fetch_eia_v2_series(eia_v2_source, variable, start_date, end_date)
+            cache_file = entry.get("cache_file") or f"data/raw/variable_pool/{variable}.csv"
+            cache_path = _resolve_project_path(cache_file)
+            cache_path.parent.mkdir(parents=True, exist_ok=True)
+            data.to_csv(cache_path, index=False)
+            stats = _variable_stats(data, variable, end_date)
+            status_row.update(
+                {
+                    "ActualSource": f"eia_v2:{eia_v2_source.get('id', variable)}",
+                    "Status": "Downloaded",
+                    "LatestDate": stats["LatestDate"],
+                    "MissingCount": stats["MissingCount"],
+                    "Coverage": stats["Coverage"],
+                    "Note": "Downloaded from the selected official EIA v2 catalog series.",
+                }
+            )
+            return data, status_row
+        except Exception as exc:  # noqa: BLE001 - return a normal per-variable failure.
+            status_row.update(
+                {
+                    "ActualSource": "eia_v2_failed",
+                    "Status": "Failed",
+                    "Note": f"EIA v2 download failed: {_safe_exception_text(exc)}",
+                }
+            )
+            return pd.DataFrame(columns=["Date", variable]), status_row
 
     sources = [
         {"type": source["type"], "id": source["id"]}
@@ -1429,6 +1490,7 @@ def build_expanded_variable_pool(
     max_stale_days: int = 14,
     selected_variables: list[str] | None = None,
     protected_variables: list[str] | None = None,
+    extra_registry_entries: list[dict[str, Any]] | None = None,
 ) -> pd.DataFrame:
     """Build and optionally merge the expanded explanatory-variable pool.
 
@@ -1436,7 +1498,7 @@ def build_expanded_variable_pool(
     the status log and do not interrupt the caller.
     """
     ensure_variable_pool_dirs()
-    full_registry = load_variable_registry(registry_path)
+    full_registry = load_variable_registry(registry_path, extra_entries=extra_registry_entries)
     selected_set = {str(variable) for variable in selected_variables or []}
     if selected_variables is None:
         registry = full_registry
@@ -1532,6 +1594,13 @@ def build_expanded_variable_pool(
                 end_date,
                 force_refresh=force_refresh,
             )
+            if entry.get("daily_fill_forward", False):
+                downloaded = _forward_fill_to_daily_calendar(
+                    downloaded,
+                    variable,
+                    start_date,
+                    end_date,
+                )
             expanded = _merge_variable(
                 expanded,
                 downloaded,

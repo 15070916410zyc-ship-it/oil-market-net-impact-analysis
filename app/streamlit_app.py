@@ -32,10 +32,17 @@ from src.api_credentials import (  # noqa: E402 - project root is added above.
 from src.quick_analysis import (  # noqa: E402
     IMF_CHANNELS,
     QUICK_ESTIMATION_TRADING_DAYS,
+    VARIABLE_ECONOMIC_CATEGORIES,
     automatic_estimation_window,
     build_channel_contribution_summary,
     build_quick_imf_summary,
     group_variables,
+)
+from src.api_variable_catalog import (  # noqa: E402
+    EIA_DATASET_ROUTES,
+    catalog_item_to_registry_entry,
+    search_eia_series,
+    search_fred_series,
 )
 
 DEFAULT_PRE_EVENT_WINDOW_TRADING_DAYS = 300
@@ -5016,6 +5023,7 @@ def run_paper_replication_setup_workflow(
         min_coverage=options["min_data_coverage"],
         selected_variables=options.get("selected_variable_pool"),
         protected_variables=options.get("paper_target_variables"),
+        extra_registry_entries=options.get("api_catalog_registry_entries"),
     )
     variable_pool_summary = summarize_variable_pool_update(
         required_start_date=paper_sample_start_text,
@@ -6593,9 +6601,15 @@ def _render_quick_mode_results(result: dict[str, Any]) -> None:
 
     language = current_language()
     imf_summary = build_quick_imf_summary(result.get("scale_statistics", pd.DataFrame()), language)
+    api_metadata = {
+        str(entry.get("name")): entry
+        for entry in st.session_state.get("quick_api_catalog_registry_entries", [])
+        if entry.get("name")
+    }
     channel_summary = build_channel_contribution_summary(
         result.get("contribution_weights", pd.DataFrame()),
         language,
+        api_metadata,
     )
     PATHS["quick_imf_channel_summary"].parent.mkdir(parents=True, exist_ok=True)
     imf_summary.to_excel(PATHS["quick_imf_channel_summary"], index=False)
@@ -6623,13 +6637,19 @@ def _render_quick_mode_results(result: dict[str, Any]) -> None:
                 names="Channel",
                 values="WeightPercent",
                 hole=0.48,
-                color="IMF",
+                color="Category",
                 color_discrete_map={
-                    "IMF1": "#D95D39",
-                    "IMF2": "#2F6690",
-                    "IMF3": "#3A7D44",
-                    "IMF4": "#8E6C8A",
-                    "IMF5": "#D4A72C",
+                    "geopolitical_policy_risk": "#D95D39",
+                    "market_risk_sentiment": "#B96DCC",
+                    "financial_assets_hedging": "#D4A72C",
+                    "crude_benchmarks_expectations": "#C97843",
+                    "physical_supply": "#3A7D44",
+                    "inventories_refining": "#65A765",
+                    "real_economy_demand": "#2F6690",
+                    "monetary_financial_conditions": "#547AA5",
+                    "currency_pricing": "#44A1A0",
+                    "substitute_energy": "#8E6C8A",
+                    "other_indicators": "#758087",
                 },
                 title=ui_text(
                     f"{target} FEVD contribution by economic channel",
@@ -6642,7 +6662,7 @@ def _render_quick_mode_results(result: dict[str, Any]) -> None:
                 hovertemplate="%{label}<br>%{value:.2f}%<extra></extra>",
             )
             figure.update_layout(
-                legend_title_text="IMF",
+                legend_title_text=ui_text("Variable category", "变量经济分类"),
                 margin=dict(l=20, r=20, t=70, b=20),
                 height=440,
             )
@@ -6707,6 +6727,154 @@ def _render_quick_mode_results(result: dict[str, Any]) -> None:
     )
 
 
+def _render_api_variable_catalog() -> list[dict[str, Any]]:
+    """Render searchable request-local FRED/EIA catalogs for quick mode."""
+    state_key = "quick_api_catalog_registry_entries"
+    result_key = "quick_api_catalog_search_results"
+    entries = list(st.session_state.get(state_key, []))
+    with st.expander(ui_text("Add variables from FRED / EIA", "从 FRED / EIA 添加变量"), expanded=False):
+        status = api_key_status()
+        source = st.radio(
+            ui_text("Data source", "数据源"),
+            ["FRED", "EIA"],
+            horizontal=True,
+            key="quick_catalog_source",
+        )
+        configured = bool(status.get("keys", {}).get(f"{source}_API_KEY", {}).get("configured"))
+        if not configured:
+            st.warning(ui_text(
+                f"Enter the {source} API key in the top-right API settings before searching.",
+                f"请先在右上角“API 密钥”设置中填写 {source} API 密钥，再搜索变量。",
+            ))
+        route = ""
+        if source == "EIA":
+            custom_route_value = "__custom_eia_route__"
+            route_options = [*EIA_DATASET_ROUTES, custom_route_value]
+            selected_route = st.selectbox(
+                ui_text("EIA dataset", "EIA 数据集"),
+                route_options,
+                format_func=lambda value: (
+                    ui_text("Another official leaf route", "其他官方叶级路径")
+                    if value == custom_route_value
+                    else EIA_DATASET_ROUTES[value]["label_zh" if current_language() == "zh" else "label_en"]
+                    + f" · {value}"
+                ),
+                key="quick_eia_dataset_route",
+            )
+            route = selected_route
+            if selected_route == custom_route_value:
+                route = st.text_input(
+                    ui_text("EIA leaf route", "EIA 叶级路径"),
+                    placeholder="petroleum/pri/spt",
+                    key="quick_eia_custom_route",
+                )
+            st.caption(ui_text(
+                "Searches named series in the selected official EIA dataset; no regions or products are combined implicitly.",
+                "搜索所选 EIA 官方数据集中的具名序列，不会擅自合并地区或产品。",
+            ))
+        query = st.text_input(
+            ui_text("Search by variable name, code or keyword", "按变量名称、代码或关键词搜索"),
+            placeholder=ui_text("e.g. industrial production, DGS10", "例如：原油库存、RCLC1"),
+            key="quick_catalog_query",
+        )
+        if st.button(
+            ui_text("Search official catalog", "搜索官方变量库"),
+            disabled=(
+                not configured
+                or not query.strip()
+                or (source == "EIA" and not route.strip())
+            ),
+            use_container_width=True,
+            key="quick_catalog_search",
+        ):
+            try:
+                with st.spinner(ui_text("Searching official metadata...", "正在检索官方元数据……")):
+                    results = (
+                        search_fred_series(query)
+                        if source == "FRED"
+                        else search_eia_series(query, route)
+                    )
+                st.session_state[result_key] = {
+                    "signature": f"{source}|{route}|{query.strip()}",
+                    "items": results,
+                }
+            except Exception as exc:  # noqa: BLE001 - keep the selector usable.
+                st.session_state[result_key] = {
+                    "signature": f"{source}|{route}|{query.strip()}",
+                    "items": [],
+                }
+                st.error(ui_text(
+                    f"Catalog search failed: {safe_exception_text(exc)}",
+                    f"变量库搜索失败：{safe_exception_text(exc)}",
+                ))
+
+        stored_results = st.session_state.get(result_key, {})
+        search_signature = f"{source}|{route}|{query.strip()}"
+        results = stored_results.get("items", []) if stored_results.get("signature") == search_signature else []
+        if results:
+            selected_index = st.selectbox(
+                ui_text("Search results", "搜索结果"),
+                range(len(results)),
+                format_func=lambda index: (
+                    f"{results[index]['title']} · {results[index]['series_id']} · "
+                    f"{results[index].get('frequency', '')} {results[index].get('units', '')}".strip()
+                ),
+                key=f"quick_catalog_result_{source}",
+            )
+            selected_item = results[selected_index]
+            category = VARIABLE_ECONOMIC_CATEGORIES[selected_item["economic_category"]]
+            category_label = category["label_zh" if current_language() == "zh" else "label_en"]
+            st.caption(ui_text("Automatic economic category: ", "自动经济分类：") + category_label)
+            if st.button(
+                ui_text("Add and auto-update this variable", "加入变量并自动更新数据"),
+                type="primary",
+                use_container_width=True,
+                key=f"quick_catalog_add_{source}",
+            ):
+                entry = catalog_item_to_registry_entry(selected_item)
+                entries = [item for item in entries if item.get("name") != entry["name"]]
+                entries.append(entry)
+                st.session_state[state_key] = entries
+                category_widget_key = f"quick_variables_{entry['economic_category']}"
+                if category_widget_key in st.session_state:
+                    selected_category_variables = list(st.session_state[category_widget_key])
+                    if entry["name"] not in selected_category_variables:
+                        selected_category_variables.append(entry["name"])
+                        st.session_state[category_widget_key] = selected_category_variables
+                st.success(ui_text(
+                    f"Added {entry['display_name']}; it will refresh automatically when quick mode runs.",
+                    f"已加入“{entry['display_name']}”；运行快速模式时将自动更新。",
+                ))
+        elif query.strip() and stored_results.get("signature") == search_signature:
+            st.info(ui_text("No matching series found.", "没有找到匹配序列。"))
+
+        if entries:
+            st.markdown(ui_text("**Added API variables**", "**已加入的 API 变量**"))
+            keep_names = st.multiselect(
+                ui_text("Keep these variables", "保留这些变量"),
+                options=[entry["name"] for entry in entries],
+                default=[entry["name"] for entry in entries],
+                format_func=lambda name: next(
+                    (str(item.get("display_name") or name) for item in entries if item["name"] == name),
+                    name,
+                ),
+                key="quick_catalog_kept_variables",
+                label_visibility="collapsed",
+            )
+            removed_entries = [entry for entry in entries if entry["name"] not in keep_names]
+            for removed_entry in removed_entries:
+                category_widget_key = f"quick_variables_{removed_entry['economic_category']}"
+                if category_widget_key in st.session_state:
+                    st.session_state[category_widget_key] = [
+                        name
+                        for name in st.session_state[category_widget_key]
+                        if name != removed_entry["name"]
+                    ]
+            entries = [entry for entry in entries if entry["name"] in keep_names]
+            st.session_state[state_key] = entries
+    return entries
+
+
 def render_quick_pipeline_tab(options: dict[str, Any]) -> None:
     """Render the one-click five-IMF quick workflow."""
     st.header(ui_text("Quick analysis", "快速分析"))
@@ -6714,7 +6882,24 @@ def render_quick_pipeline_tab(options: dict[str, Any]) -> None:
         "Select the event window and run. Five IMFs and the estimation window are configured automatically.",
         "选择事件窗口后即可运行；五个 IMF 与估计窗均自动配置。",
     ))
+    api_registry_entries = _render_api_variable_catalog()
     variable_options, default_pool = load_variable_pool_options()
+    for entry in api_registry_entries:
+        if entry["name"] not in variable_options:
+            variable_options.append(entry["name"])
+        if entry["name"] not in default_pool:
+            default_pool.append(entry["name"])
+    variable_metadata = load_variable_registry_metadata()
+    for entry in api_registry_entries:
+        variable_metadata[entry["name"]] = {
+            "Variable": entry["name"],
+            "FullName": entry.get("display_name") or entry.get("description") or entry["name"],
+            "title": entry.get("display_name") or entry.get("description") or entry["name"],
+            "description": entry.get("description", ""),
+            "economic_category": entry.get("economic_category", "other_indicators"),
+            "Frequency": entry.get("frequency", ""),
+            "Note": entry.get("note", ""),
+        }
     preferred_targets = [item for item in ["Brent", "WTI"] if item in variable_options]
     target_options = preferred_targets or variable_options
     target = st.selectbox(
@@ -6723,28 +6908,37 @@ def render_quick_pipeline_tab(options: dict[str, Any]) -> None:
         index=0,
         format_func=lambda variable: localized_variable_name(
             variable,
-            load_variable_registry_metadata(),
+            variable_metadata,
             current_language(),
         ),
         key="quick_target_variable",
     )
     explanatory_candidates = [item for item in default_pool if item != target]
-    grouped = group_variables(explanatory_candidates)
+    grouped = group_variables(explanatory_candidates, variable_metadata)
     selected_explanatory: list[str] = []
-    st.markdown(ui_text("#### Five economic channels", "#### 五类经济渠道"))
-    group_items = list(grouped.items())
-    group_columns = [*st.columns(3), *st.columns(2)]
-    for index, (imf, variables) in enumerate(group_items):
-        details = IMF_CHANNELS[imf]
-        channel_name = details["channel_zh" if current_language() == "zh" else "channel_en"]
-        with group_columns[index]:
-            st.markdown(f"**{imf} · {channel_name}**")
+    st.markdown(ui_text("#### Explanatory variables by economic meaning", "#### 按经济含义选择解释变量"))
+    st.caption(ui_text(
+        "These categories describe the input variables. The five IMF interpretations are assigned separately after decomposition.",
+        "这里分类的是输入变量；五个 IMF 的论文解释只在分解完成后单独呈现。",
+    ))
+    group_items = [(category, values) for category, values in grouped.items() if values]
+    group_columns = st.columns(2)
+    for index, (category, variables) in enumerate(group_items):
+        details = VARIABLE_ECONOMIC_CATEGORIES[category]
+        channel_name = details["label_zh" if current_language() == "zh" else "label_en"]
+        with group_columns[index % 2]:
+            st.markdown(f"**{channel_name}**")
             st.caption(details["explanation_zh" if current_language() == "zh" else "explanation_en"])
             selected = st.multiselect(
                 ui_text("Included variables", "纳入变量"),
                 options=variables,
                 default=variables,
-                key=f"quick_variables_{imf}",
+                format_func=lambda variable: localized_variable_name(
+                    variable,
+                    variable_metadata,
+                    current_language(),
+                ),
+                key=f"quick_variables_{category}",
                 label_visibility="collapsed",
             )
             selected_explanatory.extend(selected)
@@ -6759,6 +6953,7 @@ def render_quick_pipeline_tab(options: dict[str, Any]) -> None:
             "selected_variable_pool": list(dict.fromkeys([target, *selected_explanatory])),
             "auto_download_expanded_variable_pool": True,
             "use_uploaded_local_data_first": True,
+            "api_catalog_registry_entries": api_registry_entries,
         }
     )
     start, end = automatic_estimation_window(
