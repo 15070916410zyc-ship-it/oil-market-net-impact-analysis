@@ -21,13 +21,14 @@ class QuickModeTests(unittest.TestCase):
         self.assertEqual(end, pd.Timestamp("2024-01-05"))
         self.assertEqual(len(pd.bdate_range(start, end)), QUICK_ESTIMATION_TRADING_DAYS)
 
-    def test_variables_are_grouped_once_across_five_channels(self) -> None:
+    def test_variables_are_grouped_once_independently_from_imfs(self) -> None:
         variables = ["OVX", "Brent", "Gasoline", "ShanghaiSC", "Copper", "Custom"]
         grouped = group_variables(variables)
-        self.assertEqual(list(grouped), ["IMF1", "IMF2", "IMF3", "IMF4", "IMF5"])
         flattened = [item for values in grouped.values() for item in values]
         self.assertCountEqual(flattened, variables)
-        self.assertEqual(grouped["IMF1"], ["OVX", "Custom"])
+        self.assertEqual(grouped["market_risk_sentiment"], ["OVX"])
+        self.assertEqual(grouped["crude_benchmarks_expectations"], ["Brent", "ShanghaiSC"])
+        self.assertEqual(grouped["other_indicators"], ["Custom"])
 
     def test_quick_imf_summary_uses_paper_interpretations(self) -> None:
         stats = pd.DataFrame({"Target": ["Brent"] * 5, "IMF": [f"IMF{i}" for i in range(1, 6)]})
@@ -43,7 +44,7 @@ class QuickModeTests(unittest.TestCase):
             }
         )
         summary = build_channel_contribution_summary(contribution, "en")
-        self.assertEqual(len(summary), 5)
+        self.assertEqual(len(summary), 11)
         self.assertAlmostEqual(float(summary["WeightPercent"].sum()), 100.0)
 
 

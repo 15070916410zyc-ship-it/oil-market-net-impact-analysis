@@ -1,4 +1,4 @@
-"""Quick-mode helpers for paper-aligned five-channel net-impact analysis."""
+"""Quick-mode helpers for IMF interpretation and independent variable taxonomy."""
 
 from __future__ import annotations
 
@@ -62,7 +62,7 @@ IMF_CHANNELS: "OrderedDict[str, dict[str, str]]" = OrderedDict(
 )
 
 
-VARIABLE_ECONOMIC_GROUPS: "OrderedDict[str, tuple[str, ...]]" = OrderedDict(
+VARIABLE_PAPER_IMF_GROUPS: "OrderedDict[str, tuple[str, ...]]" = OrderedDict(
     [
         (
             "IMF1",
@@ -117,6 +117,133 @@ VARIABLE_ECONOMIC_GROUPS: "OrderedDict[str, tuple[str, ...]]" = OrderedDict(
 )
 
 
+VARIABLE_ECONOMIC_CATEGORIES: "OrderedDict[str, dict[str, Any]]" = OrderedDict(
+    [
+        (
+            "geopolitical_policy_risk",
+            {
+                "label_en": "Geopolitical & policy risk",
+                "label_zh": "地缘政治与政策风险",
+                "explanation_en": "Conflict, sanctions, trade policy and policy uncertainty.",
+                "explanation_zh": "冲突、制裁、贸易政策及政策不确定性。",
+                "variables": ("GPRD", "EPU", "TPU", "EMV"),
+                "keywords": ("geopolit", "conflict", "war", "sanction", "policy uncertainty", "trade policy"),
+            },
+        ),
+        (
+            "market_risk_sentiment",
+            {
+                "label_en": "Market risk sentiment",
+                "label_zh": "市场风险偏好",
+                "explanation_en": "Volatility, stress and rapid changes in risk appetite.",
+                "explanation_zh": "波动率、市场压力与风险偏好的快速变化。",
+                "variables": ("OVX", "VIX"),
+                "keywords": ("volatility", "fear", "stress", "risk premium", "uncertainty index"),
+            },
+        ),
+        (
+            "financial_assets_hedging",
+            {
+                "label_en": "Financial assets & hedging",
+                "label_zh": "金融资产与避险",
+                "explanation_en": "Equity pricing, safe-haven demand and cross-asset allocation.",
+                "explanation_zh": "股票定价、避险需求与跨资产配置。",
+                "variables": ("Gold", "Silver", "SP500", "Nasdaq"),
+                "keywords": ("stock market", "equity", "gold", "silver", "safe haven", "s&p 500", "nasdaq"),
+            },
+        ),
+        (
+            "crude_benchmarks_expectations",
+            {
+                "label_en": "Crude benchmarks & expectations",
+                "label_zh": "原油基准与价格预期",
+                "explanation_en": "Spot and futures benchmarks that transmit price discovery.",
+                "explanation_zh": "承担价格发现功能的原油现货与期货基准。",
+                "variables": ("WTI", "Brent", "ShanghaiSC"),
+                "keywords": ("crude oil price", "crude oil future", "brent", "west texas", "wti"),
+            },
+        ),
+        (
+            "physical_supply",
+            {
+                "label_en": "Physical supply & production",
+                "label_zh": "实物供给与生产",
+                "explanation_en": "Extraction, output capacity, imports, exports and transport flows.",
+                "explanation_zh": "开采、产能、进出口及运输流量。",
+                "variables": (),
+                "keywords": ("production", "supply", "output", "rig", "import", "export", "pipeline"),
+            },
+        ),
+        (
+            "inventories_refining",
+            {
+                "label_en": "Inventories, refining & products",
+                "label_zh": "库存、炼化与成品油",
+                "explanation_en": "Stock buffers, refinery activity and refined-product markets.",
+                "explanation_zh": "库存缓冲、炼厂活动与成品油市场。",
+                "variables": ("CrudeStocks", "Gasoline", "HeatingOil", "ShanghaiFU"),
+                "keywords": ("stock", "storage", "inventory", "refin", "gasoline", "distillate", "heating oil"),
+            },
+        ),
+        (
+            "real_economy_demand",
+            {
+                "label_en": "Real economy & energy demand",
+                "label_zh": "实体经济与能源需求",
+                "explanation_en": "Industrial activity, consumption, mobility and end-use demand.",
+                "explanation_zh": "工业活动、消费、出行与终端能源需求。",
+                "variables": ("Copper",),
+                "keywords": ("consumption", "demand", "industrial production", "gdp", "sales", "freight", "copper"),
+            },
+        ),
+        (
+            "monetary_financial_conditions",
+            {
+                "label_en": "Monetary & financial conditions",
+                "label_zh": "货币与金融条件",
+                "explanation_en": "Policy rates, yields, liquidity and financing conditions.",
+                "explanation_zh": "政策利率、国债收益率、流动性与融资条件。",
+                "variables": ("TNote10Y", "US2Y", "FedFunds"),
+                "keywords": ("interest rate", "yield", "treasury", "federal funds", "liquidity", "credit"),
+            },
+        ),
+        (
+            "currency_pricing",
+            {
+                "label_en": "Currency & cross-border pricing",
+                "label_zh": "汇率与跨境定价",
+                "explanation_en": "Dollar valuation and exchange-rate transmission into commodity prices.",
+                "explanation_zh": "美元估值及汇率向大宗商品价格的传导。",
+                "variables": ("DollarIndex", "CNYUSD"),
+                "keywords": ("exchange rate", "currency", "dollar", "foreign exchange", "broad dollar"),
+            },
+        ),
+        (
+            "substitute_energy",
+            {
+                "label_en": "Substitute energy & relative costs",
+                "label_zh": "替代能源与相对成本",
+                "explanation_en": "Natural gas, coal and power prices that alter fuel substitution.",
+                "explanation_zh": "影响燃料替代的天然气、煤炭与电力价格。",
+                "variables": ("NaturalGas",),
+                "keywords": ("natural gas", "coal", "electricity", "power price", "renewable", "fuel switching"),
+            },
+        ),
+        (
+            "other_indicators",
+            {
+                "label_en": "Other indicators",
+                "label_zh": "其他指标",
+                "explanation_en": "User-added indicators not yet assigned to a primary economic category.",
+                "explanation_zh": "尚未归入主要经济类别的用户新增指标。",
+                "variables": (),
+                "keywords": (),
+            },
+        ),
+    ]
+)
+
+
 def automatic_estimation_window(
     event_start: Any,
     available_start: Any | None = None,
@@ -136,19 +263,49 @@ def automatic_estimation_window(
 
 
 def variable_group(variable: str) -> str:
-    """Return the primary paper channel for a variable."""
+    """Return the legacy paper IMF channel used only by the warning model."""
     value = str(variable)
-    for imf, variables in VARIABLE_ECONOMIC_GROUPS.items():
+    for imf, variables in VARIABLE_PAPER_IMF_GROUPS.items():
         if value in variables:
             return imf
     return "IMF1"
 
 
-def group_variables(variables: Iterable[str]) -> "OrderedDict[str, list[str]]":
-    """Group variables once by their primary paper-aligned economic interpretation."""
-    grouped: "OrderedDict[str, list[str]]" = OrderedDict((imf, []) for imf in IMF_CHANNELS)
+def variable_economic_category(variable: str, metadata: dict[str, Any] | None = None) -> str:
+    """Classify a variable independently from the five post-decomposition IMFs."""
+    value = str(variable)
+    metadata = metadata or {}
+    explicit = str(metadata.get("economic_category", "")).strip()
+    if explicit in VARIABLE_ECONOMIC_CATEGORIES:
+        return explicit
+    for category, details in VARIABLE_ECONOMIC_CATEGORIES.items():
+        if value in details.get("variables", ()):
+            return category
+    searchable = " ".join(
+        str(metadata.get(field, "")) for field in ("title", "description", "FullName", "Note")
+    ).lower()
+    searchable = f"{value.lower()} {searchable}"
+    if any(term in searchable for term in ("industrial production", "retail sales", "real gross domestic")):
+        return "real_economy_demand"
+    if any(term in searchable for term in ("crude oil stock", "petroleum stock", "oil inventory")):
+        return "inventories_refining"
+    for category, details in VARIABLE_ECONOMIC_CATEGORIES.items():
+        if any(keyword in searchable for keyword in details.get("keywords", ())):
+            return category
+    return "other_indicators"
+
+
+def group_variables(
+    variables: Iterable[str],
+    metadata: dict[str, dict[str, Any]] | None = None,
+) -> "OrderedDict[str, list[str]]":
+    """Group variables by economic meaning, separately from IMF interpretation."""
+    grouped: "OrderedDict[str, list[str]]" = OrderedDict(
+        (category, []) for category in VARIABLE_ECONOMIC_CATEGORIES
+    )
+    metadata = metadata or {}
     for variable in dict.fromkeys(str(item) for item in variables):
-        grouped[variable_group(variable)].append(variable)
+        grouped[variable_economic_category(variable, metadata.get(variable))].append(variable)
     return grouped
 
 
@@ -185,20 +342,24 @@ def build_quick_imf_summary(scale_statistics: pd.DataFrame, language: str = "zh"
 def build_channel_contribution_summary(
     contribution_weights: pd.DataFrame,
     language: str = "zh",
+    metadata: dict[str, dict[str, Any]] | None = None,
 ) -> pd.DataFrame:
-    """Aggregate variable FEVD weights into the five paper-aligned economic channels."""
+    """Aggregate variable FEVD weights into independent variable categories."""
     frame = contribution_weights.copy() if isinstance(contribution_weights, pd.DataFrame) else pd.DataFrame()
     if frame.empty or "ExternalVariable" not in frame.columns:
-        return pd.DataFrame(columns=["Target", "IMF", "Channel", "WeightPercent"])
+        return pd.DataFrame(columns=["Target", "Category", "Channel", "WeightPercent"])
     weight_column = (
         "ExternalRelativeWeightPercent"
         if "ExternalRelativeWeightPercent" in frame.columns
         else "ExternalRelativeWeight"
     )
-    frame["IMF"] = frame["ExternalVariable"].astype(str).map(variable_group)
+    metadata = metadata or {}
+    frame["Category"] = frame["ExternalVariable"].astype(str).map(
+        lambda variable: variable_economic_category(variable, metadata.get(variable))
+    )
     frame["WeightPercent"] = pd.to_numeric(frame.get(weight_column), errors="coerce").fillna(0.0)
     target_column = "Target" if "Target" in frame.columns else None
-    group_columns = [column for column in [target_column, "IMF"] if column]
+    group_columns = [column for column in [target_column, "Category"] if column]
     summary = frame.groupby(group_columns, as_index=False)["WeightPercent"].sum()
     targets = (
         summary["Target"].dropna().astype(str).unique().tolist()
@@ -206,18 +367,18 @@ def build_channel_contribution_summary(
         else [""]
     )
     complete_rows: list[dict[str, Any]] = []
-    channels = imf_channel_table(language).set_index("IMF")
+    label_key = "label_zh" if language == "zh" else "label_en"
     for target in targets:
-        for imf in IMF_CHANNELS:
-            selector = summary["IMF"].eq(imf)
+        for category, details in VARIABLE_ECONOMIC_CATEGORIES.items():
+            selector = summary["Category"].eq(category)
             if "Target" in summary.columns:
                 selector &= summary["Target"].astype(str).eq(target)
             values = summary.loc[selector, "WeightPercent"]
             complete_rows.append(
                 {
                     "Target": target,
-                    "IMF": imf,
-                    "Channel": channels.loc[imf, "Channel"],
+                    "Category": category,
+                    "Channel": details[label_key],
                     "WeightPercent": float(values.sum()) if not values.empty else 0.0,
                 }
             )
