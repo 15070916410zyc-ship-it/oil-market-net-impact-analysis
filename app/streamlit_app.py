@@ -29,6 +29,12 @@ from src.api_credentials import (  # noqa: E402 - project root is added above.
     encrypt_api_keys,
     set_session_api_keys,
 )
+# Streamlit Cloud reuses imported project modules during a Git hot update. Reload
+# this module before importing newly added helpers so a deployment does not mix
+# the new app script with the previous in-memory quick-analysis module.
+_quick_analysis_module = importlib.import_module("src.quick_analysis")
+importlib.reload(_quick_analysis_module)
+
 from src.quick_analysis import (  # noqa: E402
     IMF_CHANNELS,
     QUICK_ESTIMATION_TRADING_DAYS,
