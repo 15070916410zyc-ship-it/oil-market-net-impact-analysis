@@ -2294,6 +2294,11 @@ def apply_custom_css() -> None:
         div[data-testid="stCheckbox"] label[data-selected="true"] > div:first-of-type > div {
             background: #101416 !important;
         }
+        /* Keep Glide Data Grid's painted canvas visible inside dark expanders. */
+        [data-testid="stDataFrame"] .dvn-scroller,
+        [data-testid="stDataFrame"] canvas[data-testid="data-grid-canvas"] {
+            background: transparent !important;
+        }
         .variable-selection-summary {
             background: #1B272C !important;
             border-color: rgba(237, 242, 244, 0.14) !important;
