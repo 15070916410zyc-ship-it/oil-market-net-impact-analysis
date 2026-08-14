@@ -2182,6 +2182,159 @@ def apply_custom_css() -> None:
             fill: #101416 !important;
             stroke: #101416 !important;
         }
+        /*
+         * Final control-contrast pass.  This block deliberately comes last:
+         * older light-theme rules use !important and webkit text fill, while
+         * Streamlit 1.5x also changed multiselect tags and sliders away from
+         * their former BaseWeb attributes.
+         */
+        html, body, .stApp, [data-testid="stAppViewContainer"] {
+            color-scheme: dark !important;
+            --text-color: var(--oil-ink) !important;
+            --background-color: var(--oil-canvas) !important;
+            --secondary-background-color: var(--oil-surface) !important;
+            --primary-color: var(--oil-accent) !important;
+        }
+        [data-testid="stWidgetLabel"],
+        [data-testid="stWidgetLabel"] *,
+        div[data-testid="stSlider"] [data-testid="stMarkdownContainer"],
+        div[data-testid="stSlider"] [data-testid="stMarkdownContainer"] * {
+            color: #C7D0D4 !important;
+            -webkit-text-fill-color: #C7D0D4 !important;
+            opacity: 1 !important;
+            text-shadow: none !important;
+        }
+        div[data-testid="stTextInput"] [data-testid="stWidgetLabel"],
+        div[data-testid="stTextInput"] [data-testid="stWidgetLabel"] *,
+        div[data-testid="stTextArea"] [data-testid="stWidgetLabel"],
+        div[data-testid="stTextArea"] [data-testid="stWidgetLabel"] *,
+        div[data-testid="stMultiSelect"] [data-testid="stWidgetLabel"],
+        div[data-testid="stMultiSelect"] [data-testid="stWidgetLabel"] *,
+        div[data-testid="stSelectbox"] [data-testid="stWidgetLabel"],
+        div[data-testid="stSelectbox"] [data-testid="stWidgetLabel"] *,
+        div[data-testid="stNumberInput"] [data-testid="stWidgetLabel"],
+        div[data-testid="stNumberInput"] [data-testid="stWidgetLabel"] *,
+        div[data-testid="stSlider"] [data-testid="stWidgetLabel"],
+        div[data-testid="stSlider"] [data-testid="stWidgetLabel"] * {
+            color: #C7D0D4 !important;
+            -webkit-text-fill-color: #C7D0D4 !important;
+            opacity: 1 !important;
+        }
+        div[data-testid="stCheckbox"] [data-testid="stWidgetLabel"],
+        div[data-testid="stCheckbox"] [data-testid="stWidgetLabel"] *,
+        div[data-testid="stExpander"] summary,
+        div[data-testid="stExpander"] summary *,
+        div[data-testid="stExpander"] summary [data-testid="stMarkdownContainer"],
+        div[data-testid="stExpander"] summary [data-testid="stMarkdownContainer"] * {
+            color: var(--oil-ink) !important;
+            -webkit-text-fill-color: var(--oil-ink) !important;
+            opacity: 1 !important;
+            text-shadow: none !important;
+        }
+        div[data-testid="stMultiSelect"] [data-tag] {
+            background: #2A353B !important;
+            border: 1px solid rgba(237, 242, 244, 0.18) !important;
+            color: #F5F8F9 !important;
+            -webkit-text-fill-color: #F5F8F9 !important;
+            box-shadow: none !important;
+        }
+        div[data-testid="stMultiSelect"] [data-tag] *,
+        div[data-testid="stMultiSelect"] [data-tag] span,
+        div[data-testid="stMultiSelect"] [data-tag] button,
+        div[data-testid="stMultiSelect"] [data-tag] svg,
+        div[data-testid="stMultiSelect"] [data-tag] path {
+            color: #F5F8F9 !important;
+            -webkit-text-fill-color: #F5F8F9 !important;
+            fill: currentColor !important;
+            stroke: currentColor !important;
+            opacity: 1 !important;
+        }
+        div[data-testid="stMultiSelect"] input,
+        div[data-testid="stSelectbox"] input,
+        div[data-testid="stTextInput"] input,
+        div[data-testid="stNumberInput"] input,
+        div[data-testid="stDateInput"] input,
+        div[data-testid="stTextArea"] textarea {
+            background: #182125 !important;
+            color: var(--oil-ink) !important;
+            -webkit-text-fill-color: var(--oil-ink) !important;
+            caret-color: var(--oil-accent) !important;
+            opacity: 1 !important;
+        }
+        div[data-testid="stNumberInput"] button,
+        div[data-testid="stNumberInput"] button *,
+        div[data-testid="stNumberInput"] svg,
+        div[data-testid="stNumberInput"] svg * {
+            background: #233036 !important;
+            border-color: var(--oil-line) !important;
+            color: var(--oil-ink) !important;
+            -webkit-text-fill-color: var(--oil-ink) !important;
+            fill: var(--oil-ink) !important;
+            stroke: var(--oil-ink) !important;
+            opacity: 1 !important;
+        }
+        div[data-testid="stSlider"] [data-testid="stSliderThumbValue"] p {
+            color: var(--oil-ink) !important;
+            -webkit-text-fill-color: var(--oil-ink) !important;
+            font-weight: 700 !important;
+        }
+        div[data-testid="stSlider"] [data-testid="stSliderTickBar"] p {
+            color: #AEBAC0 !important;
+            -webkit-text-fill-color: #AEBAC0 !important;
+        }
+        div[data-testid="stSlider"] input[type="range"] {
+            color: var(--oil-accent) !important;
+            -webkit-text-fill-color: var(--oil-accent) !important;
+            accent-color: var(--oil-accent) !important;
+        }
+        div[data-testid="stCheckbox"] label[data-selected="true"] > div:first-of-type {
+            background: var(--oil-accent) !important;
+            border-color: var(--oil-accent) !important;
+        }
+        div[data-testid="stCheckbox"] label[data-selected="true"] > div:first-of-type > div {
+            background: #101416 !important;
+        }
+        .variable-selection-summary {
+            background: #1B272C !important;
+            border-color: rgba(237, 242, 244, 0.14) !important;
+            color: var(--oil-ink) !important;
+        }
+        .variable-selection-summary strong {
+            color: var(--oil-ink) !important;
+            -webkit-text-fill-color: var(--oil-ink) !important;
+        }
+        .variable-selection-summary span {
+            color: #B7C2C7 !important;
+            -webkit-text-fill-color: #B7C2C7 !important;
+        }
+        .variable-selection-summary::before {
+            background: var(--oil-accent) !important;
+            color: #101416 !important;
+        }
+        [data-testid="stRadio"] > div {
+            background: #11191C !important;
+            border: 1px solid var(--oil-line) !important;
+        }
+        [data-testid="stRadio"] label p {
+            color: #B7C2C7 !important;
+            -webkit-text-fill-color: #B7C2C7 !important;
+        }
+        [data-testid="stRadio"] label:has(input:checked) {
+            background: #2A353B !important;
+            box-shadow: inset 0 0 0 1px rgba(237, 242, 244, 0.12) !important;
+        }
+        [data-testid="stRadio"] label:has(input:checked) p {
+            color: var(--oil-ink) !important;
+            -webkit-text-fill-color: var(--oil-ink) !important;
+        }
+        .stTabs [data-testid="stRadio"] label:has(input:checked) {
+            background: var(--oil-accent) !important;
+            box-shadow: 0 8px 20px rgba(229, 138, 74, 0.17) !important;
+        }
+        .stTabs [data-testid="stRadio"] label:has(input:checked) p {
+            color: #101416 !important;
+            -webkit-text-fill-color: #101416 !important;
+        }
         hr { border-color: var(--oil-line) !important; }
         @media (max-width: 760px) {
             .block-container { padding-left: 1rem; padding-right: 1rem; }
