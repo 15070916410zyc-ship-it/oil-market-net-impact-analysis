@@ -2340,6 +2340,14 @@ def apply_custom_css() -> None:
             color: #101416 !important;
             -webkit-text-fill-color: #101416 !important;
         }
+        [data-testid="stTable"] [data-testid="stTableStyledTable"] td p {
+            color: var(--oil-ink) !important;
+            -webkit-text-fill-color: var(--oil-ink) !important;
+        }
+        [data-testid="stTable"] [data-testid="stTableStyledTable"] th p {
+            color: #B7C2C7 !important;
+            -webkit-text-fill-color: #B7C2C7 !important;
+        }
         hr { border-color: var(--oil-line) !important; }
         @media (max-width: 760px) {
             .block-container { padding-left: 1rem; padding-right: 1rem; }
@@ -3453,12 +3461,6 @@ def selected_variable_metadata_frame(
                 ),
                 localized_text("Frequency", "频率", language): frequency,
                 localized_text("Sources", "数据来源", language): localized_source_names(item, language),
-                localized_text("Auto download", "自动下载", language): localized_bool(
-                    item.get("AutoDownload", False), language
-                ),
-                localized_text("Proxy", "代理变量", language): localized_bool(
-                    item.get("IsProxy", False), language
-                ),
             }
         )
     return pd.DataFrame(rows)
@@ -6410,7 +6412,9 @@ def render_professional_pipeline_tab(options: dict[str, Any]) -> None:
                 variable_metadata,
                 language,
             )
-            st.dataframe(selected_metadata, use_container_width=True, hide_index=True)
+            # A static HTML table is more reliable here than Glide's virtualized
+            # canvas: rows remain visible while the page scrolls.
+            st.table(selected_metadata.style.hide(axis="index"))
 
         def make_paper_status_callback() -> tuple[Any, Any, Callable[[str, int, int, str], None]]:
             progress = st.progress(0)
