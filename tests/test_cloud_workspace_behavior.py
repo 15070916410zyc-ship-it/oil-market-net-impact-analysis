@@ -32,6 +32,28 @@ class CloudWorkspaceBehaviorTests(unittest.TestCase):
         self.assertIn('[data-testid="stTable"] [data-testid="stTableStyledTable"] td p', css)
         self.assertIn("color: var(--oil-ink) !important;", css)
 
+    def test_dark_theme_contrast_overrides_cover_interactive_controls(self) -> None:
+        from app import streamlit_app as app
+
+        with patch.object(app.st, "markdown") as markdown:
+            app.apply_custom_css()
+
+        css = markdown.call_args.args[0]
+        self.assertIn(
+            'div[data-testid="stExpander"] [data-testid="stWidgetLabel"] '
+            '[data-testid="stMarkdownContainer"] p',
+            css,
+        )
+        self.assertIn(
+            '.stTabs div[data-testid="stExpander"] [data-testid="stRadio"] '
+            'label:has(input:checked) p',
+            css,
+        )
+        self.assertIn('.stTabs div[data-testid="stButton"] button[kind="primary"] p', css)
+        self.assertIn('[data-testid="stFileUploaderDropzone"] [data-has-shortcut] *', css)
+        self.assertIn('button:disabled p', css)
+        self.assertIn('-webkit-text-fill-color: #101416 !important;', css)
+
     def test_result_image_preview_is_embedded_without_streamlit_media_route(self) -> None:
         from app import streamlit_app as app
 
