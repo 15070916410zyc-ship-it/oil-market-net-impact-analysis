@@ -1833,6 +1833,41 @@ def apply_custom_css() -> None:
             font-weight: 750 !important;
             letter-spacing: 0.14em !important;
         }
+        .section-kicker.compact {
+            margin-bottom: 0.35rem !important;
+        }
+        .window-summary {
+            display: grid;
+            grid-template-columns: minmax(0, 1.8fr) minmax(8rem, 0.65fr) minmax(0, 1.5fr);
+            gap: 0;
+            margin-top: 1rem;
+            overflow: hidden;
+            background: #10171A;
+            border: 1px solid var(--oil-line);
+            border-radius: 11px;
+        }
+        .window-summary > div {
+            min-width: 0;
+            padding: 0.9rem 1rem 1rem;
+            border-right: 1px solid var(--oil-line);
+        }
+        .window-summary > div:last-child { border-right: 0; }
+        .window-summary span {
+            display: block;
+            margin-bottom: 0.28rem;
+            color: var(--oil-muted) !important;
+            font-size: 0.76rem;
+            font-weight: 650;
+        }
+        .window-summary strong {
+            display: block;
+            overflow-wrap: anywhere;
+            color: var(--oil-ink) !important;
+            font-family: "Cascadia Mono", "SFMono-Regular", monospace;
+            font-size: 0.9rem;
+            font-variant-numeric: tabular-nums;
+            font-weight: 520;
+        }
         .dashboard-header {
             min-height: 174px;
             padding: 2rem 2.35rem 2.2rem !important;
@@ -1996,6 +2031,40 @@ def apply_custom_css() -> None:
         .empty-state p {
             margin: 0;
             color: var(--oil-muted) !important;
+        }
+        .forecast-result-heading {
+            display: flex;
+            align-items: end;
+            justify-content: space-between;
+            gap: 1rem;
+            margin: 1.6rem 0 0.8rem;
+        }
+        .forecast-result-heading h3 {
+            margin: 0 !important;
+            font-size: 1.35rem;
+            letter-spacing: -0.025em;
+        }
+        .forecast-result-heading span {
+            display: block;
+            margin-bottom: 0.28rem;
+            color: var(--oil-accent) !important;
+            font-size: 0.72rem;
+            font-weight: 750;
+            letter-spacing: 0.12em;
+        }
+        .forecast-result-heading p {
+            margin: 0 !important;
+            color: var(--oil-muted) !important;
+            font-size: 0.86rem;
+        }
+        @media (max-width: 760px) {
+            .window-summary { grid-template-columns: 1fr; }
+            .window-summary > div {
+                border-right: 0;
+                border-bottom: 1px solid var(--oil-line);
+            }
+            .window-summary > div:last-child { border-bottom: 0; }
+            .forecast-result-heading { align-items: start; flex-direction: column; }
         }
         h1, h2, h3, h4, h5, h6, p, label,
         [data-testid="stMarkdownContainer"], [data-testid="stCaptionContainer"],
@@ -2266,6 +2335,21 @@ def apply_custom_css() -> None:
             caret-color: var(--oil-accent) !important;
             opacity: 1 !important;
         }
+        /*
+         * BaseWeb places the multiselect search input over the first tag.
+         * A solid input background masks the tag's first character, especially
+         * after responsive wrapping, so only this internal search field stays
+         * transparent while the surrounding control keeps the dark surface.
+         */
+        div[data-testid="stMultiSelect"] input {
+            background: transparent !important;
+            box-shadow: none !important;
+        }
+        div[data-testid="stMultiSelect"] div:has(> span[data-baseweb="tag"])
+        > div:has(> input[role="combobox"]) {
+            right: 0.25rem !important;
+            left: auto !important;
+        }
         div[data-testid="stNumberInput"] button,
         div[data-testid="stNumberInput"] button *,
         div[data-testid="stNumberInput"] svg,
@@ -2424,7 +2508,7 @@ def render_main_header() -> None:
     title = ui_text("Crisis-aware oil market intelligence", "危机事件下的原油市场分析")
     subtitle = ui_text(
         "Net impact · WTI / Brent forecast · five-day risk signal",
-        "净影响 · WTI / Brent 价格预测 · 五日风险信号",
+        "净影响分析 · WTI / Brent 价格预测 · 五日风险预警",
     )
     title_col, tools_col = st.columns([0.79, 0.21])
     with title_col:
@@ -3539,13 +3623,8 @@ def load_uploaded_variable_names() -> list[str]:
     ]
 
 
-def render_sidebar() -> dict[str, Any]:
-    """Render sidebar controls."""
-    st.sidebar.markdown(
-        f'<p class="sidebar-kicker">{ui_text("TIME WINDOW", "时间范围")}</p>',
-        unsafe_allow_html=True,
-    )
-    analysis_mode = st.session_state.get("net_impact_analysis_mode", "professional")
+def default_analysis_options() -> dict[str, Any]:
+    """Build stable analysis defaults before the in-page controls are rendered."""
     local_start, local_end = get_complete_market_date_range_if_exists(PATHS["clean_market"])
     if local_start is None or local_end is None:
         local_start, local_end = get_date_range_if_exists(PATHS["clean_market"])
@@ -3553,79 +3632,15 @@ def render_sidebar() -> dict[str, Any]:
     default_end = local_end if local_end is not None else pd.Timestamp("2024-03-31")
     if local_start is not None and default_start < local_start:
         default_start = local_start
-    with st.sidebar.container(border=True):
-        st.markdown(
-            ui_text("**Event Window**", "**事件窗口**")
-            if analysis_mode == "quick"
-            else ui_text("**Analysis Window**", "**分析窗口**")
-        )
-        start_picker_key = "analysis_start_date_picker"
-        end_picker_key = "analysis_end_date_picker"
-        if start_picker_key not in st.session_state:
-            st.session_state[start_picker_key] = default_start.date()
-        if end_picker_key not in st.session_state:
-            st.session_state[end_picker_key] = default_end.date()
-
-        start_date = st.date_input(
-            ui_text("Start date", "开始日期"),
-            format="YYYY/MM/DD",
-            key=start_picker_key,
-        )
-        end_date = st.date_input(
-            ui_text("End date", "结束日期"),
-            format="YYYY/MM/DD",
-            key=end_picker_key,
-        )
-        start_timestamp = pd.Timestamp(start_date).normalize()
-        end_timestamp = pd.Timestamp(end_date).normalize()
-        if start_timestamp > end_timestamp:
-            st.error(ui_text("Start date must be on or before end date. The current run will use the default window.", "开始日期必须早于或等于结束日期，本次将使用默认窗口。"))
-            start_timestamp = default_start
-            end_timestamp = default_end
-        requested_window_end = (start_timestamp - pd.offsets.BDay(1)).normalize()
-        if analysis_mode == "quick":
-            window_start_timestamp, requested_window_end = automatic_estimation_window(
-                start_timestamp,
-                available_start=local_start,
-            )
-            window_trading_days = max(1, business_day_count(window_start_timestamp, requested_window_end))
-            st.caption(ui_text(
-                f"Estimation window · {window_start_timestamp:%Y-%m-%d} — {requested_window_end:%Y-%m-%d}",
-                f"自动估计窗 · {window_start_timestamp:%Y-%m-%d} — {requested_window_end:%Y-%m-%d}",
-            ))
-        else:
-            default_window_dates = pd.bdate_range(
-                end=requested_window_end,
-                periods=DEFAULT_PRE_EVENT_WINDOW_TRADING_DAYS,
-            )
-            default_window_start = pd.Timestamp(default_window_dates.min()).normalize()
-            window_start_picker_key = "pre_event_window_start_date_picker"
-            if window_start_picker_key not in st.session_state:
-                st.session_state[window_start_picker_key] = default_window_start.date()
-            current_window_start = pd.to_datetime(
-                st.session_state.get(window_start_picker_key, default_window_start.date()),
-                errors="coerce",
-            )
-            if pd.isna(current_window_start) or current_window_start.normalize() > requested_window_end:
-                st.session_state[window_start_picker_key] = default_window_start.date()
-            window_start_date = st.date_input(
-                ui_text("Window period start date", "事件前窗口开始日期"),
-                format="YYYY/MM/DD",
-                max_value=requested_window_end.date(),
-                key=window_start_picker_key,
-            )
-            window_start_timestamp = pd.Timestamp(window_start_date).normalize()
-            if window_start_timestamp > requested_window_end:
-                window_start_timestamp = default_window_start
-                st.session_state[window_start_picker_key] = default_window_start.date()
-                st.warning(ui_text("Window period start date must be before the event start date. The default start date is used.", "事件前窗口开始日期必须早于事件开始日期，已使用默认日期。"))
-            window_trading_days = max(1, business_day_count(window_start_timestamp, requested_window_end))
-            st.caption(ui_text(
-                f"Baseline · {window_start_timestamp:%Y-%m-%d} — {requested_window_end:%Y-%m-%d} · {window_trading_days} days",
-                f"基准窗 · {window_start_timestamp:%Y-%m-%d} — {requested_window_end:%Y-%m-%d} · {window_trading_days} 个工作日",
-            ))
-        if local_start is not None and local_end is not None:
-            st.caption(ui_text(f"Available data · {local_start:%Y-%m-%d} — {local_end:%Y-%m-%d}", f"可用数据 · {local_start:%Y-%m-%d} — {local_end:%Y-%m-%d}"))
+    start_timestamp = default_start.normalize()
+    end_timestamp = pd.Timestamp(default_end).normalize()
+    requested_window_end = (start_timestamp - pd.offsets.BDay(1)).normalize()
+    default_window_dates = pd.bdate_range(
+        end=requested_window_end,
+        periods=DEFAULT_PRE_EVENT_WINDOW_TRADING_DAYS,
+    )
+    window_start_timestamp = pd.Timestamp(default_window_dates.min()).normalize()
+    window_trading_days = max(1, business_day_count(window_start_timestamp, requested_window_end))
 
     feature_selection_method = "mrgc_then_elasticnet"
     max_lag = 5
@@ -3651,7 +3666,7 @@ def render_sidebar() -> dict[str, Any]:
     show_selected_variables = True
 
     return {
-        "analysis_mode": analysis_mode,
+        "analysis_mode": "professional",
         "start_date": start_timestamp.strftime("%Y-%m-%d"),
         "end_date": end_timestamp.strftime("%Y-%m-%d"),
         "window_start_date": window_start_timestamp.strftime("%Y-%m-%d"),
@@ -3675,6 +3690,128 @@ def render_sidebar() -> dict[str, Any]:
         ),
         "show_selected_variables": bool(show_selected_variables),
     }
+
+
+def render_analysis_window_controls(
+    options: dict[str, Any],
+    analysis_mode: str,
+) -> dict[str, Any]:
+    """Render event and estimation dates inside the analysis workspace."""
+    local_start, local_end = get_complete_market_date_range_if_exists(PATHS["clean_market"])
+    if local_start is None or local_end is None:
+        local_start, local_end = get_date_range_if_exists(PATHS["clean_market"])
+    default_start = pd.to_datetime(options.get("start_date"), errors="coerce")
+    default_end = pd.to_datetime(options.get("end_date"), errors="coerce")
+    if pd.isna(default_start):
+        default_start = local_start if local_start is not None else pd.Timestamp("2020-01-01")
+    if pd.isna(default_end):
+        default_end = local_end if local_end is not None else pd.Timestamp("2024-03-31")
+
+    start_picker_key = "analysis_start_date_picker"
+    end_picker_key = "analysis_end_date_picker"
+    if start_picker_key not in st.session_state:
+        st.session_state[start_picker_key] = pd.Timestamp(default_start).date()
+    if end_picker_key not in st.session_state:
+        st.session_state[end_picker_key] = pd.Timestamp(default_end).date()
+
+    with st.container(border=True):
+        st.markdown(
+            f'<p class="section-kicker compact">{ui_text("SAMPLE WINDOW", "样本区间")}</p>',
+            unsafe_allow_html=True,
+        )
+        st.subheader(ui_text("Set the event period", "设置事件期"))
+        st.caption(ui_text(
+            "The estimation period is configured automatically from the selected event period."
+            if analysis_mode == "quick"
+            else "Set the event period and the starting date of its preceding estimation period.",
+            "选择事件期后，系统将自动配置相应的估计期。"
+            if analysis_mode == "quick"
+            else "请设置事件期，以及位于事件期之前的估计期开始日期。",
+        ))
+        date_columns = st.columns(2 if analysis_mode == "quick" else 3)
+        start_date = date_columns[0].date_input(
+            ui_text("Event start", "事件期开始日期"),
+            format="YYYY/MM/DD",
+            key=start_picker_key,
+        )
+        end_date = date_columns[1].date_input(
+            ui_text("Event end", "事件期结束日期"),
+            format="YYYY/MM/DD",
+            key=end_picker_key,
+        )
+        start_timestamp = pd.Timestamp(start_date).normalize()
+        end_timestamp = pd.Timestamp(end_date).normalize()
+        if start_timestamp > end_timestamp:
+            st.error(ui_text(
+                "The event start must not be later than the event end. Default dates are used for this run.",
+                "事件期开始日期不能晚于结束日期，本次运行将使用默认日期。",
+            ))
+            start_timestamp = pd.Timestamp(default_start).normalize()
+            end_timestamp = pd.Timestamp(default_end).normalize()
+
+        requested_window_end = (start_timestamp - pd.offsets.BDay(1)).normalize()
+        if analysis_mode == "quick":
+            window_start_timestamp, requested_window_end = automatic_estimation_window(
+                start_timestamp,
+                available_start=local_start,
+            )
+        else:
+            default_window_dates = pd.bdate_range(
+                end=requested_window_end,
+                periods=DEFAULT_PRE_EVENT_WINDOW_TRADING_DAYS,
+            )
+            default_window_start = pd.Timestamp(default_window_dates.min()).normalize()
+            window_start_picker_key = "pre_event_window_start_date_picker"
+            if window_start_picker_key not in st.session_state:
+                st.session_state[window_start_picker_key] = default_window_start.date()
+            current_window_start = pd.to_datetime(
+                st.session_state.get(window_start_picker_key),
+                errors="coerce",
+            )
+            if pd.isna(current_window_start) or current_window_start.normalize() > requested_window_end:
+                st.session_state[window_start_picker_key] = default_window_start.date()
+            window_start_date = date_columns[2].date_input(
+                ui_text("Estimation start", "估计期开始日期"),
+                format="YYYY/MM/DD",
+                max_value=requested_window_end.date(),
+                key=window_start_picker_key,
+            )
+            window_start_timestamp = pd.Timestamp(window_start_date).normalize()
+            if window_start_timestamp > requested_window_end:
+                window_start_timestamp = default_window_start
+                st.session_state[window_start_picker_key] = default_window_start.date()
+                st.warning(ui_text(
+                    "The estimation period must end before the event period. The default starting date is used.",
+                    "估计期必须早于事件期，系统已恢复默认的估计期开始日期。",
+                ))
+
+        window_trading_days = max(1, business_day_count(window_start_timestamp, requested_window_end))
+        coverage_text = (
+            f"{local_start:%Y-%m-%d} — {local_end:%Y-%m-%d}"
+            if local_start is not None and local_end is not None
+            else ui_text("Not detected", "暂未检测到")
+        )
+        st.markdown(
+            f"""
+            <div class="window-summary">
+                <div><span>{ui_text("Estimation period", "估计期")}</span><strong>{window_start_timestamp:%Y-%m-%d} — {requested_window_end:%Y-%m-%d}</strong></div>
+                <div><span>{ui_text("Trading days", "交易日数")}</span><strong>{window_trading_days}</strong></div>
+                <div><span>{ui_text("Local data coverage", "本地数据覆盖")}</span><strong>{coverage_text}</strong></div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    updated = options.copy()
+    updated.update({
+        "analysis_mode": analysis_mode,
+        "start_date": start_timestamp.strftime("%Y-%m-%d"),
+        "end_date": end_timestamp.strftime("%Y-%m-%d"),
+        "window_start_date": window_start_timestamp.strftime("%Y-%m-%d"),
+        "window_end_date": requested_window_end.strftime("%Y-%m-%d"),
+        "window_trading_days": int(window_trading_days),
+    })
+    return updated
 
 
 def run_update_market_data(options: dict[str, Any]) -> None:
@@ -5706,7 +5843,7 @@ def render_paper_replication_tab() -> None:
             <div class="empty-state">
                 <span>02</span>
                 <h3>{ui_text("No analysis result yet", "尚未生成分析结果")}</h3>
-                <p>{ui_text("Run quick or professional analysis first.", "请先运行快速分析或专业分析。")}</p>
+                <p>{ui_text("Complete a quick or professional run to view results here.", "完成一次快速模式或专业模式分析后，结果将在这里显示。")}</p>
             </div>
             """,
             unsafe_allow_html=True,
@@ -6320,10 +6457,10 @@ def render_upload_controls(options: dict[str, Any]) -> None:
 
 def render_professional_pipeline_tab(options: dict[str, Any]) -> None:
     """Render the unchanged confirmation-based professional workflow."""
-    st.header(ui_text("Professional analysis", "专业分析"))
+    st.header(ui_text("Professional mode", "专业模式"))
     st.caption(ui_text(
-        "Full EMTV-NEI workflow with data, VMD and FEVD review gates.",
-        "完整 EMTV-NEI 流程，保留数据、VMD 与 FEVD 确认节点。",
+        "Review the data, VMD and FEVD settings at each stage of the complete EMTV-NEI workflow.",
+        "按步骤确认数据、VMD 与 FEVD 设置，完整运行 EMTV-NEI 分析流程。",
     ))
 
     variable_pool_options, default_variable_pool = load_variable_pool_options()
@@ -6360,7 +6497,7 @@ def render_professional_pipeline_tab(options: dict[str, Any]) -> None:
             )
             st.session_state[widget_language_key] = language
         net_targets = st.multiselect(
-            ui_text("Target variables to be explained", "待解释的目标变量"),
+            ui_text("Analysis targets", "分析目标"),
             options=variable_pool_options,
             help=ui_text("Select one or two targets; each run supports at most two.", "选择一至两个目标变量，每次最多分析两个。"),
             key=target_widget_key,
@@ -6390,8 +6527,8 @@ def render_professional_pipeline_tab(options: dict[str, Any]) -> None:
             net_explanatory = available_explanatory
             st.markdown(
                 '<div class="variable-selection-summary">'
-                f'<strong>{ui_text(f"{len(net_explanatory)} variables selected", f"已选择 {len(net_explanatory)} 个解释变量")}</strong>'
-                f'<span>{ui_text("Targets are excluded automatically", "目标变量已自动排除")}</span>'
+                f'<strong>{ui_text(f"{len(net_explanatory)} variables included", f"已纳入 {len(net_explanatory)} 个解释变量")}</strong>'
+                f'<span>{ui_text("Targets will not be reused as explanatory variables", "分析目标不会重复作为解释变量")}</span>'
                 "</div>",
                 unsafe_allow_html=True,
             )
@@ -6419,7 +6556,7 @@ def render_professional_pipeline_tab(options: dict[str, Any]) -> None:
         with n_col1:
             net_options["vmd_imf_count"] = int(
                 st.number_input(
-                    ui_text("Number of VMD IMFs", "VMD IMF 数量"),
+                    ui_text("Number of VMD components", "VMD 分量数"),
                     min_value=MIN_VMD_IMF_COUNT,
                     max_value=MAX_VMD_IMF_COUNT,
                     value=min(
@@ -6449,7 +6586,7 @@ def render_professional_pipeline_tab(options: dict[str, Any]) -> None:
         net_options["paper_explanatory_variables"] = list(net_explanatory)
         net_options["selected_variable_pool"] = sorted(set(net_targets) | set(net_explanatory))
         st.caption(
-            ui_text("Targets: ", "目标变量：")
+            ui_text("Targets: ", "分析目标：")
             + (", ".join(net_targets) if net_targets else ui_text("none", "无"))
             + ui_text(" | Explanatory variables: ", " | 解释变量：")
             + ui_text(
@@ -6458,10 +6595,10 @@ def render_professional_pipeline_tab(options: dict[str, Any]) -> None:
             )
             + ui_text(
                 f" | VMD IMFs: {net_options['vmd_imf_count']}",
-                f" | VMD IMF 数量：{net_options['vmd_imf_count']}",
+                f" | VMD 分量数：{net_options['vmd_imf_count']}",
             )
         )
-        with st.expander(ui_text("Selected variable full names and data sources", "所选变量全称与数据来源"), expanded=True):
+        with st.expander(ui_text("Variable names and sources", "变量名称与数据来源"), expanded=True):
             selected_metadata = selected_variable_metadata_frame(
                 list(dict.fromkeys([*net_targets, *net_explanatory])),
                 variable_metadata,
@@ -7100,10 +7237,10 @@ def _render_api_variable_catalog() -> list[dict[str, Any]]:
 
 def render_quick_pipeline_tab(options: dict[str, Any]) -> None:
     """Render the one-click five-IMF quick workflow."""
-    st.header(ui_text("Quick analysis", "快速分析"))
+    st.header(ui_text("Quick mode", "快速模式"))
     st.caption(ui_text(
-        "Select the event window and run. Five IMFs and the estimation window are configured automatically.",
-        "选择事件窗口后即可运行；五个 IMF 与估计窗均自动配置。",
+        "Set the event period only. The estimation period and five IMF components are configured automatically.",
+        "只需设置事件期，系统会自动确定估计期并配置 5 个 IMF。",
     ))
     api_registry_entries = _render_api_variable_catalog()
     variable_options, default_pool = load_variable_pool_options()
@@ -7142,7 +7279,7 @@ def render_quick_pipeline_tab(options: dict[str, Any]) -> None:
     st.markdown(ui_text("#### Explanatory variables by economic meaning", "#### 按经济含义选择解释变量"))
     st.caption(ui_text(
         "These categories describe the input variables. The five IMF interpretations are assigned separately after decomposition.",
-        "这里分类的是输入变量；五个 IMF 的论文解释只在分解完成后单独呈现。",
+        "下列分类用于组织输入变量；IMF 的经济含义将在分解完成后依据结果单独解释。",
     ))
     group_items = [(category, values) for category, values in grouped.items() if values]
     group_columns = st.columns(2)
@@ -7187,12 +7324,8 @@ def render_quick_pipeline_tab(options: dict[str, Any]) -> None:
     quick_options["window_end_date"] = end.strftime("%Y-%m-%d")
     quick_options["window_trading_days"] = business_day_count(start, end)
 
-    st.caption(ui_text(
-        f"Estimation window · {quick_options['window_start_date']} — {quick_options['window_end_date']} · K = 5",
-        f"估计窗 · {quick_options['window_start_date']} — {quick_options['window_end_date']} · K = 5",
-    ))
     if st.button(
-        ui_text("Run Quick Analysis", "一键运行快速分析"),
+        ui_text("Run Quick Analysis", "运行快速分析"),
         type="primary",
         use_container_width=True,
         key="run_quick_analysis",
@@ -7440,8 +7573,8 @@ def render_oil_price_forecast_panel() -> None:
 
     st.header(ui_text("WTI / Brent price forecast", "WTI / Brent 价格预测"))
     st.caption(ui_text(
-        "Five-IMF reconstruction with a holdout-validated forecast band.",
-        "五 IMF 重构，并用留出样本误差生成预测区间。",
+        "Forecast five IMF components separately, then reconstruct the price path and prediction intervals.",
+        "分别预测 5 个 IMF 分量，再重构价格路径及多档预测区间。",
     ))
     control_target, control_left, control_middle, control_right = st.columns([1, 1, 1, 1.35])
     target = control_target.selectbox(
@@ -7458,7 +7591,7 @@ def render_oil_price_forecast_panel() -> None:
         key="price_forecast_horizon",
     )
     history_years = control_middle.selectbox(
-        ui_text("Training history", "训练样本"),
+        ui_text("Historical sample", "历史样本长度"),
         options=[3, 5, 8],
         index=1,
         format_func=lambda value: ui_text(f"{value} years", f"{value} 年"),
@@ -7475,8 +7608,8 @@ def render_oil_price_forecast_panel() -> None:
 
     with st.expander(ui_text("Method and interpretation", "方法与解释")):
         st.write(ui_text(
-            f"The paper uses CEMD on weekly high/low intervals, BPNN for high-frequency IMFs, and ACI for lower-frequency IMFs. The selected {target} series is a daily point series, so this is a five-IMF point-price baseline: BPNN for IMF1 and autoregressive ridge models for IMF2–IMF5. It is not the paper's full interval replication.",
-            f"论文对周度最高价/最低价区间进行 CEMD 分解，高频 IMF 使用 BPNN，中低频 IMF 使用 ACI。当前选择的是 {target} 日度点值，因此此处展示五 IMF 点预测基线：IMF1 使用 BPNN，IMF2–IMF5 使用自回归岭回归；它不是论文区间模型的完整复刻。",
+            f"This page follows the paper's decomposition–component forecast–reconstruction workflow. Because the automatically updated {target} input is a daily point-price series rather than a weekly high/low interval, IMF1 uses BPNN and IMF2–IMF5 use autoregressive ridge models. Holdout-error quantiles provide empirical prediction intervals; this is a practical baseline, not a full replication of the paper's interval model.",
+            f"本页面沿用论文的“分解—分量预测—重构”思路。自动更新的 {target} 数据为日度点价格，并非周度最高价/最低价区间，因此 IMF1 使用 BPNN，IMF2—IMF5 使用自回归岭回归；预测区间由留出期误差分位数构造。该结果属于可运行的基线预测，并非论文区间模型的完整复现。",
         ))
 
     if run_forecast:
@@ -7501,7 +7634,7 @@ def render_oil_price_forecast_panel() -> None:
                     f"No sufficiently current {target} series is available. Check the network or data-source credentials.",
                     f"未取得足够的最新 {target} 数据，请检查网络或数据源凭据。",
                 ))
-            status.write(ui_text("Decomposing and validating five IMF models.", "正在分解并验证五个 IMF 模型。"))
+            status.write(ui_text("Decomposing the series and validating five IMF component models.", "正在分解价格序列并验证 5 个 IMF 分量模型。"))
             result = run_oil_price_forecast(price_data, price_column=target, horizon=int(horizon))
             _save_price_forecast_workbook(result, target)
             st.session_state["price_forecast_last_result"] = {"target": target, "result": result}
@@ -7522,7 +7655,7 @@ def render_oil_price_forecast_panel() -> None:
             <div class="empty-state">
                 <span>01</span>
                 <h3>{ui_text("No forecast yet", "尚未生成预测")}</h3>
-                <p>{ui_text("Choose a horizon, then refresh the data.", "选择预测期限，然后更新数据并运行。")}</p>
+                <p>{ui_text("Set the target, horizon and sample length, then generate a forecast.", "设置预测对象、预测期限和历史样本长度后，点击“更新数据并生成预测”。")}</p>
             </div>
             """,
             unsafe_allow_html=True,
@@ -7530,53 +7663,149 @@ def render_oil_price_forecast_panel() -> None:
         return
 
     metrics = result.metrics
+    st.markdown(
+        f"""
+        <div class="forecast-result-heading">
+            <div>
+                <span>{ui_text("FORECAST SUMMARY", "预测摘要")}</span>
+                <h3>{target} · {int(horizon)} {ui_text("business days", "个交易日")}</h3>
+            </div>
+            <p>{ui_text("Data through", "数据截至")} {metrics['AsOfDate']} ·
+               {ui_text("holdout sample", "留出样本")} {int(float(metrics['ValidationObservations']))} {ui_text("days", "个交易日")}</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
     metric_columns = st.columns(4)
-    metric_columns[0].metric(ui_text(f"Latest {target}", f"最新 {target}"), f"${float(metrics['LatestPrice']):.2f}")
-    metric_columns[1].metric(ui_text("End forecast", "期末预测"), f"${float(metrics['ForecastEndPrice']):.2f}")
-    metric_columns[2].metric(ui_text("Projected change", "预测涨跌"), f"{float(metrics['ProjectedChangePercent']):+.1f}%")
-    metric_columns[3].metric(ui_text("Holdout MAE", "留出集 MAE"), f"${float(metrics['ValidationMAE']):.2f}")
+    metric_columns[0].metric(ui_text(f"Latest {target} price", f"最新 {target} 价格"), f"${float(metrics['LatestPrice']):.2f}")
+    metric_columns[1].metric(ui_text("Forecast-period close", "预测期末价格"), f"${float(metrics['ForecastEndPrice']):.2f}")
+    metric_columns[2].metric(ui_text("Forecast-period change", "预测期累计涨跌"), f"{float(metrics['ProjectedChangePercent']):+.1f}%")
+    metric_columns[3].metric(ui_text("Out-of-sample MAE", "样本外 MAE"), f"${float(metrics['ValidationMAE']):.2f}")
 
     history = result.history
     forecast = result.forecast
+    available_intervals = [level for level in (50, 80, 90, 95) if f"Lower{level}" in forecast]
+    selected_intervals = st.multiselect(
+        ui_text("Prediction intervals to display", "显示的预测区间"),
+        options=available_intervals,
+        default=[level for level in (50, 80, 95) if level in available_intervals],
+        format_func=lambda level: ui_text(f"{level}% prediction interval", f"{level}% 预测区间"),
+        key=f"{target.lower()}_forecast_interval_levels",
+        help=ui_text(
+            "Wider coverage produces a wider range. Select one or more levels for comparison.",
+            "覆盖率越高，区间通常越宽。可同时选择多档区间进行比较。",
+        ),
+    )
+    st.caption(ui_text(
+        "These are empirical prediction intervals derived from holdout errors, not parameter confidence intervals.",
+        "这里展示的是基于留出期误差构造的经验预测区间，并非模型参数的置信区间。",
+    ))
     figure = go.Figure()
     figure.add_trace(go.Scatter(
         x=history["Date"], y=history["Actual"], name=ui_text("Actual", "实际价格"),
         line=dict(color="#D9E2E6", width=2.2), hovertemplate="%{x|%Y-%m-%d}<br>$%{y:.2f}<extra></extra>",
     ))
-    figure.add_trace(go.Scatter(
-        x=forecast["Date"], y=forecast["Upper80"], showlegend=False,
-        line=dict(color="rgba(229, 138, 74, 0.05)"), hoverinfo="skip",
-    ))
-    figure.add_trace(go.Scatter(
-        x=forecast["Date"], y=forecast["Lower80"], name=ui_text("Empirical 80% band", "经验 80% 区间"),
-        fill="tonexty", fillcolor="rgba(229, 138, 74, 0.15)",
-        line=dict(color="rgba(229, 138, 74, 0.08)"), hoverinfo="skip",
-    ))
+    interval_colors = {
+        50: "rgba(229, 138, 74, 0.28)",
+        80: "rgba(229, 138, 74, 0.20)",
+        90: "rgba(229, 138, 74, 0.14)",
+        95: "rgba(229, 138, 74, 0.09)",
+    }
+    for level in sorted(selected_intervals, reverse=True):
+        figure.add_trace(go.Scatter(
+            x=forecast["Date"], y=forecast[f"Upper{level}"], showlegend=False,
+            line=dict(color="rgba(229, 138, 74, 0.01)", width=0), hoverinfo="skip",
+        ))
+        figure.add_trace(go.Scatter(
+            x=forecast["Date"], y=forecast[f"Lower{level}"],
+            name=ui_text(f"{level}% prediction interval", f"{level}% 预测区间"),
+            fill="tonexty", fillcolor=interval_colors[level],
+            line=dict(color="rgba(229, 138, 74, 0.01)", width=0), hoverinfo="skip",
+        ))
     figure.add_trace(go.Scatter(
         x=forecast["Date"], y=forecast["PointForecast"], name=ui_text("Forecast", "预测价格"),
         line=dict(color="#E58A4A", width=2.5, dash="dash"),
         hovertemplate="%{x|%Y-%m-%d}<br>$%{y:.2f}<extra></extra>",
     ))
     figure.update_layout(
-        height=500, margin=dict(l=12, r=12, t=30, b=10), hovermode="x unified",
-        legend=dict(orientation="h", y=1.08), xaxis_title=None,
+        title=dict(
+            text=ui_text(f"{target} forecast and prediction intervals", f"{target} 价格预测与预测区间"),
+            x=0.0,
+            xanchor="left",
+        ),
+        height=520, margin=dict(l=12, r=12, t=78, b=10), hovermode="x unified",
+        legend=dict(orientation="h", y=1.04, x=0), xaxis_title=None,
         yaxis_title=ui_text("USD / barrel", "美元/桶"),
     )
     _apply_dark_plot_theme(figure)
     st.plotly_chart(figure, use_container_width=True, key=f"{target.lower()}_price_forecast_chart")
 
-    with st.expander(ui_text("IMF models and forecast table", "IMF 模型与预测明细")):
+    validation_columns = st.columns(3)
+    validation_columns[0].metric(ui_text("Out-of-sample RMSE", "样本外 RMSE"), f"${float(metrics['ValidationRMSE']):.2f}")
+    validation_columns[1].metric(
+        ui_text("Directional accuracy", "方向判断准确率"),
+        f"{float(metrics['DirectionalAccuracyPercent']):.1f}%",
+    )
+    validation_columns[2].metric(
+        ui_text("Validation sample", "验证样本"),
+        ui_text(
+            f"{int(float(metrics['ValidationObservations']))} business days",
+            f"{int(float(metrics['ValidationObservations']))} 个交易日",
+        ),
+    )
+
+    forecast_tab, model_tab, validation_tab = st.tabs([
+        ui_text("Forecast table", "预测明细"),
+        ui_text("IMF models", "IMF 模型"),
+        ui_text("Validation notes", "验证说明"),
+    ])
+    with forecast_tab:
+        forecast_display = forecast.copy()
+        forecast_display = forecast_display.rename(columns={
+            "Date": ui_text("Date", "日期"),
+            "PointForecast": ui_text("Point forecast", "点预测"),
+            **{
+                f"{bound}{level}": ui_text(
+                    f"{level}% {'lower' if bound == 'Lower' else 'upper'}",
+                    f"{level}% {'下界' if bound == 'Lower' else '上界'}",
+                )
+                for level in available_intervals
+                for bound in ("Lower", "Upper")
+            },
+        })
+        st.dataframe(forecast_display, use_container_width=True, hide_index=True)
+    with model_tab:
         summary = result.model_summary.copy()
-        summary["Channel"] = summary["ChannelZH" if current_language() == "zh" else "ChannelEN"]
-        st.dataframe(summary[["IMF", "Channel", "Model", "CenterFrequency"]], use_container_width=True, hide_index=True)
-        st.dataframe(forecast, use_container_width=True, hide_index=True)
+        summary[ui_text("Economic interpretation", "经济含义")] = summary[
+            "ChannelZH" if current_language() == "zh" else "ChannelEN"
+        ]
+        summary = summary.rename(columns={
+            "Model": ui_text("Model", "模型"),
+            "CenterFrequency": ui_text("Center frequency", "中心频率"),
+        })
+        st.dataframe(
+            summary[[
+                "IMF",
+                ui_text("Economic interpretation", "经济含义"),
+                ui_text("Model", "模型"),
+                ui_text("Center frequency", "中心频率"),
+            ]],
+            use_container_width=True,
+            hide_index=True,
+        )
+    with validation_tab:
+        st.markdown(ui_text(
+            "The most recent holdout observations are forecast without using their future values. MAE, RMSE and directional accuracy summarize this out-of-sample check. Prediction intervals use finite-sample quantiles of the absolute holdout errors and widen with the forecast horizon.",
+            "系统在不使用未来值的前提下预测最近一段留出样本，并据此计算 MAE、RMSE 与方向判断准确率。各档预测区间采用留出期绝对误差的有限样本分位数构造，并随预测期限适度扩展。",
+        ))
     result_path = _price_forecast_result_path(target)
     if result_path.exists():
         st.download_button(
-            ui_text("Download forecast workbook", "下载预测结果"),
+            ui_text("Download forecast workbook", "下载完整预测结果"),
             data=result_path.read_bytes(),
             file_name=result_path.name,
             mime=_download_mime(result_path),
+            use_container_width=True,
             key=f"download_{target.lower()}_price_forecast",
         )
 
@@ -7748,10 +7977,10 @@ def render_crisis_warning_tab(options: dict[str, Any]) -> None:
             )
 
 
-def render_run_pipeline_tab(options: dict[str, Any]) -> None:
+def render_run_pipeline_tab(options: dict[str, Any]) -> dict[str, Any]:
     """Route the analysis entry to quick or professional mode."""
     st.markdown(
-        f'<p class="section-kicker">{ui_text("ANALYSIS MODE", "分析模式")}</p>',
+        f'<p class="section-kicker">{ui_text("ANALYSIS SETUP", "分析设置")}</p>',
         unsafe_allow_html=True,
     )
     analysis_mode = st.radio(
@@ -7759,21 +7988,21 @@ def render_run_pipeline_tab(options: dict[str, Any]) -> None:
         options=["quick", "professional"],
         index=1,
         format_func=lambda value: {
-            "quick": ui_text("Quick · automatic", "快速模式 · 自动运行"),
-            "professional": ui_text("Professional · full control", "专业模式 · 完整控制"),
+            "quick": ui_text("Quick · automatic", "快速模式 · 自动配置"),
+            "professional": ui_text("Professional · guided", "专业模式 · 分步设置"),
         }[value],
         horizontal=True,
         label_visibility="collapsed",
         key="net_impact_analysis_mode",
     )
-    run_options = options.copy()
-    run_options["analysis_mode"] = analysis_mode
+    run_options = render_analysis_window_controls(options, analysis_mode)
     if analysis_mode == "quick":
         render_quick_pipeline_tab(run_options)
     else:
         render_professional_pipeline_tab(run_options)
     st.divider()
     render_paper_replication_tab()
+    return run_options
 
 
 def render_price_forecast_tab(options: dict[str, Any]) -> None:
@@ -7806,13 +8035,13 @@ def main() -> None:
     restore_api_credentials_for_request()
     apply_custom_css()
     render_language_switcher()
-    options = render_sidebar()
+    options = default_analysis_options()
 
     render_main_header()
 
     tabs = st.tabs(main_navigation_labels())
     with tabs[0]:
-        render_run_pipeline_tab(options)
+        options = render_run_pipeline_tab(options)
     with tabs[1]:
         render_price_forecast_tab(options)
 

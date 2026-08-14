@@ -25,9 +25,23 @@ class PriceForecastTests(unittest.TestCase):
         result = run_brent_price_forecast(synthetic_brent(), horizon=10, max_history=420)
 
         self.assertEqual(len(result.forecast), 10)
-        self.assertEqual(list(result.forecast.columns), ["Date", "PointForecast", "Lower80", "Upper80"])
-        self.assertTrue(result.forecast[["PointForecast", "Lower80", "Upper80"]].notna().all().all())
-        self.assertTrue((result.forecast["Lower80"] < result.forecast["Upper80"]).all())
+        expected_columns = ["Date", "PointForecast"] + [
+            f"{bound}{level}"
+            for level in (50, 80, 90, 95)
+            for bound in ("Lower", "Upper")
+        ]
+        self.assertEqual(list(result.forecast.columns), expected_columns)
+        self.assertTrue(result.forecast[expected_columns[1:]].notna().all().all())
+        for level in (50, 80, 90, 95):
+            self.assertTrue((result.forecast[f"Lower{level}"] < result.forecast[f"Upper{level}"]).all())
+            self.assertTrue((result.forecast[f"Lower{level}"] <= result.forecast["PointForecast"]).all())
+            self.assertTrue((result.forecast["PointForecast"] <= result.forecast[f"Upper{level}"]).all())
+        self.assertTrue((result.forecast["Lower95"] <= result.forecast["Lower90"]).all())
+        self.assertTrue((result.forecast["Lower90"] <= result.forecast["Lower80"]).all())
+        self.assertTrue((result.forecast["Lower80"] <= result.forecast["Lower50"]).all())
+        self.assertTrue((result.forecast["Upper50"] <= result.forecast["Upper80"]).all())
+        self.assertTrue((result.forecast["Upper80"] <= result.forecast["Upper90"]).all())
+        self.assertTrue((result.forecast["Upper90"] <= result.forecast["Upper95"]).all())
         self.assertEqual(result.model_summary["IMF"].tolist(), ["IMF1", "IMF2", "IMF3", "IMF4", "IMF5"])
         self.assertEqual(result.model_summary.loc[0, "Model"], "BPNN")
         self.assertEqual(set(result.model_summary.loc[1:, "Model"]), {"AR-Ridge"})

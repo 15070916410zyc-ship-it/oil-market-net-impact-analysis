@@ -36,14 +36,47 @@ class CloudWorkspaceBehaviorTests(unittest.TestCase):
             patch.object(app.st, "markdown"),
             patch.object(app.st, "radio", return_value="professional"),
             patch.object(app.st, "divider") as divider,
+            patch.object(
+                app,
+                "render_analysis_window_controls",
+                return_value={"start_date": "2020-01-01", "analysis_mode": "professional"},
+            ) as window_controls,
             patch.object(app, "render_professional_pipeline_tab") as professional,
             patch.object(app, "render_paper_replication_tab") as results,
         ):
-            app.render_run_pipeline_tab({"start_date": "2020-01-01"})
+            returned = app.render_run_pipeline_tab({"start_date": "2020-01-01"})
 
+        window_controls.assert_called_once()
         professional.assert_called_once()
         divider.assert_called_once()
         results.assert_called_once()
+        self.assertEqual(returned["analysis_mode"], "professional")
+
+    def test_analysis_dates_are_rendered_inside_the_run_workspace(self) -> None:
+        import inspect
+
+        from app import streamlit_app as app
+
+        defaults_source = inspect.getsource(app.default_analysis_options)
+        window_source = inspect.getsource(app.render_analysis_window_controls)
+        run_source = inspect.getsource(app.render_run_pipeline_tab)
+
+        self.assertNotIn("st.sidebar", defaults_source)
+        self.assertIn("Event start", window_source)
+        self.assertIn("Estimation start", window_source)
+        self.assertIn("render_analysis_window_controls", run_source)
+
+    def test_price_forecast_ui_offers_multiple_prediction_intervals_and_named_chart(self) -> None:
+        import inspect
+
+        from app import streamlit_app as app
+
+        renderer = inspect.getsource(app.render_oil_price_forecast_panel)
+
+        self.assertIn("Prediction intervals to display", renderer)
+        self.assertIn("(50, 80, 90, 95)", renderer)
+        self.assertIn("forecast and prediction intervals", renderer)
+        self.assertNotIn("Empirical 80% band", renderer)
 
     def test_dark_expanders_do_not_cover_dataframe_canvas(self) -> None:
         from app import streamlit_app as app
@@ -88,6 +121,12 @@ class CloudWorkspaceBehaviorTests(unittest.TestCase):
         self.assertIn('[data-testid="stFileUploaderDropzone"] [data-has-shortcut] *', css)
         self.assertIn('button:disabled p', css)
         self.assertIn('-webkit-text-fill-color: #101416 !important;', css)
+        multiselect_input_override = css.rsplit(
+            'div[data-testid="stMultiSelect"] input {', maxsplit=1
+        )[1].split("}", maxsplit=1)[0]
+        self.assertIn("background: transparent !important;", multiselect_input_override)
+        self.assertIn('div:has(> span[data-baseweb="tag"])', css)
+        self.assertIn("right: 0.25rem !important;", css)
 
     def test_result_image_preview_is_embedded_without_streamlit_media_route(self) -> None:
         from app import streamlit_app as app
