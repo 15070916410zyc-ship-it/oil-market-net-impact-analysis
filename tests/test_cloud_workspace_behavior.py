@@ -15,6 +15,21 @@ from zipfile import ZipFile
 
 
 class CloudWorkspaceBehaviorTests(unittest.TestCase):
+    def test_dark_expanders_do_not_cover_dataframe_canvas(self) -> None:
+        from app import streamlit_app as app
+
+        with patch.object(app.st, "markdown") as markdown:
+            app.apply_custom_css()
+
+        css = markdown.call_args.args[0]
+        selector = (
+            '[data-testid="stDataFrame"] .dvn-scroller,\n'
+            '        [data-testid="stDataFrame"] canvas[data-testid="data-grid-canvas"]'
+        )
+        self.assertIn(selector, css)
+        dataframe_override = css.split(selector, maxsplit=1)[1].split("}", maxsplit=1)[0]
+        self.assertIn("background: transparent !important;", dataframe_override)
+
     def test_result_image_preview_is_embedded_without_streamlit_media_route(self) -> None:
         from app import streamlit_app as app
 
