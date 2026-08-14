@@ -137,11 +137,13 @@ def run_oil_price_forecast(
     max_history: int = 1500,
     lags: int = 12,
 ) -> PriceForecastResult:
-    """Generate a five-IMF oil-price point forecast with an empirical 80% band.
+    """Generate a five-IMF oil-price forecast with empirical prediction intervals.
 
     Validation decomposition uses only the pre-holdout signal, avoiding future
     information in the displayed holdout metrics.  The final future forecast is
-    then fitted to all observations available at run time.
+    then fitted to all observations available at run time.  The 50%, 80%, 90%
+    and 95% prediction intervals use finite-sample holdout-error quantiles and
+    widen gradually across the forecast horizon.
     """
     if horizon < 1 or horizon > 60:
         raise ValueError("Forecast horizon must be between 1 and 60 business days.")
@@ -155,22 +157,23 @@ def run_oil_price_forecast(
 
     point_forecast, component_forecasts, frequencies = _forecast_from_signal(values, horizon, lags)
     absolute_errors = np.abs(validation_errors)
-    base_radius = max(
-        float(np.quantile(absolute_errors, 0.80)),
-        float(np.std(validation_errors, ddof=1) * 1.2816) if len(validation_errors) > 1 else 0.0,
-        0.50,
-    )
     widening = np.sqrt(1.0 + np.arange(horizon) / max(holdout - 1, 1))
-    radius = base_radius * widening
     future_dates = pd.bdate_range(cleaned["Date"].iloc[-1] + pd.offsets.BDay(1), periods=horizon)
-    forecast = pd.DataFrame(
-        {
-            "Date": future_dates,
-            "PointForecast": point_forecast,
-            "Lower80": point_forecast - radius,
-            "Upper80": point_forecast + radius,
-        }
-    )
+    forecast_data: dict[str, object] = {
+        "Date": future_dates,
+        "PointForecast": point_forecast,
+    }
+    for level in (50, 80, 90, 95):
+        coverage = level / 100.0
+        quantile = min(1.0, np.ceil((len(absolute_errors) + 1) * coverage) / len(absolute_errors))
+        try:
+            empirical_radius = float(np.quantile(absolute_errors, quantile, method="higher"))
+        except TypeError:  # NumPy < 1.22 compatibility.
+            empirical_radius = float(np.quantile(absolute_errors, quantile, interpolation="higher"))
+        radius = max(empirical_radius, 0.50) * widening
+        forecast_data[f"Lower{level}"] = point_forecast - radius
+        forecast_data[f"Upper{level}"] = point_forecast + radius
+    forecast = pd.DataFrame(forecast_data)
 
     component_rows: list[dict[str, object]] = []
     model_rows: list[dict[str, object]] = []
