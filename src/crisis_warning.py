@@ -1,10 +1,9 @@
-"""Five-day oil-crisis risk-ranking and Google Trends timeline helpers."""
+"""Five-day oil-crisis risk-ranking helpers."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -300,43 +299,3 @@ def run_five_day_warning(
             "The displayed score is a historical risk percentile for ranking, not a calibrated event probability."
         ),
     )
-
-
-def fetch_google_trends_timeline(
-    keywords: Iterable[str],
-    start_date: Any,
-    end_date: Any,
-    geo: str = "",
-    cache_path: str | Path | None = None,
-) -> tuple[pd.DataFrame, str]:
-    """Fetch a best-effort Google Trends attention timeline, with a local-cache fallback."""
-    terms = [str(term).strip() for term in keywords if str(term).strip()][:5]
-    if not terms:
-        return pd.DataFrame(), "No Google Trends keywords were supplied."
-    start = pd.to_datetime(start_date).strftime("%Y-%m-%d")
-    end = pd.to_datetime(end_date).strftime("%Y-%m-%d")
-    cache = Path(cache_path) if cache_path else None
-    try:
-        from pytrends.request import TrendReq
-
-        # Do not pass pytrends' legacy retry arguments: current urllib3 removed
-        # ``method_whitelist``, which older pytrends releases still reference.
-        client = TrendReq(hl="en-US", tz=0, timeout=(10, 30))
-        client.build_payload(terms, timeframe=f"{start} {end}", geo=geo)
-        timeline = client.interest_over_time().reset_index()
-        timeline = timeline.drop(columns=["isPartial"], errors="ignore")
-        if timeline.empty:
-            raise ValueError("Google Trends returned an empty timeline.")
-        value_columns = [column for column in timeline.columns if column != "date"]
-        timeline["AttentionIndex"] = timeline[value_columns].mean(axis=1)
-        timeline = timeline.rename(columns={"date": "Date"})
-        if cache is not None:
-            cache.parent.mkdir(parents=True, exist_ok=True)
-            timeline.to_csv(cache, index=False)
-        return timeline, "Google Trends attention was downloaded automatically through the public Trends web interface."
-    except Exception as exc:  # noqa: BLE001 - public Trends access can be rate limited.
-        if cache is not None and cache.exists():
-            cached = pd.read_csv(cache)
-            cached["Date"] = pd.to_datetime(cached["Date"], errors="coerce")
-            return cached, f"Google Trends refresh failed; the latest local cache is shown. {exc}"
-        return pd.DataFrame(), f"Google Trends could not be downloaded and no cache is available. {exc}"

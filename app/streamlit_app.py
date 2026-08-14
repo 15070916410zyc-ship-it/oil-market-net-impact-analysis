@@ -181,8 +181,7 @@ PATHS = {
     "quick_imf_channel_summary": PROJECT_ROOT / "outputs" / "tables" / "quick_imf_channel_summary.xlsx",
     "quick_channel_contribution_summary": PROJECT_ROOT / "outputs" / "tables" / "quick_channel_contribution_summary.xlsx",
     "warning_results": PROJECT_ROOT / "outputs" / "tables" / "crisis_warning_results.xlsx",
-    "google_trends_cache": PROJECT_ROOT / "data" / "raw" / "google_trends_crisis_timeline.csv",
-    "price_forecast_results": PROJECT_ROOT / "outputs" / "tables" / "brent_price_forecast.xlsx",
+    "price_forecast_results_dir": PROJECT_ROOT / "outputs" / "tables",
 }
 
 
@@ -2231,6 +2230,12 @@ def apply_custom_css() -> None:
             opacity: 1 !important;
             text-shadow: none !important;
         }
+        div[data-testid="stExpander"] [data-testid="stMarkdownContainer"] a,
+        div[data-testid="stExpander"] [data-testid="stMarkdownContainer"] a * {
+            color: #F0A36B !important;
+            -webkit-text-fill-color: #F0A36B !important;
+            text-decoration-color: rgba(240, 163, 107, 0.72) !important;
+        }
         div[data-testid="stMultiSelect"] [data-tag] {
             background: #2A353B !important;
             border: 1px solid rgba(237, 242, 244, 0.18) !important;
@@ -2418,8 +2423,8 @@ def render_main_header() -> None:
     eyebrow = ui_text("OIL MARKET RESEARCH LAB", "原油市场研究台")
     title = ui_text("Crisis-aware oil market intelligence", "危机事件下的原油市场分析")
     subtitle = ui_text(
-        "Net impact · Brent forecast · five-day risk signal",
-        "净影响 · Brent 价格预测 · 五日风险信号",
+        "Net impact · WTI / Brent forecast · five-day risk signal",
+        "净影响 · WTI / Brent 价格预测 · 五日风险信号",
     )
     title_col, tools_col = st.columns([0.79, 0.21])
     with title_col:
@@ -7247,13 +7252,12 @@ def render_quick_pipeline_tab(options: dict[str, Any]) -> None:
 
 
 def _render_warning_results(payload: dict[str, Any]) -> None:
-    """Render warning ranking, channel importance, and attention timeline."""
+    """Render the unchanged warning model and an independent regime forecast."""
     import plotly.express as px
     import plotly.graph_objects as go
-    from plotly.subplots import make_subplots
 
     result = payload["result"]
-    trends = payload.get("trends", pd.DataFrame())
+    regime = payload.get("regime_forecast")
     st.subheader(ui_text("Five-Day Crisis Risk Ranking", "五日危机风险排序"))
     metrics = st.columns(4)
     metrics[0].metric(ui_text("Latest date", "最新日期"), f"{result.latest_date:%Y-%m-%d}")
@@ -7271,16 +7275,15 @@ def _render_warning_results(payload: dict[str, Any]) -> None:
 
     history = result.risk_history.copy()
     if not history.empty:
-        figure = make_subplots(specs=[[{"secondary_y": True}]])
+        figure = go.Figure()
         figure.add_trace(
             go.Scatter(
                 x=history["Date"],
                 y=history["RiskScore"],
                 name=ui_text("Five-day risk score", "五日风险分数"),
-                line=dict(color="#D95D39", width=2),
+                line=dict(color="#E58A4A", width=2.4),
                 hovertemplate="%{x|%Y-%m-%d}<br>%{y:.1f}<extra></extra>",
-            ),
-            secondary_y=False,
+            )
         )
         figure.add_hline(
             y=result.alert_threshold,
@@ -7288,18 +7291,6 @@ def _render_warning_results(payload: dict[str, Any]) -> None:
             line_color="#7A1F1F",
             annotation_text=ui_text("Alert threshold", "预警阈值"),
         )
-        if isinstance(trends, pd.DataFrame) and not trends.empty:
-            figure.add_trace(
-                go.Scatter(
-                    x=trends["Date"],
-                    y=trends["AttentionIndex"],
-                    name=ui_text("Google Trends attention", "Google Trends 关注度"),
-                    line=dict(color="#2F6690", width=1.5),
-                    opacity=0.75,
-                    hovertemplate="%{x|%Y-%m-%d}<br>%{y:.1f}<extra></extra>",
-                ),
-                secondary_y=True,
-            )
         events = result.event_catalog.copy()
         if not events.empty:
             event_points = pd.merge_asof(
@@ -7318,11 +7309,9 @@ def _render_warning_results(payload: dict[str, Any]) -> None:
                     marker=dict(size=8, color="#111827", symbol="diamond"),
                     text=event_points["Event"],
                     hovertemplate="%{x|%Y-%m-%d}<br>%{text}<extra></extra>",
-                ),
-                secondary_y=False,
+                )
             )
-        figure.update_yaxes(title_text=ui_text("Risk percentile", "风险百分位"), range=[0, 102], secondary_y=False)
-        figure.update_yaxes(title_text=ui_text("Attention index", "关注度指数"), secondary_y=True)
+        figure.update_yaxes(title_text=ui_text("Risk percentile", "风险百分位"), range=[0, 102])
         figure.update_layout(
             height=520,
             margin=dict(l=20, r=20, t=40, b=20),
@@ -7330,7 +7319,7 @@ def _render_warning_results(payload: dict[str, Any]) -> None:
             legend=dict(orientation="h", y=1.08),
         )
         _apply_dark_plot_theme(figure)
-        st.plotly_chart(figure, use_container_width=True, key="warning_attention_timeline")
+        st.plotly_chart(figure, use_container_width=True, key="warning_risk_timeline")
 
     channels = result.channel_scores.copy()
     if not channels.empty:
@@ -7348,12 +7337,93 @@ def _render_warning_results(payload: dict[str, Any]) -> None:
         _apply_dark_plot_theme(channel_figure)
         st.plotly_chart(channel_figure, use_container_width=True, key="warning_channel_pie")
 
-    st.info(ui_text(payload.get("trends_note", ""), payload.get("trends_note", "")))
+    st.divider()
+    st.subheader(ui_text("Literature crisis-state forecast", "文献危机状态预测"))
+    if regime is None:
+        st.warning(ui_text(
+            payload.get("regime_note", "The independent regime forecast is unavailable."),
+            payload.get("regime_note_zh", "独立的危机状态预测暂不可用。"),
+        ))
+        return
+
+    regime_metrics = st.columns(4)
+    regime_metrics[0].metric(
+        ui_text("Current crisis regime", "当前危机状态概率"),
+        f"{regime.current_probability:.1%}",
+    )
+    regime_metrics[1].metric(
+        ui_text("Next-day probability", "下一交易日概率"),
+        f"{regime.probability_1d:.1%}",
+    )
+    regime_metrics[2].metric(
+        ui_text("Next-five-day probability", "未来五日发生概率"),
+        f"{regime.probability_5d:.1%}",
+    )
+    regime_metrics[3].metric(
+        ui_text("Crisis-regime volatility", "危机状态年化波动"),
+        f"{regime.crisis_annualized_volatility:.1f}%",
+    )
+    if regime.probability_5d >= 0.50:
+        st.warning(ui_text(
+            "The Hamilton model assigns at least 50% probability to entering the high-volatility regime within five trading days.",
+            "Hamilton 模型判断未来五个交易日进入高波动危机状态的概率不低于 50%。",
+        ))
+    else:
+        st.success(ui_text(
+            "The five-day high-volatility-regime probability is below 50%.",
+            "未来五日进入高波动危机状态的概率低于 50%。",
+        ))
+    st.caption(ui_text(
+        regime.model_note,
+        "Hamilton 两状态马尔可夫转换预测。这里的概率指进入原油价格高波动状态的概率，不代表特定战争、疫情或宏观危机的日期与原因。",
+    ))
+
+    regime_history = regime.probability_history.copy()
+    regime_figure = go.Figure()
+    regime_figure.add_trace(go.Scatter(
+        x=regime_history["Date"],
+        y=regime_history["CrisisRegimeProbability"],
+        name=ui_text("Filtered crisis-state probability", "危机状态过滤概率"),
+        line=dict(color="#5FB3A7", width=2.3),
+        fill="tozeroy",
+        fillcolor="rgba(95, 179, 167, 0.12)",
+        hovertemplate="%{x|%Y-%m-%d}<br>%{y:.1f}%<extra></extra>",
+    ))
+    regime_figure.add_hline(
+        y=50,
+        line_dash="dash",
+        line_color="#E58A4A",
+        annotation_text=ui_text("50% reference", "50% 参考线"),
+    )
+    regime_figure.update_layout(
+        height=440,
+        margin=dict(l=20, r=20, t=40, b=20),
+        hovermode="x unified",
+        yaxis=dict(title=ui_text("Probability", "概率"), range=[0, 100]),
+    )
+    _apply_dark_plot_theme(regime_figure)
+    st.plotly_chart(regime_figure, use_container_width=True, key="hamilton_crisis_regime_probability")
+
+    with st.expander(ui_text("Regime diagnostics", "状态模型诊断")):
+        detail_columns = st.columns(4)
+        detail_columns[0].metric(ui_text("Converged", "是否收敛"), ui_text("Yes", "是") if regime.converged else ui_text("No", "否"))
+        detail_columns[1].metric(ui_text("High-state persistence", "高波动状态持续率"), f"{regime.crisis_persistence:.3f}")
+        detail_columns[2].metric(ui_text("Expected duration", "预计持续时间"), f"{regime.expected_duration_days:.1f}")
+        detail_columns[3].metric("AIC", f"{regime.aic:.1f}")
+        st.dataframe(regime.transition_matrix, use_container_width=True)
 
 
-def _save_price_forecast_workbook(result: Any) -> None:
+def _price_forecast_result_path(target: str) -> Path:
+    """Return a target-specific forecast workbook path."""
+    safe_target = target.strip().lower()
+    if safe_target not in {"brent", "wti"}:
+        raise ValueError(f"Unsupported oil-price target: {target}")
+    return PATHS["price_forecast_results_dir"] / f"{safe_target}_price_forecast.xlsx"
+
+
+def _save_price_forecast_workbook(result: Any, target: str) -> Path:
     """Persist the latest forecast tables for download."""
-    path = PATHS["price_forecast_results"]
+    path = _price_forecast_result_path(target)
     path.parent.mkdir(parents=True, exist_ok=True)
     with pd.ExcelWriter(path) as writer:
         result.forecast.to_excel(writer, sheet_name="Forecast", index=False)
@@ -7361,18 +7431,25 @@ def _save_price_forecast_workbook(result: Any) -> None:
         result.components.to_excel(writer, sheet_name="IMFComponents", index=False)
         result.model_summary.to_excel(writer, sheet_name="ModelSummary", index=False)
         pd.DataFrame([result.metrics]).to_excel(writer, sheet_name="Validation", index=False)
+    return path
 
 
-def render_brent_forecast_panel() -> None:
-    """Render a discoverable, runnable Brent price forecast result page."""
+def render_oil_price_forecast_panel() -> None:
+    """Render a runnable WTI or Brent price forecast result page."""
     import plotly.graph_objects as go
 
-    st.header(ui_text("Brent price forecast", "Brent 价格预测"))
+    st.header(ui_text("WTI / Brent price forecast", "WTI / Brent 价格预测"))
     st.caption(ui_text(
         "Five-IMF reconstruction with a holdout-validated forecast band.",
         "五 IMF 重构，并用留出样本误差生成预测区间。",
     ))
-    control_left, control_middle, control_right = st.columns([1, 1, 1.35])
+    control_target, control_left, control_middle, control_right = st.columns([1, 1, 1, 1.35])
+    target = control_target.selectbox(
+        ui_text("Price target", "预测目标"),
+        options=["Brent", "WTI"],
+        format_func=lambda value: ui_text(f"{value} crude oil", f"{value} 原油"),
+        key="price_forecast_target",
+    )
     horizon = control_left.selectbox(
         ui_text("Forecast horizon", "预测期限"),
         options=[5, 10, 20, 30],
@@ -7398,42 +7475,47 @@ def render_brent_forecast_panel() -> None:
 
     with st.expander(ui_text("Method and interpretation", "方法与解释")):
         st.write(ui_text(
-            "The paper uses CEMD on weekly high/low intervals, BPNN for high-frequency IMFs, ACI for lower-frequency IMFs, and Google Trends only after an event is identified. This website currently has a daily Brent point series, so the displayed result is a five-IMF point-price baseline: BPNN for IMF1 and autoregressive ridge models for IMF2–IMF5. It is not the paper's full interval replication.",
-            "论文对周度最高价/最低价区间进行 CEMD 分解，高频 IMF 使用 BPNN，中低频 IMF 使用 ACI，并仅在事件已识别后引入 Google Trends。网站当前取得的是 Brent 日度点值，因此此处展示五 IMF 点预测基线：IMF1 使用 BPNN，IMF2–IMF5 使用自回归岭回归；它不是论文区间模型的完整复刻。",
+            f"The paper uses CEMD on weekly high/low intervals, BPNN for high-frequency IMFs, and ACI for lower-frequency IMFs. The selected {target} series is a daily point series, so this is a five-IMF point-price baseline: BPNN for IMF1 and autoregressive ridge models for IMF2–IMF5. It is not the paper's full interval replication.",
+            f"论文对周度最高价/最低价区间进行 CEMD 分解，高频 IMF 使用 BPNN，中低频 IMF 使用 ACI。当前选择的是 {target} 日度点值，因此此处展示五 IMF 点预测基线：IMF1 使用 BPNN，IMF2–IMF5 使用自回归岭回归；它不是论文区间模型的完整复刻。",
         ))
 
     if run_forecast:
-        status = st.status(ui_text("Preparing Brent forecast...", "正在生成 Brent 预测……"), expanded=True)
+        status = st.status(ui_text(f"Preparing {target} forecast...", f"正在生成 {target} 预测……"), expanded=True)
         try:
             from src.data_fetcher import RAW_CACHE_FILES, SERIES_SOURCES, fetch_series_with_fallback
-            from src.price_forecast import run_brent_price_forecast
+            from src.price_forecast import run_oil_price_forecast
 
             end = pd.Timestamp.today().normalize()
             start = (end - pd.DateOffset(years=int(history_years))).normalize()
-            status.write(ui_text("Refreshing Brent data.", "正在更新 Brent 数据。"))
-            brent = fetch_series_with_fallback(
-                "Brent",
-                SERIES_SOURCES["Brent"],
+            status.write(ui_text(f"Refreshing {target} data.", f"正在更新 {target} 数据。"))
+            price_data = fetch_series_with_fallback(
+                target,
+                SERIES_SOURCES[target],
                 start.strftime("%Y-%m-%d"),
                 end.strftime("%Y-%m-%d"),
-                RAW_CACHE_FILES["Brent"],
+                RAW_CACHE_FILES[target],
                 force_refresh=True,
             )
-            if brent.empty or "Brent" not in brent or brent["Brent"].notna().sum() < 180:
+            if price_data.empty or target not in price_data or price_data[target].notna().sum() < 180:
                 raise ValueError(ui_text(
-                    "No sufficiently current Brent series is available. Check the network or data-source credentials.",
-                    "未取得足够的最新 Brent 数据，请检查网络或数据源凭据。",
+                    f"No sufficiently current {target} series is available. Check the network or data-source credentials.",
+                    f"未取得足够的最新 {target} 数据，请检查网络或数据源凭据。",
                 ))
             status.write(ui_text("Decomposing and validating five IMF models.", "正在分解并验证五个 IMF 模型。"))
-            result = run_brent_price_forecast(brent, horizon=int(horizon))
-            _save_price_forecast_workbook(result)
-            st.session_state["price_forecast_last_result"] = result
+            result = run_oil_price_forecast(price_data, price_column=target, horizon=int(horizon))
+            _save_price_forecast_workbook(result, target)
+            st.session_state["price_forecast_last_result"] = {"target": target, "result": result}
             status.update(label=ui_text("Forecast ready", "预测已完成"), state="complete", expanded=False)
         except Exception as exc:  # noqa: BLE001
             status.update(label=ui_text("Forecast failed", "预测失败"), state="error")
             st.error(safe_exception_text(exc))
 
-    result = st.session_state.get("price_forecast_last_result")
+    result_payload = st.session_state.get("price_forecast_last_result")
+    result = (
+        result_payload.get("result")
+        if isinstance(result_payload, dict) and result_payload.get("target") == target
+        else None
+    )
     if result is None:
         st.markdown(
             f"""
@@ -7449,7 +7531,7 @@ def render_brent_forecast_panel() -> None:
 
     metrics = result.metrics
     metric_columns = st.columns(4)
-    metric_columns[0].metric(ui_text("Latest Brent", "最新 Brent"), f"${float(metrics['LatestPrice']):.2f}")
+    metric_columns[0].metric(ui_text(f"Latest {target}", f"最新 {target}"), f"${float(metrics['LatestPrice']):.2f}")
     metric_columns[1].metric(ui_text("End forecast", "期末预测"), f"${float(metrics['ForecastEndPrice']):.2f}")
     metric_columns[2].metric(ui_text("Projected change", "预测涨跌"), f"{float(metrics['ProjectedChangePercent']):+.1f}%")
     metric_columns[3].metric(ui_text("Holdout MAE", "留出集 MAE"), f"${float(metrics['ValidationMAE']):.2f}")
@@ -7481,52 +7563,44 @@ def render_brent_forecast_panel() -> None:
         yaxis_title=ui_text("USD / barrel", "美元/桶"),
     )
     _apply_dark_plot_theme(figure)
-    st.plotly_chart(figure, use_container_width=True, key="brent_price_forecast_chart")
+    st.plotly_chart(figure, use_container_width=True, key=f"{target.lower()}_price_forecast_chart")
 
     with st.expander(ui_text("IMF models and forecast table", "IMF 模型与预测明细")):
         summary = result.model_summary.copy()
         summary["Channel"] = summary["ChannelZH" if current_language() == "zh" else "ChannelEN"]
         st.dataframe(summary[["IMF", "Channel", "Model", "CenterFrequency"]], use_container_width=True, hide_index=True)
         st.dataframe(forecast, use_container_width=True, hide_index=True)
-    if PATHS["price_forecast_results"].exists():
+    result_path = _price_forecast_result_path(target)
+    if result_path.exists():
         st.download_button(
             ui_text("Download forecast workbook", "下载预测结果"),
-            data=PATHS["price_forecast_results"].read_bytes(),
-            file_name=PATHS["price_forecast_results"].name,
-            mime=_download_mime(PATHS["price_forecast_results"]),
-            key="download_price_forecast",
+            data=result_path.read_bytes(),
+            file_name=result_path.name,
+            mime=_download_mime(result_path),
+            key=f"download_{target.lower()}_price_forecast",
         )
 
 
 def render_crisis_warning_tab(options: dict[str, Any]) -> None:
-    """Render automated five-day crisis warning and Google Trends timeline."""
+    """Render the existing warning and a separate literature-based forecast."""
     st.header(ui_text("Crisis signal", "危机预警"))
     st.caption(ui_text(
-        "Five-day risk ranking with a separate Google Trends attention layer.",
-        "五日风险排序，并叠加独立的 Google Trends 关注度时间轴。",
+        "Original five-day risk model · Hamilton oil-crisis regime probability.",
+        "原五日风险模型 · Hamilton 原油危机状态概率。",
     ))
-    keyword_text = st.text_input(
-        ui_text("Google Trends keywords (up to five, comma separated)", "Google Trends 关键词（最多五个，逗号分隔）"),
-        value="oil crisis, oil price, recession, war, supply disruption",
-        key="warning_google_keywords",
-    )
-    geo_label = st.selectbox(
-        ui_text("Google Trends region", "Google Trends 地区"),
-        options=["", "US", "CN", "GB"],
-        format_func=lambda value: {
-            "": ui_text("Worldwide", "全球"),
-            "US": ui_text("United States", "美国"),
-            "CN": ui_text("China", "中国"),
-            "GB": ui_text("United Kingdom", "英国"),
-        }[value],
-        key="warning_google_geo",
-    )
-    st.caption(
-        ui_text(
-            "Google's official Trends API remains limited-access alpha; this app uses best-effort public web access and automatically falls back to its local cache.",
-            "Google 官方 Trends API 仍是限量 Alpha；本应用采用尽力而为的公开网页访问，失败时自动回退到本地缓存。",
-        )
-    )
+    with st.expander(ui_text("Method and interpretation", "方法与解释")):
+        st.markdown(ui_text(
+            "The existing five-day Random Forest, labels, threshold and channel logic are unchanged. The unstable Google Trends layer is removed and replaced by an independent two-state Hamilton Markov-switching forecast fitted to Brent daily returns.",
+            "原有五日随机森林、标签、阈值和渠道逻辑均不改动。不稳定的 Google Trends 层已移除，并由一套独立的 Hamilton 两状态马尔可夫转换模型替代；新模型使用 Brent 日收益率估计。",
+        ))
+        st.markdown(ui_text(
+            "Method basis: [Hamilton (1989), *Econometrica*](https://doi.org/10.2307/1912559) established Markov regime switching; [Fong & See (2002), *Energy Economics*](https://doi.org/10.1016/S0140-9883(01)00087-1) applied it to daily oil returns and found regime shifts important for oil-volatility forecasts.",
+            "方法依据：[Hamilton（1989，*Econometrica*）](https://doi.org/10.2307/1912559)奠定了马尔可夫状态转换方法；[Fong 与 See（2002，*Energy Economics*）](https://doi.org/10.1016/S0140-9883(01)00087-1)将其用于原油日收益率，并发现状态转换对原油波动预测具有重要作用。",
+        ))
+        st.info(ui_text(
+            "The new probability forecasts an oil-price high-volatility regime over the next five trading days. It does not predict the exact date or cause of a war, pandemic, or broad macroeconomic crisis.",
+            "新概率预测的是未来五个交易日内的原油价格高波动状态，不代表能够预测战争、疫情或宏观危机的确切日期与原因。",
+        ))
     if st.button(
         ui_text("Refresh Data and Run Warning", "自动更新数据并运行预警"),
         type="primary",
@@ -7546,7 +7620,8 @@ def render_crisis_warning_tab(options: dict[str, Any]) -> None:
             run_update_market_data(warning_options)
             run_prepare_model_data()
 
-            from src.crisis_warning import fetch_google_trends_timeline, run_five_day_warning
+            from src.crisis_regime import run_markov_crisis_forecast
+            from src.crisis_warning import run_five_day_warning
             from src.variable_pool import build_expanded_variable_pool
 
             available_variables, _ = load_variable_pool_options()
@@ -7572,7 +7647,10 @@ def render_crisis_warning_tab(options: dict[str, Any]) -> None:
                 ]
                 if variable in available_variables
             ]
-            status.write(ui_text("Downloading and aligning warning variables.", "正在下载并对齐预警变量。"))
+            status.write(ui_text(
+                "Downloading and aligning the original warning variables.",
+                "正在下载并对齐原预警变量。",
+            ))
             warning_data = build_expanded_variable_pool(
                 start_date=warning_options["start_date"],
                 end_date=warning_options["end_date"],
@@ -7584,25 +7662,68 @@ def render_crisis_warning_tab(options: dict[str, Any]) -> None:
                 prefer_existing=True,
                 force_refresh=True,
             )
+            status.write(ui_text(
+                "Running the existing walk-forward warning model.",
+                "正在运行原有滚动样本外预警模型。",
+            ))
             result = run_five_day_warning(warning_data, price_column="Brent")
-            trend_start = max(result.latest_date - pd.DateOffset(years=5), warning_data["Date"].min())
-            terms = [item.strip() for item in keyword_text.split(",") if item.strip()][:5]
-            status.write(ui_text("Refreshing Google Trends attention.", "正在更新 Google Trends 关注度。"))
-            trends, trends_note = fetch_google_trends_timeline(
-                terms,
-                trend_start,
-                result.latest_date,
-                geo=geo_label,
-                cache_path=PATHS["google_trends_cache"],
-            )
+            regime_forecast = None
+            regime_note = "The original warning completed, but the independent Hamilton forecast is temporarily unavailable."
+            regime_note_zh = "原五日预警已完成，但独立的 Hamilton 危机状态预测暂不可用。"
+            try:
+                status.write(ui_text(
+                    "Fitting the independent Hamilton crisis-regime forecast.",
+                    "正在拟合独立的 Hamilton 危机状态预测。",
+                ))
+                regime_forecast = run_markov_crisis_forecast(
+                    warning_data,
+                    price_column="Brent",
+                )
+                regime_note = "The independent Hamilton forecast completed."
+                regime_note_zh = "独立的 Hamilton 危机状态预测已完成。"
+            except Exception as regime_exc:  # noqa: BLE001
+                regime_note = (
+                    "The original warning completed, but the independent Hamilton forecast failed: "
+                    f"{safe_exception_text(regime_exc)}"
+                )
+                regime_note_zh = (
+                    "原五日预警已完成，但独立的 Hamilton 危机状态预测失败："
+                    f"{safe_exception_text(regime_exc)}"
+                )
             PATHS["warning_results"].parent.mkdir(parents=True, exist_ok=True)
             with pd.ExcelWriter(PATHS["warning_results"]) as writer:
                 result.risk_history.to_excel(writer, sheet_name="RiskHistory", index=False)
                 result.channel_scores.to_excel(writer, sheet_name="ChannelScores", index=False)
                 result.event_catalog.to_excel(writer, sheet_name="EventCatalog", index=False)
-                if not trends.empty:
-                    trends.to_excel(writer, sheet_name="GoogleTrends", index=False)
-            payload = {"result": result, "trends": trends, "trends_note": trends_note}
+                if regime_forecast is not None:
+                    regime_forecast.probability_history.to_excel(
+                        writer,
+                        sheet_name="RegimeProbability",
+                        index=False,
+                    )
+                    regime_forecast.transition_matrix.to_excel(
+                        writer,
+                        sheet_name="RegimeTransitions",
+                    )
+                    pd.DataFrame([{
+                        "LatestDate": regime_forecast.latest_date,
+                        "CurrentProbability": regime_forecast.current_probability,
+                        "Probability1D": regime_forecast.probability_1d,
+                        "Probability5D": regime_forecast.probability_5d,
+                        "CrisisPersistence": regime_forecast.crisis_persistence,
+                        "ExpectedDurationDays": regime_forecast.expected_duration_days,
+                        "CalmAnnualizedVolatility": regime_forecast.calm_annualized_volatility,
+                        "CrisisAnnualizedVolatility": regime_forecast.crisis_annualized_volatility,
+                        "Converged": regime_forecast.converged,
+                        "AIC": regime_forecast.aic,
+                        "BIC": regime_forecast.bic,
+                    }]).to_excel(writer, sheet_name="RegimeSummary", index=False)
+            payload = {
+                "result": result,
+                "regime_forecast": regime_forecast,
+                "regime_note": regime_note,
+                "regime_note_zh": regime_note_zh,
+            }
             st.session_state["warning_last_result"] = payload
             status.update(label=ui_text("Warning workflow completed.", "预警流程已完成。"), state="complete")
         except Exception as exc:  # noqa: BLE001
@@ -7651,22 +7772,32 @@ def render_run_pipeline_tab(options: dict[str, Any]) -> None:
         render_quick_pipeline_tab(run_options)
     else:
         render_professional_pipeline_tab(run_options)
+    st.divider()
+    render_paper_replication_tab()
 
 
 def render_price_forecast_tab(options: dict[str, Any]) -> None:
-    """Group Brent forecasting and crisis warning in one forecast workspace."""
+    """Group oil-price forecasting and crisis warning in one workspace."""
     st.markdown(
         f'<p class="section-kicker">{ui_text("FORECAST WORKSPACE", "预测工作区")}</p>',
         unsafe_allow_html=True,
     )
     forecast_tabs = st.tabs([
-        ui_text("Brent forecast", "Brent 价格预测"),
+        ui_text("WTI / Brent forecast", "WTI / Brent 价格预测"),
         ui_text("Crisis warning", "危机预警"),
     ])
     with forecast_tabs[0]:
-        render_brent_forecast_panel()
+        render_oil_price_forecast_panel()
     with forecast_tabs[1]:
         render_crisis_warning_tab(options)
+
+
+def main_navigation_labels() -> list[str]:
+    """Return the two top-level workspaces; analysis results are inline."""
+    return [
+        ui_text("Run analysis", "运行分析"),
+        ui_text("Price forecast", "价格预测"),
+    ]
 
 
 def main() -> None:
@@ -7679,17 +7810,11 @@ def main() -> None:
 
     render_main_header()
 
-    tabs = st.tabs([
-        ui_text("Run analysis", "运行分析"),
-        ui_text("Price forecast", "价格预测"),
-        ui_text("Analysis results", "分析结果"),
-    ])
+    tabs = st.tabs(main_navigation_labels())
     with tabs[0]:
         render_run_pipeline_tab(options)
     with tabs[1]:
         render_price_forecast_tab(options)
-    with tabs[2]:
-        render_paper_replication_tab()
 
 
 if __name__ == "__main__":

@@ -13,8 +13,38 @@ import unittest
 from unittest.mock import patch
 from zipfile import ZipFile
 
-
 class CloudWorkspaceBehaviorTests(unittest.TestCase):
+    def test_crisis_warning_keeps_original_model_and_runs_regime_forecast_separately(self) -> None:
+        import inspect
+
+        from app import streamlit_app as app
+
+        renderer = inspect.getsource(app.render_crisis_warning_tab)
+        original_model = inspect.getsource(__import__("src.crisis_warning", fromlist=["run_five_day_warning"]))
+
+        self.assertIn("run_five_day_warning(warning_data", renderer)
+        self.assertIn("run_markov_crisis_forecast(", renderer)
+        self.assertIn("regime_forecast = None", renderer)
+        self.assertNotIn("MarkovRegression", original_model)
+        self.assertNotIn("fetch_google_trends_timeline", original_model)
+
+    def test_analysis_results_are_inline_not_a_top_level_tab(self) -> None:
+        from app import streamlit_app as app
+
+        self.assertEqual(app.main_navigation_labels(), ["运行分析", "价格预测"])
+        with (
+            patch.object(app.st, "markdown"),
+            patch.object(app.st, "radio", return_value="professional"),
+            patch.object(app.st, "divider") as divider,
+            patch.object(app, "render_professional_pipeline_tab") as professional,
+            patch.object(app, "render_paper_replication_tab") as results,
+        ):
+            app.render_run_pipeline_tab({"start_date": "2020-01-01"})
+
+        professional.assert_called_once()
+        divider.assert_called_once()
+        results.assert_called_once()
+
     def test_dark_expanders_do_not_cover_dataframe_canvas(self) -> None:
         from app import streamlit_app as app
 
@@ -31,6 +61,11 @@ class CloudWorkspaceBehaviorTests(unittest.TestCase):
         self.assertIn("background: transparent !important;", dataframe_override)
         self.assertIn('[data-testid="stTable"] [data-testid="stTableStyledTable"] td p', css)
         self.assertIn("color: var(--oil-ink) !important;", css)
+        self.assertIn(
+            'div[data-testid="stExpander"] [data-testid="stMarkdownContainer"] a *',
+            css,
+        )
+        self.assertIn("color: #F0A36B !important;", css)
 
     def test_dark_theme_contrast_overrides_cover_interactive_controls(self) -> None:
         from app import streamlit_app as app

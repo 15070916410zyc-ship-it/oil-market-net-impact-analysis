@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import unittest
 
-from src.price_forecast import run_brent_price_forecast
+from src.price_forecast import run_brent_price_forecast, run_oil_price_forecast
 
 
 def synthetic_brent(rows: int = 420) -> pd.DataFrame:
@@ -12,6 +12,12 @@ def synthetic_brent(rows: int = 420) -> pd.DataFrame:
     x = np.arange(rows, dtype=float)
     price = 76.0 + 0.025 * x + 2.4 * np.sin(x / 17.0) + 0.7 * np.sin(x / 3.2)
     return pd.DataFrame({"Date": dates, "Brent": price})
+
+
+def synthetic_wti(rows: int = 420) -> pd.DataFrame:
+    data = synthetic_brent(rows).rename(columns={"Brent": "WTI"})
+    data["WTI"] = data["WTI"] - 4.25
+    return data
 
 
 class PriceForecastTests(unittest.TestCase):
@@ -40,3 +46,12 @@ class PriceForecastTests(unittest.TestCase):
     def test_forecast_rejects_short_series(self) -> None:
         with self.assertRaisesRegex(ValueError, "180"):
             run_brent_price_forecast(synthetic_brent(120), horizon=5)
+
+    def test_generic_forecast_supports_wti_target(self) -> None:
+        result = run_oil_price_forecast(
+            synthetic_wti(), price_column="WTI", horizon=5, max_history=360
+        )
+
+        self.assertEqual(result.metrics["Target"], "WTI")
+        self.assertEqual(len(result.forecast), 5)
+        self.assertEqual(result.history.columns.tolist(), ["Date", "Actual"])
