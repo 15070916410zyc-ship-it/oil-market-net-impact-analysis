@@ -2274,8 +2274,8 @@ def apply_custom_css() -> None:
             opacity: 1 !important;
         }
         div[data-testid="stSlider"] [data-testid="stSliderThumbValue"] p {
-            color: var(--oil-ink) !important;
-            -webkit-text-fill-color: var(--oil-ink) !important;
+            color: #101416 !important;
+            -webkit-text-fill-color: #101416 !important;
             font-weight: 700 !important;
         }
         div[data-testid="stSlider"] [data-testid="stSliderTickBar"] p {
@@ -2339,6 +2339,56 @@ def apply_custom_css() -> None:
         .stTabs [data-testid="stRadio"] label:has(input:checked) p {
             color: #101416 !important;
             -webkit-text-fill-color: #101416 !important;
+        }
+        /* Final dark-theme contrast audit.  These selectors intentionally
+           outrank the legacy light-theme rules earlier in this stylesheet. */
+        div[data-testid="stExpander"] [data-testid="stExpanderDetails"] p,
+        div[data-testid="stExpander"] [data-testid="stExpanderDetails"] span,
+        div[data-testid="stExpander"] [data-testid="stExpanderDetails"] label,
+        div[data-testid="stExpander"] [data-testid="stExpanderDetails"] strong,
+        div[data-testid="stAlert"] [data-testid="stMarkdownContainer"] p,
+        div[data-testid="stAlert"] [data-testid="stMarkdownContainer"] span,
+        div[data-testid="stAlert"] [data-testid="stMarkdownContainer"] strong {
+            color: var(--oil-ink) !important;
+            -webkit-text-fill-color: var(--oil-ink) !important;
+            opacity: 1 !important;
+        }
+        div[data-testid="stExpander"] [data-testid="stWidgetLabel"] [data-testid="stMarkdownContainer"] p,
+        div[data-testid="stExpander"] [data-testid="stRadio"] label:not(:has(input:checked)) p {
+            color: #C7D0D4 !important;
+            -webkit-text-fill-color: #C7D0D4 !important;
+            opacity: 1 !important;
+        }
+        .stTabs div[data-testid="stExpander"] [data-testid="stRadio"] label:has(input:checked) p {
+            color: #101416 !important;
+            -webkit-text-fill-color: #101416 !important;
+        }
+        .stTabs div[data-testid="stButton"] button[kind="primary"],
+        .stTabs div[data-testid="stButton"] button[kind="primary"] p,
+        .stTabs div[data-testid="stButton"] button[kind="primary"] span {
+            color: #101416 !important;
+            -webkit-text-fill-color: #101416 !important;
+            opacity: 1 !important;
+        }
+        div[data-testid="stExpander"] div[data-testid="stButton"] button:disabled,
+        div[data-testid="stExpander"] div[data-testid="stButton"] button:disabled p,
+        div[data-testid="stExpander"] div[data-testid="stButton"] button:disabled span {
+            background: #1B272C !important;
+            border-color: rgba(237, 242, 244, 0.12) !important;
+            color: #AEBAC0 !important;
+            -webkit-text-fill-color: #AEBAC0 !important;
+            opacity: 1 !important;
+        }
+        [data-testid="stFileUploaderDropzone"] button,
+        [data-testid="stFileUploaderDropzone"] button *,
+        [data-testid="stFileUploaderDropzone"] [data-has-shortcut],
+        [data-testid="stFileUploaderDropzone"] [data-has-shortcut] *,
+        [data-testid="stFileUploaderDropzone"] [data-testid="stIconMaterial"] {
+            color: var(--oil-ink) !important;
+            -webkit-text-fill-color: var(--oil-ink) !important;
+            fill: var(--oil-ink) !important;
+            stroke: var(--oil-ink) !important;
+            opacity: 1 !important;
         }
         [data-testid="stTable"] [data-testid="stTableStyledTable"] td p {
             color: var(--oil-ink) !important;
