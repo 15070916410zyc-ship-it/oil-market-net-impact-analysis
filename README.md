@@ -14,28 +14,27 @@ The app supports this workflow:
    variable is removed before analysis windows are split.
 4. Run VMD, MRGC screening, FEVD contribution analysis, net-impact calculation,
    and structural-break diagnostics.
-5. Review generated tables and figures in the dashboard.
-6. Run the separate five-day crisis-risk workflow and, when public access is
-   available, overlay a Google Trends attention timeline.
-7. Generate a dedicated Brent point-price forecast from five frequency-ordered
+5. Review generated tables and figures directly below the analysis workflow.
+6. Run the existing five-day crisis-risk model and the independent Hamilton
+   oil-crisis regime forecast.
+7. Generate a WTI or Brent point-price forecast from five frequency-ordered
    IMFs, with a holdout-validated empirical forecast band.
 8. Upload optional local candidate-variable files.
 
-The website separates net-impact interpretation, price forecasting and crisis
-risk ranking into distinct result pages so that one output is not presented as
-another.
+Net-impact results remain attached to the run that produced them, while oil-price
+forecasting and crisis warning share a separate forecast workspace.
 
-## Brent Price Forecast
+## WTI and Brent Price Forecast
 
 The Price Forecast page is a runnable point-price baseline that stays connected
-to the supplied CRP-MIF-F paper: it decomposes the latest Brent series into five
+to the supplied CRP-MIF-F paper: it decomposes the selected WTI or Brent series into five
 frequency-ordered IMFs, uses a BPNN for IMF1, autoregressive ridge baselines for
 IMF2-IMF5, and reconstructs the component forecasts. The shaded 80% band is
 scaled from a pre-forecast holdout error rather than claimed as a calibrated
 probability interval.
 
 This is not a full replication of the paper's weekly high/low interval model.
-The current automatic source provides a daily Brent point series, so the app
+The current automatic sources provide daily WTI and Brent point series, so the app
 labels the output accordingly and keeps the full method boundary in a collapsed
 note on the result page.
 
@@ -68,17 +67,22 @@ review.
 
 ## Crisis Warning
 
-The Crisis Warning tab implements the currently supported part of the DC-CLOF
-extension: a five-business-day fast-clock Random Forest risk ranking based on
-expanding-tail oil-stress labels. The displayed score is a historical risk
-percentile, not a calibrated crisis probability. It must not be interpreted as
-predicting the date of a particular war, pandemic, or disaster.
+The Crisis Warning tab keeps the existing five-business-day Random Forest rank,
+expanding-tail oil-stress labels, threshold selection, and channel logic
+unchanged. The displayed score remains a historical risk percentile, not a
+calibrated crisis probability.
 
-Google Trends is shown as a separate attention/nowcasting timeline and is not
-treated as a causal variable or long-horizon warning proof. Google's official
-Trends API is still limited-access alpha. The app therefore uses best-effort
-public web access and falls back to a local cache when the public endpoint is
-unavailable or rate limited.
+Google Trends has been removed because its unofficial public interface was not
+reliable enough for an automated workflow. It is replaced by a separate
+two-state Hamilton Markov-switching model fitted to Brent daily returns. The
+state with the higher conditional variance is labelled the oil-crisis regime,
+and the app reports its current, next-day, and next-five-day probabilities.
+
+The original Random Forest warning remains unchanged. The new model follows
+[Hamilton (1989)](https://doi.org/10.2307/1912559), with the oil-market
+application supported by [Fong and See (2002)](https://doi.org/10.1016/S0140-9883(01)00087-1).
+Its output is an oil high-volatility-regime probability, not a forecast of the
+exact date or cause of a war, pandemic, or broad macroeconomic crisis.
 
 ## Data Sources
 
@@ -114,8 +118,8 @@ app container. They are not written back to GitHub or copied automatically to
 the visitor's computer, and they may be removed when the app restarts or is
 redeployed.
 
-After an analysis finishes, open **Net-Impact Results** and select **Download
-all results**. The ZIP contains generated tables, figures, reports, and model
+After an analysis finishes, use the **Analysis results** section directly below
+the run workflow and select **Download all results**. The ZIP contains generated tables, figures, reports, and model
 outputs. It intentionally excludes raw uploads, downloaded caches, processed
 working data, `API.env`, and Streamlit secrets.
 

@@ -1,8 +1,8 @@
-"""Paper-aligned five-IMF Brent forecasting baseline.
+"""Paper-aligned five-IMF oil-price forecasting baseline.
 
 The original paper models interval high/low prices with CEMD, BPNN and ACI.
-The website currently stores a daily Brent price series rather than the full
-high/low interval.  This module therefore provides a transparent point-price
+The website currently stores daily Brent and WTI point series rather than the
+full high/low interval.  This module therefore provides a transparent point-price
 baseline: five frequency-ordered VMD components, a neural-network model for
 the highest-frequency component, autoregressive ridge models for the remaining
 components, and an empirical validation-error band after reconstruction.
@@ -52,7 +52,7 @@ def _clean_price_data(data: pd.DataFrame, price_column: str) -> pd.DataFrame:
         .reset_index(drop=True)
     )
     if len(cleaned) < 180:
-        raise ValueError("At least 180 valid Brent observations are required for forecasting.")
+        raise ValueError(f"At least 180 valid {price_column} observations are required for forecasting.")
     return cleaned
 
 
@@ -129,7 +129,7 @@ def _forecast_from_signal(
     return reconstructed, component_predictions, frequencies
 
 
-def run_brent_price_forecast(
+def run_oil_price_forecast(
     data: pd.DataFrame,
     *,
     price_column: str = "Brent",
@@ -137,7 +137,7 @@ def run_brent_price_forecast(
     max_history: int = 1500,
     lags: int = 12,
 ) -> PriceForecastResult:
-    """Generate a five-IMF Brent point forecast with an empirical 80% band.
+    """Generate a five-IMF oil-price point forecast with an empirical 80% band.
 
     Validation decomposition uses only the pre-holdout signal, avoiding future
     information in the displayed holdout metrics.  The final future forecast is
@@ -203,6 +203,7 @@ def run_brent_price_forecast(
     actual_direction = np.sign(validation_actual - prior_actual)
     forecast_direction = np.sign(validation_forecast - prior_forecast)
     metrics: dict[str, float | str] = {
+        "Target": price_column,
         "AsOfDate": cleaned["Date"].iloc[-1].strftime("%Y-%m-%d"),
         "LatestPrice": float(values[-1]),
         "ForecastEndPrice": float(point_forecast[-1]),
@@ -219,4 +220,22 @@ def run_brent_price_forecast(
         components=pd.DataFrame(component_rows),
         metrics=metrics,
         model_summary=pd.DataFrame(model_rows),
+    )
+
+
+def run_brent_price_forecast(
+    data: pd.DataFrame,
+    *,
+    price_column: str = "Brent",
+    horizon: int = 20,
+    max_history: int = 1500,
+    lags: int = 12,
+) -> PriceForecastResult:
+    """Backward-compatible wrapper around :func:`run_oil_price_forecast`."""
+    return run_oil_price_forecast(
+        data,
+        price_column=price_column,
+        horizon=horizon,
+        max_history=max_history,
+        lags=lags,
     )
