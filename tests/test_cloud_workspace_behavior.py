@@ -29,6 +29,8 @@ class CloudWorkspaceBehaviorTests(unittest.TestCase):
         self.assertIn(selector, css)
         dataframe_override = css.split(selector, maxsplit=1)[1].split("}", maxsplit=1)[0]
         self.assertIn("background: transparent !important;", dataframe_override)
+        self.assertIn('[data-testid="stTable"] [data-testid="stTableStyledTable"] td p', css)
+        self.assertIn("color: var(--oil-ink) !important;", css)
 
     def test_result_image_preview_is_embedded_without_streamlit_media_route(self) -> None:
         from app import streamlit_app as app

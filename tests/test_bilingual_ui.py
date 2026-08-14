@@ -210,6 +210,7 @@ class BilingualUITests(unittest.TestCase):
         frame = selected_variable_metadata_frame(["VIX"], metadata, "zh")
         source_text = str(frame.loc[0, "数据来源"])
 
+        self.assertEqual(list(frame.columns), ["变量代码", "变量名称", "频率", "数据来源"])
         self.assertEqual(source_text, "FRED、Yahoo Finance")
         self.assertNotIn("_", source_text)
         self.assertNotIn("^", source_text)
