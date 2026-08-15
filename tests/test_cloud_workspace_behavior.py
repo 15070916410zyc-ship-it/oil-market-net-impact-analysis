@@ -80,6 +80,40 @@ class CloudWorkspaceBehaviorTests(unittest.TestCase):
         self.assertIn("Forecast-end ranges", renderer)
         self.assertNotIn("Empirical 80% band", renderer)
 
+    def test_price_forecast_ui_accepts_custom_days_and_history_months(self) -> None:
+        import inspect
+
+        from app import streamlit_app as app
+
+        renderer = inspect.getsource(app.render_oil_price_forecast_panel)
+        self.assertIn('"Forecast horizon (business days)"', renderer)
+        self.assertIn('"Historical sample (months)"', renderer)
+        self.assertIn("min_value=1", renderer)
+        self.assertIn("max_value=120", renderer)
+        self.assertIn("min_value=12", renderer)
+        self.assertIn("pd.DateOffset(months=int(history_months))", renderer)
+        self.assertIn('result_payload.get("history_months") == int(history_months)', renderer)
+
+    def test_visible_copy_names_both_oil_targets_and_avoids_thesis_wording(self) -> None:
+        import inspect
+
+        from app import streamlit_app as app
+
+        app_source = inspect.getsource(app)
+        renderer = inspect.getsource(app.render_oil_price_forecast_panel)
+        self.assertIn("WTI and Brent", renderer)
+        self.assertIn("WTI 与 Brent", renderer)
+        self.assertNotIn("论文", app_source)
+        self.assertNotIn("paper's decomposition", renderer)
+        self.assertNotIn("paper channel", renderer)
+        legacy_value = (
+            "Dynamic paper-style selection from IMF1-IMF5 using MRGC/GPRD significance, "
+            "event-window range share, variance contribution, and correlation; "
+            "one or multiple IMFs may be retained"
+        )
+        self.assertNotIn("paper", app.localized_workflow_value(legacy_value, "en").lower())
+        self.assertNotIn("论文", app.localized_workflow_value(legacy_value, "zh"))
+
     def test_charts_and_tables_use_codex_gray_data_surfaces(self) -> None:
         import plotly.graph_objects as go
 

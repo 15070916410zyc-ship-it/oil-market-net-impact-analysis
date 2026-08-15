@@ -195,7 +195,7 @@ def _scale_rule_text(vmd_k: int = 4) -> str:
     """Return method text for dynamic main-scale selection."""
     levels = _imf_levels(vmd_k)
     return (
-        f"Dynamic paper-style selection from {levels[0]}-{levels[-1]} using "
+        f"Dynamic multiscale selection from {levels[0]}-{levels[-1]} using "
         "MRGC/GPRD significance, event-window range share, variance contribution, "
         "and correlation; one or multiple IMFs may be retained"
     )
@@ -337,14 +337,14 @@ def load_paper_replication_data(
         data = data.loc[data["Date"] <= pd.to_datetime(end_date)]
     data = data.reset_index(drop=True)
     if len(data) < 40:
-        raise ValueError("The selected period is too short for paper-method replication.")
+        raise ValueError("The selected period is too short for multiscale analysis.")
 
     for column in data.columns:
         if column != "Date":
             data[column] = pd.to_numeric(data[column], errors="coerce")
     data.attrs["source_note"] = source_note
     if len(data) < 40:
-        raise ValueError("The complete-case paper-method sample is too short.")
+        raise ValueError("The complete-case multiscale sample is too short.")
     return data
 
 
@@ -571,7 +571,7 @@ def _target_scale_statistics(
     if retained.empty:
         retained = strongest.copy()
     reason = (
-        f"Selected by paper-style dominant-scale criteria across {levels[0]}-{levels[-1]}: the "
+        f"Selected by dominant-scale criteria across {levels[0]}-{levels[-1]}: the "
         "dominant event-response IMF is selected using MRGC/GPRD evidence where "
         "available, event-window range share, variance contribution, and "
         "correlation with the original oil-price series. Additional IMFs are "
@@ -910,7 +910,7 @@ def _contribution_decomposition(
             if candidate != target
         ][:3]
         driver_selection_rule = "Fallback to the first available numeric candidate variables because MRGC and selected candidate pool were empty."
-        warnings.warn("No paper driver map variables were available; using available default drivers.")
+        warnings.warn("No configured driver-map variables were available; using available default drivers.")
 
     var_data = _build_selected_scale_var_data(data, target, selected_levels, drivers, vmd_k=vmd_k)
     columns = [target] + drivers
@@ -1191,7 +1191,7 @@ def _resolve_analysis_variables(
             label="Candidate",
         )
     if not candidate_pool:
-        raise ValueError("No valid explanatory variable is available for paper-method replication.")
+        raise ValueError("No valid explanatory variable is available for multiscale analysis.")
     return targets, candidate_pool
 
 
@@ -2141,7 +2141,7 @@ def run_paper_replication_pipeline(
         break_fit_items.append((target, break_fit, break_summary))
 
     if not all_mrgc:
-        raise ValueError("Paper-method replication produced no target results. Check target and explanatory variable selections.")
+        raise ValueError("Multiscale analysis produced no target results. Check target and explanatory variable selections.")
 
     mrgc_df = pd.concat(all_mrgc, ignore_index=True)
     stats_df = pd.concat(all_stats, ignore_index=True)
@@ -2192,7 +2192,7 @@ def run_paper_replication_pipeline(
         [
             {
                 "Item": "Method",
-                "Value": "EMTV-NEI paper replication: VMD + MRGC + core scale + rolling VAR FEVD",
+                "Value": "EMTV-NEI multiscale analysis: VMD + MRGC + core scale + rolling VAR FEVD",
             },
             {"Item": "DataStartDate", "Value": _format_date(data["Date"].min())},
             {"Item": "DataEndDate", "Value": _format_date(data["Date"].max())},
