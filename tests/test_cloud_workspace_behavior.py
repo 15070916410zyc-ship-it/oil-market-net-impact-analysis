@@ -74,9 +74,27 @@ class CloudWorkspaceBehaviorTests(unittest.TestCase):
         renderer = inspect.getsource(app.render_oil_price_forecast_panel)
 
         self.assertIn("Prediction intervals to display", renderer)
-        self.assertIn("(50, 80, 90, 95)", renderer)
+        self.assertIn('re.fullmatch(r"Lower\\d+"', renderer)
         self.assertIn("forecast and prediction intervals", renderer)
+        self.assertIn("customdata", renderer)
+        self.assertIn("Forecast-end ranges", renderer)
         self.assertNotIn("Empirical 80% band", renderer)
+
+    def test_charts_and_tables_use_codex_gray_data_surfaces(self) -> None:
+        import plotly.graph_objects as go
+
+        from app import streamlit_app as app
+
+        figure = app._apply_dark_plot_theme(go.Figure())
+        self.assertEqual(figure.layout.paper_bgcolor, "#2B2B2B")
+        self.assertEqual(figure.layout.plot_bgcolor, "#242424")
+
+        with patch.object(app.st, "markdown") as markdown:
+            app.apply_custom_css()
+        css = markdown.call_args.args[0]
+        self.assertIn("--codex-panel: #2B2B2B;", css)
+        self.assertIn('[data-testid="stPlotlyChart"]', css)
+        self.assertIn('body [data-testid="stDataFrame"]', css)
 
     def test_dark_expanders_do_not_cover_dataframe_canvas(self) -> None:
         from app import streamlit_app as app

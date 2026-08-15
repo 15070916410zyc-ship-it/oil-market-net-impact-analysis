@@ -26,6 +26,9 @@ from src.quick_analysis import IMF_CHANNELS
 from src.vmd_module import estimate_center_frequency, run_vmd
 
 
+PREDICTION_INTERVAL_LEVELS = (50, 60, 70, 80, 90, 95, 99)
+
+
 @dataclass(frozen=True)
 class PriceForecastResult:
     """Forecast outputs used by the Streamlit result page."""
@@ -141,9 +144,9 @@ def run_oil_price_forecast(
 
     Validation decomposition uses only the pre-holdout signal, avoiding future
     information in the displayed holdout metrics.  The final future forecast is
-    then fitted to all observations available at run time.  The 50%, 80%, 90%
-    and 95% prediction intervals use finite-sample holdout-error quantiles and
-    widen gradually across the forecast horizon.
+    then fitted to all observations available at run time.  The configured
+    prediction intervals use finite-sample holdout-error quantiles and widen
+    gradually across the forecast horizon.
     """
     if horizon < 1 or horizon > 60:
         raise ValueError("Forecast horizon must be between 1 and 60 business days.")
@@ -163,7 +166,7 @@ def run_oil_price_forecast(
         "Date": future_dates,
         "PointForecast": point_forecast,
     }
-    for level in (50, 80, 90, 95):
+    for level in PREDICTION_INTERVAL_LEVELS:
         coverage = level / 100.0
         quantile = min(1.0, np.ceil((len(absolute_errors) + 1) * coverage) / len(absolute_errors))
         try:
