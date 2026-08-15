@@ -143,7 +143,9 @@ class CloudWorkspaceBehaviorTests(unittest.TestCase):
         self.assertIn('tickmode="array"', renderer)
         self.assertIn("tickvals=date_ticks", renderer)
         self.assertIn('tickformat="%Y-%m-%d"', renderer)
-        self.assertIn("tickangle=-90", renderer)
+        self.assertIn("tickangle=0", renderer)
+        self.assertIn("hamilton_crisis_display_window", renderer)
+        self.assertIn("Date (daily)", renderer)
         self.assertNotIn('tickmode="auto"', renderer)
 
     def test_analysis_results_are_inline_not_a_top_level_tab(self) -> None:

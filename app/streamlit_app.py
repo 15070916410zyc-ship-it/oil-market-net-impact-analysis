@@ -7764,15 +7764,22 @@ def _render_warning_results(payload: dict[str, Any]) -> None:
     ))
 
     regime_history = regime.probability_history.copy()
-    regime_dates = pd.to_datetime(regime_history["Date"], errors="coerce")
-    if len(regime_dates.dropna()) <= 24:
-        date_ticks = regime_dates.dropna().tolist()
-    else:
-        date_ticks = pd.date_range(
-            regime_dates.min(),
-            regime_dates.max(),
-            periods=12,
-        )
+    regime_display_window = st.selectbox(
+        ui_text("Display window", "显示区间"),
+        options=["30", "60", "90", "full"],
+        format_func=lambda value: {
+            "30": ui_text("Last 30 trading days", "最近 30 个交易日"),
+            "60": ui_text("Last 60 trading days", "最近 60 个交易日"),
+            "90": ui_text("Last 90 trading days", "最近 90 个交易日"),
+            "full": ui_text("Full history", "全部历史"),
+        }[value],
+        key="hamilton_crisis_display_window",
+    )
+    if regime_display_window != "full":
+        regime_history = regime_history.tail(int(regime_display_window)).copy()
+    regime_dates = pd.to_datetime(regime_history["Date"], errors="coerce").dropna()
+    date_tick_interval = max(1, (len(regime_dates) + 5) // 6)
+    date_ticks = regime_dates.iloc[::date_tick_interval].tolist()
     regime_figure = go.Figure()
     regime_figure.add_trace(go.Scatter(
         x=regime_history["Date"],
@@ -7795,16 +7802,16 @@ def _render_warning_results(payload: dict[str, Any]) -> None:
     regime_figure.update_layout(
         title=ui_text("Oil-market crisis-state probability", "油市危机状态概率"),
         height=900,
-        margin=dict(l=48, r=20, t=56, b=130),
+        margin=dict(l=48, r=20, t=56, b=96),
         hovermode="x unified",
         xaxis=dict(
-            title=ui_text("Date", "日期"),
+            title=ui_text("Date (daily)", "日期（每日）"),
             type="date",
             tickmode="array",
             tickvals=date_ticks,
             tickformat="%Y-%m-%d",
-            tickangle=-90,
-            tickfont=dict(size=9),
+            tickangle=0,
+            tickfont=dict(size=8),
             automargin=True,
         ),
         yaxis=dict(title=ui_text("Probability", "概率"), range=[0, 100]),
