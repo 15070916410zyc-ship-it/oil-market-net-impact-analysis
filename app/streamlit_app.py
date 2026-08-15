@@ -2386,6 +2386,51 @@ def apply_custom_css() -> None:
             stroke: var(--oil-ink) !important;
             opacity: 1 !important;
         }
+        /* Replace Streamlit's low-contrast help glyph with one clear icon. */
+        button[aria-label^="Help for"] {
+            position: relative !important;
+            width: 1.1rem !important;
+            min-width: 1.1rem !important;
+            height: 1.1rem !important;
+            min-height: 1.1rem !important;
+            padding: 0 !important;
+            margin-left: 0.3rem !important;
+            overflow: visible !important;
+            border: 0 !important;
+            border-radius: 999px !important;
+            background: transparent !important;
+            color: #AEBAC0 !important;
+            box-shadow: none !important;
+        }
+        button[aria-label^="Help for"] svg,
+        button[aria-label^="Help for"] [data-testid="stIconMaterial"] {
+            display: none !important;
+        }
+        button[aria-label^="Help for"]::after {
+            content: "!";
+            display: grid !important;
+            place-items: center;
+            box-sizing: border-box;
+            width: 1rem;
+            height: 1rem;
+            border: 1.5px solid currentColor;
+            border-radius: 50%;
+            background: transparent !important;
+            color: inherit !important;
+            -webkit-text-fill-color: currentColor !important;
+            font-family: Arial, sans-serif;
+            font-size: 0.68rem;
+            font-weight: 800;
+            line-height: 1;
+        }
+        button[aria-label^="Help for"]:hover,
+        button[aria-label^="Help for"]:focus-visible {
+            color: var(--oil-accent) !important;
+        }
+        button[aria-label^="Help for"]:focus-visible {
+            outline: 2px solid rgba(229, 138, 74, 0.42) !important;
+            outline-offset: 2px !important;
+        }
         div[data-testid="stSlider"] [data-testid="stSliderThumbValue"] p {
             color: #101416 !important;
             -webkit-text-fill-color: #101416 !important;

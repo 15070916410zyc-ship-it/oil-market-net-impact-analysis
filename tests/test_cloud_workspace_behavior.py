@@ -130,6 +130,18 @@ class CloudWorkspaceBehaviorTests(unittest.TestCase):
         self.assertIn('[data-testid="stPlotlyChart"]', css)
         self.assertIn('body [data-testid="stDataFrame"]', css)
 
+    def test_help_buttons_use_circle_exclamation_icon(self) -> None:
+        from app import streamlit_app as app
+
+        with patch.object(app.st, "markdown") as markdown:
+            app.apply_custom_css()
+
+        css = markdown.call_args.args[0]
+        self.assertIn('button[aria-label^="Help for"]::after', css)
+        self.assertIn('content: "!";', css)
+        self.assertIn('border-radius: 50%;', css)
+        self.assertIn('button[aria-label^="Help for"]:focus-visible', css)
+
     def test_dark_expanders_do_not_cover_dataframe_canvas(self) -> None:
         from app import streamlit_app as app
 
