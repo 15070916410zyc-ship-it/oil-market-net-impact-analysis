@@ -7778,8 +7778,8 @@ def _render_warning_results(payload: dict[str, Any]) -> None:
     if regime_display_window != "full":
         regime_history = regime_history.tail(int(regime_display_window)).copy()
     regime_dates = pd.to_datetime(regime_history["Date"], errors="coerce").dropna()
-    date_tick_interval = max(1, (len(regime_dates) + 5) // 6)
-    date_ticks = regime_dates.iloc[::date_tick_interval].tolist()
+    date_ticks = regime_dates.tolist()
+    chart_width = max(1000, len(regime_dates) * 72)
     regime_figure = go.Figure()
     regime_figure.add_trace(go.Scatter(
         x=regime_history["Date"],
@@ -7815,10 +7815,25 @@ def _render_warning_results(payload: dict[str, Any]) -> None:
             automargin=True,
         ),
         yaxis=dict(title=ui_text("Probability", "概率"), range=[0, 100]),
+        width=chart_width,
+        autosize=False,
         uirevision="crisis-regime-daily-date-axis",
     )
     _apply_dark_plot_theme(regime_figure)
-    st.plotly_chart(regime_figure, use_container_width=True, key="hamilton_crisis_regime_probability")
+    regime_html = regime_figure.to_html(
+        full_html=False,
+        include_plotlyjs=True,
+        config={"displaylogo": False, "scrollZoom": True, "responsive": False},
+    )
+    st.iframe(
+        (
+            '<div style="overflow-x:auto;width:100%;">'
+            f'<div style="width:{chart_width}px;">{regime_html}</div>'
+            "</div>"
+        ),
+        height=950,
+        width="stretch",
+    )
 
     with st.expander(ui_text("Regime diagnostics", "状态模型诊断")):
         detail_columns = st.columns(4)
