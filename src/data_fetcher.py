@@ -8,6 +8,7 @@ import re
 import time
 import warnings
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from functools import reduce
 from io import StringIO
 from pathlib import Path
@@ -1659,6 +1660,7 @@ def build_market_dataset(
     local_files: dict[str, str | Path] | None = None,
     force_refresh: bool = False,
     cache_first: bool = False,
+    download_workers: int = 1,
     **kwargs: Any,
 ) -> pd.DataFrame:
     'Market data download and preparation helper.'
@@ -1669,8 +1671,8 @@ def build_market_dataset(
     LAST_SOURCE_USED.clear()
     LAST_SOURCE_NOTES.clear()
 
-    datasets: list[pd.DataFrame] = []
-    for name, sources in SERIES_SOURCES.items():
+    def load_market_series(item: tuple[str, list[dict[str, Any]]]) -> pd.DataFrame:
+        name, sources = item
         data: pd.DataFrame | None = None
         if cache_first:
             cached_data = _load_cache_file(RAW_CACHE_FILES[name], name, start_date, end_date)
@@ -1720,7 +1722,18 @@ def build_market_dataset(
                     f"Reason: {_safe_exception_text(exc)}"
                 )
 
-        datasets.append(data)
+        return data
+
+    series_items = list(SERIES_SOURCES.items())
+    worker_count = max(1, min(int(download_workers), len(series_items)))
+    if worker_count > 1:
+        # Each series has its own cache file and source-log key, so bounded
+        # parallel downloads shorten a fresh hosted start without changing the
+        # deterministic merge order below.
+        with ThreadPoolExecutor(max_workers=worker_count) as executor:
+            datasets = list(executor.map(load_market_series, series_items))
+    else:
+        datasets = [load_market_series(item) for item in series_items]
 
     market_data = reduce(
         lambda left, right: pd.merge(left, right, on="Date", how="outer"),
@@ -1728,7 +1741,23 @@ def build_market_dataset(
     )
 
     gprd_data = _empty_gprd_frame()
-    if auto_gprd:
+    if auto_gprd and cache_first:
+        cached_gprd = _load_gprd_cache(start_date, end_date)
+        cache_is_fresh, cache_note = _is_fresh_enough(
+            cached_gprd,
+            "GPRD",
+            end_date,
+            max_lag_days=_freshness_lag_days_for_variable("GPRD"),
+        )
+        if cache_is_fresh:
+            gprd_data = cached_gprd
+            LAST_SOURCE_USED["GPRD"] = "cache:gprd_auto_download"
+            LAST_SOURCE_NOTES["GPRD"] = (
+                "Loaded a fresh traditional GPRD cache before the official source. "
+                + cache_note
+            )
+
+    if auto_gprd and gprd_data.empty:
         gprd_data = fetch_gprd_auto(start_date, end_date)
         if _has_valid_values(gprd_data, "GPRD"):
             LAST_SOURCE_USED["GPRD"] = "official_gprd_daily"

@@ -203,6 +203,22 @@ def is_cloud_runtime(
     return normalized_root == "/mount/src" or normalized_root.startswith("/mount/src/")
 
 
+def market_refresh_strategy() -> dict[str, bool | int]:
+    """Return a responsive refresh policy for the current runtime.
+
+    Hosted runs reuse a cache only when the data source has already verified it
+    against the requested end date. Missing or stale series still fall through
+    to their online sources. Local runs retain the explicit force-refresh
+    behavior used for research updates.
+    """
+    hosted = is_cloud_runtime()
+    return {
+        "cache_first": hosted,
+        "force_refresh": not hosted,
+        "download_workers": 4 if hosted else 1,
+    }
+
+
 def prefer_existing_variable_values(options: Mapping[str, Any]) -> bool:
     """Map the upload-priority option to the variable-pool merge behavior."""
     return not bool(options.get("use_uploaded_local_data_first", True))
@@ -3930,8 +3946,15 @@ def render_analysis_window_controls(
 def run_update_market_data(options: dict[str, Any]) -> None:
     """Run market data update."""
     build_market_dataset = import_function("src.data_fetcher", "build_market_dataset")
+    refresh_strategy = market_refresh_strategy()
 
-    build_market_dataset(options["start_date"], options["end_date"], force_refresh=True)
+    build_market_dataset(
+        options["start_date"],
+        options["end_date"],
+        force_refresh=refresh_strategy["force_refresh"],
+        cache_first=refresh_strategy["cache_first"],
+        download_workers=refresh_strategy["download_workers"],
+    )
 
 
 def run_prepare_model_data() -> None:
@@ -5441,13 +5464,15 @@ def run_paper_replication_setup_workflow(
     if pd.isna(requested_window_start):
         requested_window_start = selected_start
     paper_sample_start_text = requested_window_start.strftime("%Y-%m-%d")
+    refresh_strategy = market_refresh_strategy()
     report(1, "Data refresh and preparation: refreshing market and geopolitical-risk data...")
     build_market_dataset(
         paper_sample_start_text,
         options["end_date"],
         auto_gprd=True,
-        force_refresh=True,
-        cache_first=False,
+        force_refresh=refresh_strategy["force_refresh"],
+        cache_first=refresh_strategy["cache_first"],
+        download_workers=refresh_strategy["download_workers"],
     )
     rebuilt_start, rebuilt_end = get_date_range_if_exists(PATHS["clean_market"])
     complete_start, complete_end = get_complete_market_date_range_if_exists(PATHS["clean_market"])
@@ -5489,12 +5514,13 @@ def run_paper_replication_setup_workflow(
         start_date=paper_sample_start_text,
         end_date=options["end_date"],
         auto_download=True,
-        force_refresh=True,
+        force_refresh=refresh_strategy["force_refresh"],
         prefer_existing=prefer_existing_variable_values(options),
         min_coverage=options["min_data_coverage"],
         selected_variables=options.get("selected_variable_pool"),
         protected_variables=options.get("paper_target_variables"),
         extra_registry_entries=options.get("api_catalog_registry_entries"),
+        download_workers=refresh_strategy["download_workers"],
     )
     variable_pool_summary = summarize_variable_pool_update(
         required_start_date=paper_sample_start_text,
@@ -7100,6 +7126,33 @@ def _forecast_chart_default_range(
     return pd.Timestamp(visible_start), forecast_end
 
 
+def _anchored_forecast_display(
+    history: pd.DataFrame,
+    forecast: pd.DataFrame,
+) -> pd.DataFrame:
+    """Anchor forecast traces to the final actual price for visual continuity."""
+    if history.empty or forecast.empty:
+        return forecast.copy()
+    required_history = {"Date", "Actual"}
+    required_forecast = {"Date", "PointForecast"}
+    if not required_history.issubset(history.columns) or not required_forecast.issubset(forecast.columns):
+        return forecast.copy()
+
+    last_actual = history.sort_values("Date").iloc[-1]
+    anchor = forecast.iloc[[0]].copy()
+    anchor.loc[:, "Date"] = pd.Timestamp(last_actual["Date"])
+    actual_value = float(last_actual["Actual"])
+    anchor.loc[:, "PointForecast"] = actual_value
+    interval_columns = [
+        column
+        for column in forecast.columns
+        if re.fullmatch(r"(?:Lower|Upper)\d+", str(column))
+    ]
+    for column in interval_columns:
+        anchor.loc[:, column] = actual_value
+    return pd.concat([anchor, forecast], ignore_index=True)
+
+
 def _render_quick_mode_results(result: dict[str, Any]) -> None:
     """Render quick-mode outputs with interactive paper-channel charts."""
     import plotly.express as px
@@ -7591,6 +7644,7 @@ def _render_warning_results(payload: dict[str, Any]) -> None:
             )
         figure.update_yaxes(title_text=ui_text("Risk percentile", "风险百分位"), range=[0, 102])
         figure.update_layout(
+            title=ui_text("Five-day oil-market risk timeline", "五日油市风险时间轴"),
             height=520,
             margin=dict(l=20, r=20, t=40, b=20),
             hovermode="x unified",
@@ -7674,6 +7728,7 @@ def _render_warning_results(payload: dict[str, Any]) -> None:
         annotation_text=ui_text("50% reference", "50% 参考线"),
     )
     regime_figure.update_layout(
+        title=ui_text("Oil-market crisis-state probability", "油市危机状态概率"),
         height=440,
         margin=dict(l=20, r=20, t=40, b=20),
         hovermode="x unified",
@@ -7854,6 +7909,7 @@ def render_oil_price_forecast_panel() -> None:
 
     history = result.history
     forecast = result.forecast
+    forecast_display = _anchored_forecast_display(history, forecast)
     available_intervals = sorted(
         int(column.removeprefix("Lower"))
         for column in forecast.columns
@@ -7901,19 +7957,19 @@ def render_oil_price_forecast_panel() -> None:
             f"<br>{level}% 上界：$%{{customdata[1]:.2f}}<extra></extra>",
         )
         figure.add_trace(go.Scatter(
-            x=forecast["Date"], y=forecast[f"Upper{level}"], showlegend=False,
+            x=forecast_display["Date"], y=forecast_display[f"Upper{level}"], showlegend=False,
             line=dict(color=line_color, width=0.8), hoverinfo="skip",
         ))
         figure.add_trace(go.Scatter(
-            x=forecast["Date"], y=forecast[f"Lower{level}"],
+            x=forecast_display["Date"], y=forecast_display[f"Lower{level}"],
             name=ui_text(f"{level}% prediction interval", f"{level}% 预测区间"),
             fill="tonexty", fillcolor=fill_color,
             line=dict(color=line_color, width=0.8),
-            customdata=forecast[[f"Lower{level}", f"Upper{level}"]].to_numpy(),
+            customdata=forecast_display[[f"Lower{level}", f"Upper{level}"]].to_numpy(),
             hovertemplate=interval_hover,
         ))
     figure.add_trace(go.Scatter(
-        x=forecast["Date"], y=forecast["PointForecast"], name=ui_text("Forecast", "预测价格"),
+        x=forecast_display["Date"], y=forecast_display["PointForecast"], name=ui_text("Forecast", "预测价格"),
         line=dict(color="#E58A4A", width=2.5, dash="dash"),
         hovertemplate="%{x|%Y-%m-%d}<br>$%{y:.2f}<extra></extra>",
     ))
@@ -8043,6 +8099,36 @@ def render_oil_price_forecast_panel() -> None:
         )
 
 
+def _warning_dataset_with_complete_price_history(
+    warning_data: pd.DataFrame,
+    core_market_data: pd.DataFrame,
+    price_column: str = "Brent",
+) -> pd.DataFrame:
+    """Restore the full target-price calendar after optional-feature alignment."""
+    required = {"Date", price_column}
+    if not required.issubset(core_market_data.columns):
+        return warning_data.copy()
+
+    core_price = core_market_data[["Date", price_column]].copy()
+    core_price["Date"] = pd.to_datetime(core_price["Date"], errors="coerce")
+    core_price[price_column] = pd.to_numeric(core_price[price_column], errors="coerce")
+    core_price = (
+        core_price.dropna(subset=["Date"])
+        .drop_duplicates(subset=["Date"], keep="last")
+    )
+
+    features = warning_data.drop(columns=[price_column], errors="ignore").copy()
+    if "Date" not in features.columns:
+        return core_price.sort_values("Date").reset_index(drop=True)
+    features["Date"] = pd.to_datetime(features["Date"], errors="coerce")
+    features = features.dropna(subset=["Date"]).drop_duplicates(subset=["Date"], keep="last")
+    return (
+        core_price.merge(features, on="Date", how="outer")
+        .sort_values("Date")
+        .reset_index(drop=True)
+    )
+
+
 def render_crisis_warning_tab(options: dict[str, Any]) -> None:
     """Render the existing warning and a separate literature-based forecast."""
     st.header(ui_text("Crisis signal", "危机预警"))
@@ -8071,9 +8157,7 @@ def render_crisis_warning_tab(options: dict[str, Any]) -> None:
     ):
         status = st.status(ui_text("Refreshing warning data...", "正在更新预警数据……"), expanded=True)
         try:
-            end = pd.to_datetime(options.get("end_date"), errors="coerce")
-            if pd.isna(end):
-                end = pd.Timestamp.today().normalize()
+            end = pd.Timestamp.today().normalize()
             start = (end - pd.DateOffset(years=15)).normalize()
             warning_options = options.copy()
             warning_options["start_date"] = start.strftime("%Y-%m-%d")
@@ -8113,6 +8197,7 @@ def render_crisis_warning_tab(options: dict[str, Any]) -> None:
                 "Downloading and aligning the original warning variables.",
                 "正在下载并对齐原预警变量。",
             ))
+            warning_refresh_strategy = market_refresh_strategy()
             warning_data = build_expanded_variable_pool(
                 start_date=warning_options["start_date"],
                 end_date=warning_options["end_date"],
@@ -8122,8 +8207,28 @@ def render_crisis_warning_tab(options: dict[str, Any]) -> None:
                 selected_variables=warning_variables,
                 protected_variables=["Brent"],
                 prefer_existing=True,
-                force_refresh=True,
+                force_refresh=warning_refresh_strategy["force_refresh"],
+                strict_complete_case=False,
+                download_workers=warning_refresh_strategy["download_workers"],
             )
+            core_market_data = load_excel_if_exists(PATHS["model_ready"])
+            if core_market_data is None:
+                core_market_data = pd.DataFrame()
+            warning_data = _warning_dataset_with_complete_price_history(
+                warning_data,
+                core_market_data,
+                price_column="Brent",
+            )
+            warning_price = (
+                warning_data["Brent"]
+                if "Brent" in warning_data.columns
+                else pd.Series(dtype=float)
+            )
+            positive_prices = int((pd.to_numeric(warning_price, errors="coerce") > 0).sum())
+            status.write(ui_text(
+                f"Prepared {positive_prices:,} positive Brent observations on the complete price calendar.",
+                f"已按完整价格时间轴准备 {positive_prices:,} 条有效 Brent 记录。",
+            ))
             status.write(ui_text(
                 "Running the existing walk-forward warning model.",
                 "正在运行原有滚动样本外预警模型。",

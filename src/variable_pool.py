@@ -11,11 +11,12 @@ from __future__ import annotations
 import json
 import os
 import re
+import warnings
+from concurrent.futures import ThreadPoolExecutor
 from io import BytesIO
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlencode
-import warnings
 
 import pandas as pd
 import requests
@@ -1491,11 +1492,16 @@ def build_expanded_variable_pool(
     selected_variables: list[str] | None = None,
     protected_variables: list[str] | None = None,
     extra_registry_entries: list[dict[str, Any]] | None = None,
+    strict_complete_case: bool = True,
+    download_workers: int = 1,
 ) -> pd.DataFrame:
     """Build and optionally merge the expanded explanatory-variable pool.
 
     WTI rows are preserved. Candidate variable download failures are recorded in
-    the status log and do not interrupt the caller.
+    the status log and do not interrupt the caller. ``strict_complete_case`` is
+    kept enabled for the net-impact workflow; warning models can disable it so
+    their own feature-specific interpolation and coverage rules retain the full
+    target-price calendar.
     """
     ensure_variable_pool_dirs()
     full_registry = load_variable_registry(registry_path, extra_entries=extra_registry_entries)
@@ -1533,6 +1539,7 @@ def build_expanded_variable_pool(
                     }
                 )
 
+    pending_downloads: list[dict[str, Any]] = []
     for entry in registry:
         variable = entry["name"]
         existing = _series_has_values(expanded, variable)
@@ -1588,35 +1595,7 @@ def build_expanded_variable_pool(
                 continue
 
         if auto_download and entry.get("auto_download", False):
-            downloaded, status = _fetch_registry_variable(
-                entry,
-                start_date,
-                end_date,
-                force_refresh=force_refresh,
-            )
-            if entry.get("daily_fill_forward", False):
-                downloaded = _forward_fill_to_daily_calendar(
-                    downloaded,
-                    variable,
-                    start_date,
-                    end_date,
-                )
-            expanded = _merge_variable(
-                expanded,
-                downloaded,
-                variable,
-                prefer_existing=prefer_existing and not force_refresh,
-            )
-            if _series_has_values(expanded, variable):
-                stats = _variable_stats(expanded, variable, end_date)
-                status.update(
-                    {
-                        "LatestDate": stats["LatestDate"],
-                        "MissingCount": stats["MissingCount"],
-                        "Coverage": stats["Coverage"],
-                    }
-                )
-            status_rows.append(status)
+            pending_downloads.append(entry)
         elif not existing:
             status_rows.append(
                 {
@@ -1633,6 +1612,49 @@ def build_expanded_variable_pool(
                     "Note": entry.get("note", ""),
                 }
             )
+
+    def fetch_pending(entry: dict[str, Any]) -> tuple[pd.DataFrame, dict[str, Any]]:
+        return _fetch_registry_variable(
+            entry,
+            start_date,
+            end_date,
+            force_refresh=force_refresh,
+        )
+
+    worker_count = max(1, min(int(download_workers), len(pending_downloads) or 1))
+    if worker_count > 1:
+        # Fetch concurrently but apply results in registry order so column and
+        # status-report ordering remain stable across runs.
+        with ThreadPoolExecutor(max_workers=worker_count) as executor:
+            downloaded_results = list(executor.map(fetch_pending, pending_downloads))
+    else:
+        downloaded_results = [fetch_pending(entry) for entry in pending_downloads]
+
+    for entry, (downloaded, status) in zip(pending_downloads, downloaded_results):
+        variable = entry["name"]
+        if entry.get("daily_fill_forward", False):
+            downloaded = _forward_fill_to_daily_calendar(
+                downloaded,
+                variable,
+                start_date,
+                end_date,
+            )
+        expanded = _merge_variable(
+            expanded,
+            downloaded,
+            variable,
+            prefer_existing=prefer_existing and not force_refresh,
+        )
+        if _series_has_values(expanded, variable):
+            stats = _variable_stats(expanded, variable, end_date)
+            status.update(
+                {
+                    "LatestDate": stats["LatestDate"],
+                    "MissingCount": stats["MissingCount"],
+                    "Coverage": stats["Coverage"],
+                }
+            )
+        status_rows.append(status)
 
     expanded["Date"] = _normalise_date_series(expanded["Date"])
     expanded = expanded.sort_values("Date").drop_duplicates(subset=["Date"], keep="last")
@@ -1690,7 +1712,7 @@ def build_expanded_variable_pool(
 
     alignment_variables: list[str] = []
     alignment_report_to_write = pd.DataFrame()
-    if selected_variables is not None:
+    if selected_variables is not None and strict_complete_case:
         alignment_variables = [
             variable
             for variable in selected_variables
@@ -1708,14 +1730,14 @@ def build_expanded_variable_pool(
                 "Selected variables do not have an overlapping non-missing date window; "
                 "expanded variable pool was not trimmed."
             )
-    elif OUTPUT_PATHS["date_alignment_report"].exists():
+    elif strict_complete_case and OUTPUT_PATHS["date_alignment_report"].exists():
         OUTPUT_PATHS["date_alignment_report"].unlink()
 
     strict_columns = [column for column in expanded.columns if column != "Date"]
-    if strict_columns:
+    if strict_complete_case and strict_columns:
         expanded = expanded.dropna(subset=strict_columns).reset_index(drop=True)
 
-    if selected_variables is not None:
+    if selected_variables is not None and strict_complete_case:
         cleaned_alignment_report, cleaned_common_start, cleaned_common_end = _build_date_alignment_report(
             expanded,
             alignment_variables,

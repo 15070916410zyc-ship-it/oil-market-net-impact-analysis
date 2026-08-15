@@ -9,11 +9,117 @@ import hashlib
 import os
 from pathlib import Path
 import tempfile
+import threading
 import unittest
 from unittest.mock import patch
 from zipfile import ZipFile
 
+import pandas as pd
+
+
 class CloudWorkspaceBehaviorTests(unittest.TestCase):
+    def test_market_download_workers_run_independent_series_concurrently(self) -> None:
+        from src import data_fetcher
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            barrier = threading.Barrier(2, timeout=2)
+            thread_ids: set[int] = set()
+
+            def fake_fetch(
+                name: str,
+                sources: list[dict[str, str]],
+                start_date: str,
+                end_date: str,
+                cache_file: str | Path,
+                force_refresh: bool = False,
+            ):
+                thread_ids.add(threading.get_ident())
+                barrier.wait()
+                data_fetcher.LAST_SOURCE_USED[name] = f"test:{name}"
+                return pd.DataFrame(
+                    {"Date": pd.to_datetime([end_date]), name: [1.0]}
+                )
+
+            gprd = pd.DataFrame(
+                {"Date": pd.to_datetime(["2024-01-02"]), "GPRD": [1.0]}
+            )
+            sources = {"WTI": [{"type": "test", "id": "WTI"}], "Brent": [{"type": "test", "id": "Brent"}]}
+            caches = {name: temp_path / f"{name}.csv" for name in sources}
+
+            with (
+                patch.object(data_fetcher, "SERIES_SOURCES", sources),
+                patch.object(data_fetcher, "RAW_CACHE_FILES", caches),
+                patch.object(data_fetcher, "PROCESSED_MARKET_DATA_PATH", temp_path / "market.xlsx"),
+                patch.object(data_fetcher, "DATA_SOURCE_LOG_PATH", temp_path / "sources.xlsx"),
+                patch.object(data_fetcher, "fetch_series_with_fallback", side_effect=fake_fetch),
+                patch.object(data_fetcher, "fetch_gprd_auto", return_value=gprd),
+            ):
+                result = data_fetcher.build_market_dataset(
+                    "2024-01-02",
+                    "2024-01-02",
+                    download_workers=2,
+                )
+
+            self.assertEqual(len(thread_ids), 2)
+            self.assertEqual(result.loc[0, "WTI"], 1.0)
+            self.assertEqual(result.loc[0, "Brent"], 1.0)
+
+    def test_market_cache_first_uses_fresh_gprd_without_network_download(self) -> None:
+        from src import data_fetcher
+
+        dates = pd.to_datetime(["2024-01-02", "2024-01-03"])
+        market_series = {
+            name: pd.DataFrame({"Date": dates, name: [1.0, 2.0]})
+            for name in data_fetcher.SERIES_SOURCES
+        }
+        gprd = pd.DataFrame({"Date": dates, "GPRD": [3.0, 4.0]})
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            with (
+                patch.object(data_fetcher, "PROCESSED_MARKET_DATA_PATH", temp_path / "market.xlsx"),
+                patch.object(data_fetcher, "DATA_SOURCE_LOG_PATH", temp_path / "sources.xlsx"),
+                patch.object(data_fetcher, "_load_cache_file", side_effect=lambda path, name, start, end: market_series[name]),
+                patch.object(data_fetcher, "_load_gprd_cache", return_value=gprd),
+                patch.object(data_fetcher, "fetch_gprd_auto") as online_gprd,
+            ):
+                result = data_fetcher.build_market_dataset(
+                    "2024-01-02",
+                    "2024-01-03",
+                    cache_first=True,
+                )
+
+            online_gprd.assert_not_called()
+            self.assertEqual(result["GPRD"].tolist(), [3.0, 4.0])
+            self.assertEqual(
+                data_fetcher.LAST_SOURCE_USED["GPRD"],
+                "cache:gprd_auto_download",
+            )
+
+    def test_cloud_refresh_reuses_valid_cache_without_disabling_stale_refresh(self) -> None:
+        import inspect
+
+        from app import streamlit_app as app
+
+        with patch.object(app, "is_cloud_runtime", return_value=True):
+            self.assertEqual(
+                app.market_refresh_strategy(),
+                {"cache_first": True, "force_refresh": False, "download_workers": 4},
+            )
+        with patch.object(app, "is_cloud_runtime", return_value=False):
+            self.assertEqual(
+                app.market_refresh_strategy(),
+                {"cache_first": False, "force_refresh": True, "download_workers": 1},
+            )
+
+        setup_source = inspect.getsource(app.run_paper_replication_setup_workflow)
+        update_source = inspect.getsource(app.run_update_market_data)
+        self.assertIn('cache_first=refresh_strategy["cache_first"]', setup_source)
+        self.assertIn('force_refresh=refresh_strategy["force_refresh"]', setup_source)
+        self.assertIn('download_workers=refresh_strategy["download_workers"]', setup_source)
+        self.assertIn('cache_first=refresh_strategy["cache_first"]', update_source)
+
     def test_crisis_warning_keeps_original_model_and_runs_regime_forecast_separately(self) -> None:
         import inspect
 
@@ -99,6 +205,120 @@ class CloudWorkspaceBehaviorTests(unittest.TestCase):
         self.assertIn("rangeslider=dict(", renderer)
         self.assertIn('"scrollZoom": True', renderer)
         self.assertIn("fixedrange=False", renderer)
+
+    def test_price_forecast_display_connects_actual_and_forecast_traces(self) -> None:
+        import pandas as pd
+
+        from app import streamlit_app as app
+
+        history = pd.DataFrame(
+            {
+                "Date": pd.to_datetime(["2026-08-13", "2026-08-14"]),
+                "Actual": [91.0, 93.0],
+            }
+        )
+        forecast = pd.DataFrame(
+            {
+                "Date": pd.to_datetime(["2026-08-17", "2026-08-18"]),
+                "PointForecast": [92.0, 91.5],
+                "Lower80": [88.0, 87.0],
+                "Upper80": [96.0, 96.5],
+            }
+        )
+
+        displayed = app._anchored_forecast_display(history, forecast)
+
+        self.assertEqual(displayed.iloc[0]["Date"], history.iloc[-1]["Date"])
+        self.assertEqual(displayed.iloc[0]["PointForecast"], 93.0)
+        self.assertEqual(displayed.iloc[0]["Lower80"], 93.0)
+        self.assertEqual(displayed.iloc[0]["Upper80"], 93.0)
+        self.assertEqual(displayed.iloc[1]["Date"], forecast.iloc[0]["Date"])
+        self.assertEqual(len(displayed), len(forecast) + 1)
+
+    def test_warning_dataset_restores_complete_brent_history_after_alignment(self) -> None:
+        import pandas as pd
+
+        from app import streamlit_app as app
+
+        dates = pd.date_range("2020-01-01", periods=600, freq="B")
+        core = pd.DataFrame({"Date": dates, "Brent": 60.0 + pd.Series(range(600)) * 0.01})
+        aligned = pd.DataFrame(
+            {
+                "Date": dates[-180:],
+                "Brent": 1.0,
+                "OVX": range(180),
+            }
+        )
+
+        restored = app._warning_dataset_with_complete_price_history(aligned, core)
+
+        self.assertEqual(len(restored), 600)
+        self.assertEqual(int((restored["Brent"] > 0).sum()), 600)
+        self.assertEqual(int(restored["OVX"].notna().sum()), 180)
+        self.assertEqual(float(restored.iloc[-1]["Brent"]), float(core.iloc[-1]["Brent"]))
+
+    def test_warning_pool_can_keep_full_price_calendar_for_feature_specific_cleaning(self) -> None:
+        import pandas as pd
+
+        from src import variable_pool
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            dates = pd.date_range("2020-01-01", periods=600, freq="B")
+            model_ready = pd.DataFrame(
+                {
+                    "Date": dates,
+                    "WTI": 55.0,
+                    "Brent": 60.0,
+                    "OVX": [None] * 420 + list(range(180)),
+                }
+            )
+            model_path = root / "model_ready.xlsx"
+            model_ready.to_excel(model_path, index=False)
+            registry_path = root / "registry.yaml"
+            registry_path.write_text(
+                """variables:
+  - name: WTI
+    auto_download: false
+    sources: [{type: existing_model_ready_column, id: WTI}]
+  - name: Brent
+    auto_download: false
+    sources: [{type: existing_model_ready_column, id: Brent}]
+  - name: OVX
+    auto_download: false
+    sources: [{type: existing_model_ready_column, id: OVX}]
+""",
+                encoding="utf-8",
+            )
+            report_paths = {
+                key: root / f"{key}.xlsx"
+                for key in (
+                    "registry_table",
+                    "coverage_report",
+                    "quality_report",
+                    "date_alignment_report",
+                    "download_status",
+                )
+            }
+            with patch.dict(variable_pool.OUTPUT_PATHS, report_paths, clear=False):
+                report_paths["date_alignment_report"].write_text("keep", encoding="utf-8")
+                warning_pool = variable_pool.build_expanded_variable_pool(
+                    start_date=dates.min().strftime("%Y-%m-%d"),
+                    end_date=dates.max().strftime("%Y-%m-%d"),
+                    model_ready_path=model_path,
+                    registry_path=registry_path,
+                    output_path=root / "warning_pool.xlsx",
+                    auto_download=False,
+                    selected_variables=["WTI", "Brent", "OVX"],
+                    protected_variables=["Brent"],
+                    min_coverage=0.10,
+                    strict_complete_case=False,
+                )
+
+            self.assertEqual(len(warning_pool), 600)
+            self.assertEqual(int(warning_pool["Brent"].notna().sum()), 600)
+            self.assertEqual(int(warning_pool["OVX"].notna().sum()), 180)
+            self.assertTrue(report_paths["date_alignment_report"].exists())
 
     def test_price_forecast_ui_accepts_custom_days_and_history_months(self) -> None:
         import inspect
