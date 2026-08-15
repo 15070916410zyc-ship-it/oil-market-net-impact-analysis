@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import base64
 from contextlib import nullcontext
 from io import BytesIO
 import hashlib
@@ -432,34 +431,27 @@ class CloudWorkspaceBehaviorTests(unittest.TestCase):
         self.assertIn('div:has(> span[data-baseweb="tag"])', css)
         self.assertIn("right: 0.25rem !important;", css)
 
-    def test_result_image_preview_is_embedded_without_streamlit_media_route(self) -> None:
+    def test_result_plotly_charts_are_loaded_as_dynamic_figures(self) -> None:
         from app import streamlit_app as app
+        import plotly.graph_objects as go
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            image_path = Path(temp_dir) / "event.png"
-            image_bytes = base64.b64decode(
-                "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk"
-                "/w8AAusB9Y9Z4aQAAAAASUVORK5CYII="
-            )
-            image_path.write_bytes(image_bytes)
+            chart_path = Path(temp_dir) / "event.json"
+            figure = go.Figure(go.Scatter(x=[1, 2, 3], y=[3, 1, 2]))
+            chart_path.write_text(figure.to_json(), encoding="utf-8")
             with (
                 patch.object(app.st, "columns", return_value=(nullcontext(), nullcontext())),
-                patch.object(app.st, "image") as image,
-                patch.object(app.st, "markdown") as markdown,
+                patch.object(app.st, "plotly_chart") as plotly_chart,
                 patch.object(app.st, "caption"),
                 patch.object(app.st, "write"),
                 patch.object(app, "render_artifact_download_button"),
             ):
-                app.render_downloadable_image("Event chart", image_path, "Description")
+                app.render_downloadable_plotly("Event chart", chart_path, "Description")
 
-        image.assert_not_called()
-        markdown.assert_called_once()
-        html = markdown.call_args.args[0]
-        self.assertIn(
-            "data:image/png;base64," + base64.b64encode(image_bytes).decode("ascii"),
-            html,
-        )
-        self.assertTrue(markdown.call_args.kwargs["unsafe_allow_html"])
+        plotly_chart.assert_called_once()
+        rendered = plotly_chart.call_args.args[0]
+        self.assertEqual(len(rendered.data), 1)
+        self.assertEqual(rendered.layout.paper_bgcolor, "#2B2B2B")
 
     def test_cloud_runtime_detection_supports_override_and_streamlit_marker(self) -> None:
         from app.streamlit_app import is_cloud_runtime
