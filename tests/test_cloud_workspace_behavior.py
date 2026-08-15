@@ -140,9 +140,11 @@ class CloudWorkspaceBehaviorTests(unittest.TestCase):
 
         renderer = inspect.getsource(app._render_warning_results)
         self.assertIn('x=regime_history["Date"]', renderer)
-        self.assertIn("dtick=86400000", renderer)
+        self.assertIn('tickmode="array"', renderer)
+        self.assertIn("tickvals=date_ticks", renderer)
         self.assertIn('tickformat="%Y-%m-%d"', renderer)
-        self.assertNotIn('regime_history["Day"]', renderer)
+        self.assertIn("tickangle=-90", renderer)
+        self.assertNotIn('tickmode="auto"', renderer)
 
     def test_analysis_results_are_inline_not_a_top_level_tab(self) -> None:
         from app import streamlit_app as app
