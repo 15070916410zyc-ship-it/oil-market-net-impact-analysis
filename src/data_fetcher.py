@@ -127,7 +127,7 @@ MARKET_COLUMNS = [
 
 REQUESTED_TYPES = {
     "WTI": "WTI crude oil futures price; target variable",
-    "Brent": "Brent crude oil futures price; paper-replication oil benchmark",
+    "Brent": "Brent crude oil futures price; multiscale-analysis oil benchmark",
     "Gold": "Gold futures price",
     "OVX": "CBOE crude oil volatility index",
     "DollarIndex": "U.S. Dollar Index",

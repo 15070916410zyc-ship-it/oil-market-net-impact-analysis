@@ -56,6 +56,7 @@ class PriceForecastTests(unittest.TestCase):
     def test_validation_metrics_are_finite_and_future_dates_follow_history(self) -> None:
         result = run_brent_price_forecast(synthetic_brent(), horizon=5, max_history=360)
 
+        self.assertEqual(result.metrics["ForecastHorizon"], 5)
         self.assertGreaterEqual(float(result.metrics["ValidationMAE"]), 0)
         self.assertGreaterEqual(float(result.metrics["ValidationRMSE"]), 0)
         self.assertGreaterEqual(float(result.metrics["DirectionalAccuracyPercent"]), 0)
@@ -65,6 +66,14 @@ class PriceForecastTests(unittest.TestCase):
     def test_forecast_rejects_short_series(self) -> None:
         with self.assertRaisesRegex(ValueError, "180"):
             run_brent_price_forecast(synthetic_brent(120), horizon=5)
+
+    def test_forecast_accepts_custom_horizon_and_rejects_above_limit(self) -> None:
+        result = run_brent_price_forecast(synthetic_brent(), horizon=61, max_history=420)
+
+        self.assertEqual(len(result.forecast), 61)
+        self.assertEqual(result.metrics["ForecastHorizon"], 61)
+        with self.assertRaisesRegex(ValueError, "120"):
+            run_brent_price_forecast(synthetic_brent(), horizon=121, max_history=420)
 
     def test_generic_forecast_supports_wti_target(self) -> None:
         result = run_oil_price_forecast(

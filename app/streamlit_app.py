@@ -334,11 +334,11 @@ WORKFLOW_VALUE_TRANSLATIONS = {
         "严格完整样本清洗后在事件窗口内保留的观测。",
     "Full prepared table after selected variables are retained and missing rows are removed.":
         "保留所选变量并剔除含缺失值的行后得到的完整数据表。",
-    "EMTV-NEI paper replication: VMD + MRGC + core scale + rolling VAR FEVD":
-        "EMTV-NEI 论文方法复现：VMD + MRGC + 主尺度 + 滚动窗口 VAR FEVD",
+    "EMTV-NEI multiscale analysis: VMD + MRGC + core scale + rolling VAR FEVD":
+        "EMTV-NEI 多尺度分析：VMD + MRGC + 主尺度 + 滚动窗口 VAR FEVD",
     "Python vmdpy recomputed for the selected sample.": "针对所选样本使用 Python vmdpy 重新计算。",
-    "MATLAB Step01 cached VMD results for exact thesis-sample replication.":
-        "使用 MATLAB 第一步缓存的 VMD 结果精确复现论文样本。",
+    "MATLAB Step01 cached VMD results for exact reference-sample reproduction.":
+        "使用 MATLAB 第一步缓存的 VMD 结果复现既定样本。",
     "Selected by selected-scale MRGC/BIC Granger test at p < 0.10.":
         "依据所选尺度的 MRGC/BIC Granger 检验结果选入，显著性水平为 p < 0.10。",
     "Fallback to the selected candidate pool because selected-scale MRGC retained no drivers.":
@@ -558,14 +558,32 @@ WORKFLOW_COLUMN_TRANSLATIONS = {
 }
 
 
+def neutralize_public_method_wording(value: str) -> str:
+    """Remove legacy publication-oriented wording from display-only values."""
+    replacements = (
+        (r"\bpaper[- ]method replication\b", "multiscale analysis"),
+        (r"\bpaper replication\b", "multiscale analysis"),
+        (r"\bpaper-style\b", "multiscale"),
+        (r"\bpaper driver map\b", "configured driver map"),
+        (r"\bpaper method\b", "multiscale method"),
+    )
+    neutral = value
+    for pattern, replacement in replacements:
+        neutral = re.sub(pattern, replacement, neutral, flags=re.IGNORECASE)
+    return neutral
+
+
 def localized_workflow_value(value: Any, language: LanguageCode) -> Any:
     """Localize known result-table explanations without changing data values."""
-    if language == "en" or not isinstance(value, str):
+    if not isinstance(value, str):
+        return value
+    value = neutralize_public_method_wording(value)
+    if language == "en":
         return value
     if value in WORKFLOW_VALUE_TRANSLATIONS:
         return WORKFLOW_VALUE_TRANSLATIONS[value]
     dynamic_scale_rule = re.fullmatch(
-        r"Dynamic paper-style selection from (.+) using MRGC/GPRD significance, "
+        r"Dynamic multiscale selection from (.+) using MRGC/GPRD significance, "
         r"event-window range share, variance contribution, and correlation; "
         r"one or multiple IMFs may be retained",
         value,
@@ -574,7 +592,7 @@ def localized_workflow_value(value: Any, language: LanguageCode) -> Any:
         levels = dynamic_scale_rule.group(1)
         return (
             f"依据 MRGC/GPRD 显著性、事件窗口振幅占比、方差贡献和相关性，"
-            f"从 {levels} 中按论文方法动态选择；可保留一个或多个 IMF"
+            f"从 {levels} 中按多尺度规则动态选择；可保留一个或多个 IMF"
         )
     return localized_runtime_message(value, language)
 
@@ -5976,8 +5994,8 @@ def render_paper_replication_tab() -> None:
             ui_text("HHT IMF1 instantaneous frequency", "HHT IMF1 瞬时频率"),
             PATHS["paper_hht_imf1_figure"],
             ui_text(
-                "Corresponds to the paper's IMF1 instantaneous-frequency diagnostic.",
-                "对应论文中的 IMF1 瞬时频率诊断。",
+                "Shows the IMF1 instantaneous-frequency diagnostic.",
+                "展示 IMF1 瞬时频率诊断结果。",
             ),
         )
 
@@ -6027,8 +6045,8 @@ def render_paper_replication_tab() -> None:
                     title,
                     figure_path,
                     ui_text(
-                        "Paper Fig. 4.11/4.12 style external relative contribution chart.",
-                        "论文图 4.11/4.12 风格的外部相对贡献图。",
+                        "External relative-contribution chart using the established 4.11/4.12 layout.",
+                        "采用既定 4.11/4.12 布局的外部相对贡献图。",
                     ),
                 )
             if PATHS["paper_contribution_figure"].exists():
@@ -6054,8 +6072,8 @@ def render_paper_replication_tab() -> None:
             ui_text("Optimal-break RSS profile", "最优突变点 RSS 曲线"),
             PATHS["paper_optimal_break_rss"],
             description=ui_text(
-                "Supports the paper's optimal-break RSS profile figures.",
-                "用于生成论文中的最优突变点 RSS 曲线。",
+                "Provides the optimal-break RSS profile used in structural diagnostics.",
+                "用于生成结构诊断中的最优突变点 RSS 曲线。",
             ),
             max_rows=120,
         )
@@ -7521,7 +7539,7 @@ def _render_warning_results(payload: dict[str, Any]) -> None:
             values="ImportancePercent",
             color="IMF",
             hole=0.48,
-            title=ui_text("Warning-model importance by paper channel", "按论文渠道汇总的预警模型重要度"),
+            title=ui_text("Warning-model importance by economic channel", "按经济渠道汇总的预警模型重要度"),
         )
         channel_figure.update_traces(texttemplate="%{label}<br>%{value:.1f}%")
         channel_figure.update_layout(height=440, margin=dict(l=20, r=20, t=70, b=20))
@@ -7641,19 +7659,29 @@ def render_oil_price_forecast_panel() -> None:
         format_func=lambda value: ui_text(f"{value} crude oil", f"{value} 原油"),
         key="price_forecast_target",
     )
-    horizon = control_left.selectbox(
-        ui_text("Forecast horizon", "预测期限"),
-        options=[5, 10, 20, 30],
-        index=2,
-        format_func=lambda value: ui_text(f"{value} business days", f"{value} 个交易日"),
+    horizon = control_left.number_input(
+        ui_text("Forecast horizon (business days)", "预测期限（交易日）"),
+        min_value=1,
+        max_value=120,
+        value=20,
+        step=1,
         key="price_forecast_horizon",
+        help=ui_text(
+            "Enter any integer from 1 to 120 business days.",
+            "可填写 1—120 之间的整数，按交易日计算。",
+        ),
     )
-    history_years = control_middle.selectbox(
-        ui_text("Historical sample", "历史样本长度"),
-        options=[3, 5, 8],
-        index=1,
-        format_func=lambda value: ui_text(f"{value} years", f"{value} 年"),
-        key="price_forecast_history_years",
+    history_months = control_middle.number_input(
+        ui_text("Historical sample (months)", "历史样本长度（月）"),
+        min_value=12,
+        max_value=120,
+        value=60,
+        step=1,
+        key="price_forecast_history_months",
+        help=ui_text(
+            "Enter any integer from 12 to 120 months. At least 12 months are required for training and validation.",
+            "可填写 12—120 之间的整数；为保证训练与验证所需数据量，至少需要 12 个月。",
+        ),
     )
     with control_right:
         st.write("")
@@ -7666,8 +7694,8 @@ def render_oil_price_forecast_panel() -> None:
 
     with st.expander(ui_text("Method and interpretation", "方法与解释")):
         st.write(ui_text(
-            f"This page follows the paper's decomposition–component forecast–reconstruction workflow. Because the automatically updated {target} input is a daily point-price series rather than a weekly high/low interval, IMF1 uses BPNN and IMF2–IMF5 use autoregressive ridge models. Holdout-error quantiles provide empirical prediction intervals; this is a practical baseline, not a full replication of the paper's interval model.",
-            f"本页面沿用论文的“分解—分量预测—重构”思路。自动更新的 {target} 数据为日度点价格，并非周度最高价/最低价区间，因此 IMF1 使用 BPNN，IMF2—IMF5 使用自回归岭回归；预测区间由留出期误差分位数构造。该结果属于可运行的基线预测，并非论文区间模型的完整复现。",
+            "This page uses the same decomposition–component forecast–reconstruction workflow for both WTI and Brent. The automatically updated inputs are daily point-price series rather than weekly high/low intervals, so IMF1 uses BPNN and IMF2–IMF5 use autoregressive ridge models. Holdout-error quantiles provide empirical prediction intervals as a practical baseline.",
+            "WTI 与 Brent 均采用“分解—分量预测—重构”流程。自动更新的数据为日度点价格，而非周度最高价/最低价区间，因此 IMF1 使用 BPNN，IMF2—IMF5 使用自回归岭回归；预测区间由留出期误差分位数构造，作为可直接运行的基线预测。",
         ))
 
     if run_forecast:
@@ -7677,7 +7705,7 @@ def render_oil_price_forecast_panel() -> None:
             from src.price_forecast import run_oil_price_forecast
 
             end = pd.Timestamp.today().normalize()
-            start = (end - pd.DateOffset(years=int(history_years))).normalize()
+            start = (end - pd.DateOffset(months=int(history_months))).normalize()
             status.write(ui_text(f"Refreshing {target} data.", f"正在更新 {target} 数据。"))
             price_data = fetch_series_with_fallback(
                 target,
@@ -7693,9 +7721,19 @@ def render_oil_price_forecast_panel() -> None:
                     f"未取得足够的最新 {target} 数据，请检查网络或数据源凭据。",
                 ))
             status.write(ui_text("Decomposing the series and validating five IMF component models.", "正在分解价格序列并验证 5 个 IMF 分量模型。"))
-            result = run_oil_price_forecast(price_data, price_column=target, horizon=int(horizon))
+            result = run_oil_price_forecast(
+                price_data,
+                price_column=target,
+                horizon=int(horizon),
+                max_history=max(180, int(history_months) * 23),
+            )
             _save_price_forecast_workbook(result, target)
-            st.session_state["price_forecast_last_result"] = {"target": target, "result": result}
+            st.session_state["price_forecast_last_result"] = {
+                "target": target,
+                "horizon": int(horizon),
+                "history_months": int(history_months),
+                "result": result,
+            }
             status.update(label=ui_text("Forecast ready", "预测已完成"), state="complete", expanded=False)
         except Exception as exc:  # noqa: BLE001
             status.update(label=ui_text("Forecast failed", "预测失败"), state="error")
@@ -7704,7 +7742,12 @@ def render_oil_price_forecast_panel() -> None:
     result_payload = st.session_state.get("price_forecast_last_result")
     result = (
         result_payload.get("result")
-        if isinstance(result_payload, dict) and result_payload.get("target") == target
+        if (
+            isinstance(result_payload, dict)
+            and result_payload.get("target") == target
+            and result_payload.get("horizon") == int(horizon)
+            and result_payload.get("history_months") == int(history_months)
+        )
         else None
     )
     if result is None:

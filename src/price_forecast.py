@@ -148,8 +148,8 @@ def run_oil_price_forecast(
     prediction intervals use finite-sample holdout-error quantiles and widen
     gradually across the forecast horizon.
     """
-    if horizon < 1 or horizon > 60:
-        raise ValueError("Forecast horizon must be between 1 and 60 business days.")
+    if horizon < 1 or horizon > 120:
+        raise ValueError("Forecast horizon must be between 1 and 120 business days.")
     cleaned = _clean_price_data(data, price_column).tail(max_history).reset_index(drop=True)
     values = cleaned[price_column].to_numpy(dtype=float)
     holdout = min(max(20, horizon), 60, len(values) // 5)
@@ -211,6 +211,7 @@ def run_oil_price_forecast(
     metrics: dict[str, float | str] = {
         "Target": price_column,
         "AsOfDate": cleaned["Date"].iloc[-1].strftime("%Y-%m-%d"),
+        "ForecastHorizon": int(horizon),
         "LatestPrice": float(values[-1]),
         "ForecastEndPrice": float(point_forecast[-1]),
         "ProjectedChangePercent": float((point_forecast[-1] / values[-1] - 1.0) * 100.0),
