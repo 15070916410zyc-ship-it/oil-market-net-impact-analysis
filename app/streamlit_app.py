@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import base64
 import importlib
 import hashlib
 from io import BytesIO
@@ -165,15 +164,15 @@ PATHS = {
     "paper_break_test": PROJECT_ROOT / "outputs" / "tables" / "paper_structural_break_test.xlsx",
     "paper_optimal_break_rss": PROJECT_ROOT / "outputs" / "tables" / "paper_optimal_break_rss_profile.xlsx",
     "paper_selected_scale_series": PROJECT_ROOT / "outputs" / "tables" / "paper_selected_scale_series.xlsx",
-    "paper_price_event_figure": PROJECT_ROOT / "outputs" / "figures" / "paper_price_event.png",
-    "paper_selected_scale_figure": PROJECT_ROOT / "outputs" / "figures" / "paper_selected_scale_trend.png",
-    "paper_mrgc_figure": PROJECT_ROOT / "outputs" / "figures" / "paper_mrgc_heatmap.png",
-    "paper_scale_statistics_figure": PROJECT_ROOT / "outputs" / "figures" / "paper_scale_statistics.png",
-    "paper_hht_imf1_figure": PROJECT_ROOT / "outputs" / "figures" / "paper_hht_imf1_frequency.png",
-    "paper_contribution_figure": PROJECT_ROOT / "outputs" / "figures" / "paper_external_contribution.png",
-    "paper_net_impact_figure": PROJECT_ROOT / "outputs" / "figures" / "paper_net_impacts.png",
-    "paper_break_figure": PROJECT_ROOT / "outputs" / "figures" / "paper_structural_break_fit.png",
-    "paper_optimal_break_rss_figure": PROJECT_ROOT / "outputs" / "figures" / "paper_optimal_break_rss_profile.png",
+    "paper_price_event_figure": PROJECT_ROOT / "outputs" / "figures" / "paper_price_event.json",
+    "paper_selected_scale_figure": PROJECT_ROOT / "outputs" / "figures" / "paper_selected_scale_trend.json",
+    "paper_mrgc_figure": PROJECT_ROOT / "outputs" / "figures" / "paper_mrgc_heatmap.json",
+    "paper_scale_statistics_figure": PROJECT_ROOT / "outputs" / "figures" / "paper_scale_statistics.json",
+    "paper_hht_imf1_figure": PROJECT_ROOT / "outputs" / "figures" / "paper_hht_imf1_frequency.json",
+    "paper_contribution_figure": PROJECT_ROOT / "outputs" / "figures" / "paper_external_contribution.json",
+    "paper_net_impact_figure": PROJECT_ROOT / "outputs" / "figures" / "paper_net_impacts.json",
+    "paper_break_figure": PROJECT_ROOT / "outputs" / "figures" / "paper_structural_break_fit.json",
+    "paper_optimal_break_rss_figure": PROJECT_ROOT / "outputs" / "figures" / "paper_optimal_break_rss_profile.json",
     "upload_dir": PROJECT_ROOT / "data" / "raw" / "uploads",
     "upload_original_dir": PROJECT_ROOT / "data" / "raw" / "uploads" / "originals",
     "uploaded_variable_manifest": PROJECT_ROOT / "outputs" / "tables" / "uploaded_variable_manifest.xlsx",
@@ -6026,10 +6025,20 @@ def render_paper_replication_tab() -> None:
         value = summary_for_method_note.loc[summary_for_method_note["Item"].astype(str).eq("VMD K"), "Value"]
         if not value.empty:
             vmd_k_note = str(value.iloc[0])
+    settings_for_note = load_excel_if_exists(PATHS["paper_tvp_settings"])
+    rolling_window_note = "120"
+    if (
+        settings_for_note is not None
+        and not settings_for_note.empty
+        and "RollingWindow" in settings_for_note.columns
+    ):
+        rolling_values = pd.to_numeric(settings_for_note["RollingWindow"], errors="coerce").dropna()
+        if not rolling_values.empty:
+            rolling_window_note = str(int(rolling_values.iloc[0]))
     with st.expander(ui_text("Method settings", "方法设置")):
         st.write(ui_text(
-            f"VMD K = {vmd_k_note}; penalty = 1000; MRGC max lag = 5; VAR lag by BIC; rolling window = 120; FEVD h follows the selected-scale extrema interval.",
-            f"VMD K = {vmd_k_note}；惩罚因子 = 1000；MRGC 最大滞后 = 5；VAR 滞后由 BIC 选择；滚动窗口 = 120；FEVD h 取所选尺度极值间隔。",
+            f"VMD K = {vmd_k_note}; penalty = 1000; MRGC max lag = 5; VAR lag by BIC; rolling window = {rolling_window_note}; FEVD h follows the selected-scale extrema interval.",
+            f"VMD K = {vmd_k_note}；惩罚因子 = 1000；MRGC 最大滞后 = 5；VAR 滞后由 BIC 选择；滚动窗口 = {rolling_window_note}；FEVD h 取所选尺度极值间隔。",
         ))
 
     archive_bytes, archive_names = build_results_archive()
@@ -6069,7 +6078,7 @@ def render_paper_replication_tab() -> None:
             PATHS["paper_summary"],
             description=ui_text("Method settings, sample range, targets, candidate variables, and event date.", "方法设置、样本区间、目标变量、候选变量与事件日期。"),
         )
-        render_downloadable_image(
+        render_downloadable_plotly(
             ui_text("Crude-oil price event chart", "原油价格事件图"),
             PATHS["paper_price_event_figure"],
             ui_text("Crude-oil prices with the event start marked.", "展示原油价格并标记事件开始日期。"),
@@ -6087,13 +6096,13 @@ def render_paper_replication_tab() -> None:
             with st.expander(ui_text(f"VMD decomposition figures ({len(vmd_figures)})", f"VMD 分解图（{len(vmd_figures)}）"), expanded=False):
                 for figure_path in vmd_figures:
                     label = figure_path.stem.replace("paper_vmd_decomposition_", "").replace("_", " ").upper()
-                    render_downloadable_image(
+                    render_downloadable_plotly(
                         ui_text(f"VMD decomposition: {label}", f"VMD 分解：{label}"),
                         figure_path,
                     )
         else:
             st.info(ui_text("VMD decomposition figures are not available yet. Re-run the analysis.", "VMD 分解图尚未生成，请重新运行分析。"))
-        render_downloadable_image(
+        render_downloadable_plotly(
             ui_text("HHT IMF1 instantaneous frequency", "HHT IMF1 瞬时频率"),
             PATHS["paper_hht_imf1_figure"],
             ui_text(
@@ -6114,8 +6123,8 @@ def render_paper_replication_tab() -> None:
                 "这是 TVP/FEVD 开始前显示的人工确认表。",
             ),
         )
-        render_downloadable_image(ui_text("Scale statistics figure", "尺度统计图"), PATHS["paper_scale_statistics_figure"])
-        render_downloadable_image(
+        render_downloadable_plotly(ui_text("Scale statistics figure", "尺度统计图"), PATHS["paper_scale_statistics_figure"])
+        render_downloadable_plotly(
             ui_text("Selected-scale trend figure", "所选尺度趋势图"),
             PATHS["paper_selected_scale_figure"],
             ui_text(
@@ -6131,7 +6140,7 @@ def render_paper_replication_tab() -> None:
             ui_text("Selected-scale Granger tests for contribution-model inclusion", "贡献模型纳入变量的所选尺度 Granger 检验"),
             PATHS["paper_selected_scale_granger"],
         )
-        render_downloadable_image(ui_text("MRGC heatmap", "MRGC 热力图"), PATHS["paper_mrgc_figure"])
+        render_downloadable_plotly(ui_text("MRGC heatmap", "MRGC 热力图"), PATHS["paper_mrgc_figure"])
 
     with st.container(border=True):
         st.subheader(ui_text("E. TVP/VAR FEVD Contribution Decomposition", "E. TVP/VAR FEVD 贡献分解"))
@@ -6144,7 +6153,7 @@ def render_paper_replication_tab() -> None:
         contribution_figures = paper_external_contribution_figure_items()
         if contribution_figures:
             for title, figure_path in contribution_figures:
-                render_downloadable_image(
+                render_downloadable_plotly(
                     title,
                     figure_path,
                     ui_text(
@@ -6157,16 +6166,16 @@ def render_paper_replication_tab() -> None:
                     ui_text("Combined external-contribution overview", "外部贡献综合概览"),
                     expanded=False,
                 ):
-                    render_downloadable_image(
+                    render_downloadable_plotly(
                         ui_text("External contribution overview", "外部贡献概览"),
                         PATHS["paper_contribution_figure"],
                     )
         else:
-            render_downloadable_image(
+            render_downloadable_plotly(
                 ui_text("External contribution figure", "外部贡献图"),
                 PATHS["paper_contribution_figure"],
             )
-        render_downloadable_image(ui_text("Net-impact figure", "净影响图"), PATHS["paper_net_impact_figure"])
+        render_downloadable_plotly(ui_text("Net-impact figure", "净影响图"), PATHS["paper_net_impact_figure"])
 
     with st.container(border=True):
         st.subheader(ui_text("F. Structural-Break Diagnostics", "F. 结构突变诊断"))
@@ -6180,8 +6189,8 @@ def render_paper_replication_tab() -> None:
             ),
             max_rows=120,
         )
-        render_downloadable_image(ui_text("Event-start trend-break fit", "事件起点趋势突变拟合"), PATHS["paper_break_figure"])
-        render_downloadable_image(ui_text("Optimal-break RSS profile", "最优突变点 RSS 曲线"), PATHS["paper_optimal_break_rss_figure"])
+        render_downloadable_plotly(ui_text("Event-start trend-break fit", "事件起点趋势突变拟合"), PATHS["paper_break_figure"])
+        render_downloadable_plotly(ui_text("Optimal-break RSS profile", "最优突变点 RSS 曲线"), PATHS["paper_optimal_break_rss_figure"])
 
 
 def _filter_variable_list_text(value: Any, valid_variables: set[str]) -> str:
@@ -6284,6 +6293,8 @@ def _download_mime(path: Path) -> str:
         return "image/png"
     if suffix == ".pdf":
         return "application/pdf"
+    if suffix == ".json":
+        return "application/json"
     if suffix == ".svg":
         return "image/svg+xml"
     return "application/octet-stream"
@@ -6293,11 +6304,6 @@ def _download_key(prefix: str, path: Path) -> str:
     """Build a stable Streamlit key for an artifact download button."""
     token = re.sub(r"[^A-Za-z0-9]+", "_", str(path.relative_to(PROJECT_ROOT) if path.is_relative_to(PROJECT_ROOT) else path))
     return f"{prefix}_{token}"
-
-
-def _pdf_variant(path: Path) -> Path:
-    """Return the sidecar PDF path for a PNG figure when available."""
-    return path.with_suffix(".pdf")
 
 
 def render_artifact_download_button(path: Path, label: str, key_prefix: str) -> None:
@@ -6340,35 +6346,46 @@ def render_downloadable_table(
     st.dataframe(localized_workflow_frame(display_table), use_container_width=True)
 
 
-def render_downloadable_image(title: str, path: Path, description: str | None = None) -> None:
-    """Render a figure with adjacent PNG/PDF download controls."""
+def render_downloadable_plotly(title: str, path: Path, description: str | None = None) -> None:
+    """Render one saved Plotly chart as an interactive chart."""
+    import plotly.io as pio
+
     path = Path(path)
     if not path.exists():
         return
-    encoded_image = base64.b64encode(path.read_bytes()).decode("ascii")
-    image_col, action_col = st.columns([0.78, 0.22])
-    with image_col:
-        st.markdown(
-            (
-                '<img src="data:image/png;base64,'
-                f'{encoded_image}" alt="Analysis result figure" '
-                'style="display:block;width:100%;height:auto;object-fit:contain;" />'
-            ),
-            unsafe_allow_html=True,
+    try:
+        figure = pio.from_json(path.read_text(encoding="utf-8"))
+    except Exception as exc:  # noqa: BLE001 - keep the page alive for a bad artifact.
+        st.info(
+            ui_text(
+                f"{title} could not be loaded as a chart: {safe_exception_text(exc)}",
+                f"{title} 无法作为图表加载：{safe_exception_text(exc)}",
+            )
+        )
+        return
+    _apply_dark_plot_theme(figure)
+    chart_col, action_col = st.columns([0.78, 0.22])
+    with chart_col:
+        st.plotly_chart(
+            figure,
+            use_container_width=True,
+            key=f"paper_plotly_{path.stem}",
+            config={"displaylogo": False, "scrollZoom": True, "responsive": True},
         )
         if description:
             st.caption(description)
     with action_col:
         st.write(title)
-        render_artifact_download_button(path, ui_text("Download PNG", "下载 PNG"), f"figure_png_{title}")
-        pdf_path = _pdf_variant(path)
-        if pdf_path.exists():
-            render_artifact_download_button(pdf_path, ui_text("Download PDF", "下载 PDF"), f"figure_pdf_{title}")
+        render_artifact_download_button(
+            path,
+            ui_text("Download chart JSON", "下载图表 JSON"),
+            f"figure_json_{title}",
+        )
 
 
 def paper_vmd_figure_paths() -> list[Path]:
     """Return generated paper VMD decomposition figures."""
-    return sorted((PROJECT_ROOT / "outputs" / "figures").glob("paper_vmd_decomposition_*.png"))
+    return sorted((PROJECT_ROOT / "outputs" / "figures").glob("paper_vmd_decomposition_*.json"))
 
 
 def _safe_figure_token(value: Any) -> str:
@@ -6402,7 +6419,7 @@ def paper_external_contribution_figure_items() -> list[tuple[str, Path]]:
             selected_scale = str(row["SelectedScale"])
             path = figures_dir / (
                 "paper_external_contribution_"
-                f"{_safe_figure_token(target)}_{_safe_figure_token(selected_scale)}.png"
+                f"{_safe_figure_token(target)}_{_safe_figure_token(selected_scale)}.json"
             )
             if path.exists():
                 items.append(
@@ -6426,7 +6443,7 @@ def paper_external_contribution_figure_items() -> list[tuple[str, Path]]:
             ),
             path,
         )
-        for path in sorted(figures_dir.glob("paper_external_contribution_*_*.png"))
+        for path in sorted(figures_dir.glob("paper_external_contribution_*_*.json"))
     ]
 
 

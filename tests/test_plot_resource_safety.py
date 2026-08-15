@@ -65,6 +65,8 @@ class PlotResourceSafetyTests(unittest.TestCase):
         np.testing.assert_allclose(actual, expected.T, rtol=1e-10, atol=1e-10)
 
     def test_high_mode_vmd_figure_uses_a_compact_heatmap(self) -> None:
+        import plotly.graph_objects as go
+
         from src.paper_replication import _create_vmd_decomposition_figure
 
         mode_count = 30
@@ -83,17 +85,10 @@ class PlotResourceSafetyTests(unittest.TestCase):
             "WTI",
             mode_count,
         )
-        try:
-            self.assertLessEqual(len(figure.axes), 3)
-            labels = [
-                tick.get_text()
-                for axis in figure.axes
-                for tick in axis.get_yticklabels()
-            ]
-            self.assertIn("IMF1", labels)
-            self.assertIn("IMF30", labels)
-        finally:
-            plt.close(figure)
+        heatmaps = [trace for trace in figure.data if isinstance(trace, go.Heatmap)]
+        self.assertEqual(len(heatmaps), 1)
+        self.assertIn("IMF1", heatmaps[0].y)
+        self.assertIn("IMF30", heatmaps[0].y)
 
 
 if __name__ == "__main__":

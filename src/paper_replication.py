@@ -18,13 +18,12 @@ import re
 from typing import Any
 import warnings
 
-import matplotlib.dates as mdates
-import matplotlib.pyplot as plt
+import plotly.graph_objects as go
 import numpy as np
 import pandas as pd
+from plotly.subplots import make_subplots
 
 from src.mrgc_selector import run_mrgc_screening, significance_stars
-from src.plot_utils import apply_publication_plot_style, save_figure_pair
 from src.vmd_module import estimate_center_frequency, run_vmd
 
 
@@ -57,24 +56,15 @@ OUTPUT_PATHS = {
     "selected_scale_series": TABLES_DIR / "paper_selected_scale_series.xlsx",
     "vmd_center_frequencies": TABLES_DIR / "paper_vmd_center_frequencies.xlsx",
     "dashboard": TABLES_DIR / "paper_replication_dashboard.xlsx",
-    "price_event_figure": FIGURES_DIR / "paper_price_event.png",
-    "price_event_figure_pdf": FIGURES_DIR / "paper_price_event.pdf",
-    "hht_imf1_figure": FIGURES_DIR / "paper_hht_imf1_frequency.png",
-    "hht_imf1_figure_pdf": FIGURES_DIR / "paper_hht_imf1_frequency.pdf",
-    "scale_figure": FIGURES_DIR / "paper_selected_scale_trend.png",
-    "scale_figure_pdf": FIGURES_DIR / "paper_selected_scale_trend.pdf",
-    "mrgc_figure": FIGURES_DIR / "paper_mrgc_heatmap.png",
-    "mrgc_figure_pdf": FIGURES_DIR / "paper_mrgc_heatmap.pdf",
-    "stats_figure": FIGURES_DIR / "paper_scale_statistics.png",
-    "stats_figure_pdf": FIGURES_DIR / "paper_scale_statistics.pdf",
-    "contribution_figure": FIGURES_DIR / "paper_external_contribution.png",
-    "contribution_figure_pdf": FIGURES_DIR / "paper_external_contribution.pdf",
-    "net_impact_figure": FIGURES_DIR / "paper_net_impacts.png",
-    "net_impact_figure_pdf": FIGURES_DIR / "paper_net_impacts.pdf",
-    "break_figure": FIGURES_DIR / "paper_structural_break_fit.png",
-    "break_figure_pdf": FIGURES_DIR / "paper_structural_break_fit.pdf",
-    "optimal_break_rss_figure": FIGURES_DIR / "paper_optimal_break_rss_profile.png",
-    "optimal_break_rss_figure_pdf": FIGURES_DIR / "paper_optimal_break_rss_profile.pdf",
+    "price_event_figure": FIGURES_DIR / "paper_price_event.json",
+    "hht_imf1_figure": FIGURES_DIR / "paper_hht_imf1_frequency.json",
+    "scale_figure": FIGURES_DIR / "paper_selected_scale_trend.json",
+    "mrgc_figure": FIGURES_DIR / "paper_mrgc_heatmap.json",
+    "stats_figure": FIGURES_DIR / "paper_scale_statistics.json",
+    "contribution_figure": FIGURES_DIR / "paper_external_contribution.json",
+    "net_impact_figure": FIGURES_DIR / "paper_net_impacts.json",
+    "break_figure": FIGURES_DIR / "paper_structural_break_fit.json",
+    "optimal_break_rss_figure": FIGURES_DIR / "paper_optimal_break_rss_profile.json",
 }
 
 DEFAULT_CANDIDATES = ["GPRD", "Gold", "OVX", "DollarIndex", "TNote10Y"]
@@ -1242,47 +1232,11 @@ def _resolve_analysis_variables(
     return targets, candidate_pool
 
 
-def _setup_plot() -> None:
-    """Apply paper-style matplotlib settings."""
-    apply_publication_plot_style(
-        **{
-            "font.size": 11,
-            "axes.titlesize": 14,
-            "axes.labelsize": 12,
-            "xtick.labelsize": 10,
-            "ytick.labelsize": 10,
-            "legend.fontsize": 10,
-            "axes.edgecolor": "#111827",
-            "axes.linewidth": 0.9,
-            "grid.color": "#D9D9D9",
-            "grid.linewidth": 0.5,
-            "grid.alpha": 0.85,
-        }
-    )
-
-
-def _save_fig(fig: plt.Figure, png: Path, pdf: Path) -> None:
-    """Save PNG and PDF figures."""
-    png.parent.mkdir(parents=True, exist_ok=True)
-    for ax in fig.axes:
-        ax.tick_params(axis="both", colors="#111827", width=0.8)
-        for spine in ax.spines.values():
-            spine.set_color("#111827")
-            spine.set_linewidth(0.9)
-    fig.align_labels()
-    fig.tight_layout(pad=1.0)
-    save_figure_pair(fig, png, pdf)
-
 
 def _safe_file_token(value: Any) -> str:
     """Return a filesystem-friendly token for generated figure variants."""
     token = re.sub(r"[^A-Za-z0-9]+", "_", str(value)).strip("_").lower()
     return token or "variable"
-
-
-def _figure_variant_paths(stem: str) -> tuple[Path, Path]:
-    """Return PNG/PDF paths for a dynamic paper figure."""
-    return FIGURES_DIR / f"{stem}.png", FIGURES_DIR / f"{stem}.pdf"
 
 
 def _normalise_series(series: pd.Series) -> pd.Series:
@@ -1330,41 +1284,43 @@ def _normalise_plot_date(value: Any) -> pd.Timestamp | None:
     return timestamp.normalize()
 
 
-def _format_axis_date(timestamp: pd.Timestamp | None) -> str:
-    """Format an axis date label."""
-    return "" if timestamp is None else timestamp.strftime("%Y-%m-%d")
+def _save_plotly_figure(figure: go.Figure, json_path: Path) -> Path:
+    """Persist one Plotly figure as JSON for dynamic page rendering."""
+    json_path = _resolve_project_path(json_path)
+    json_path.parent.mkdir(parents=True, exist_ok=True)
+    json_path.write_text(figure.to_json(), encoding="utf-8")
+    return json_path
 
 
-def _even_date_ticks(
-    start: pd.Timestamp,
-    end: pd.Timestamp,
-    max_ticks: int,
-) -> list[pd.Timestamp]:
-    """Return evenly spaced date ticks that always include start and end."""
-    start = start.normalize()
-    end = end.normalize()
-    if end <= start:
-        return [start]
-    span_days = max(1, (end - start).days)
-    tick_count = max(2, min(max_ticks, span_days + 1))
-    offsets = [round(index * span_days / (tick_count - 1)) for index in range(tick_count)]
-    ticks = [start + pd.Timedelta(days=int(offset)) for offset in offsets]
-    ticks[0] = start
-    ticks[-1] = end
-    unique_ticks: list[pd.Timestamp] = []
-    for tick in ticks:
-        if not unique_ticks or tick != unique_ticks[-1]:
-            unique_ticks.append(tick)
-    return unique_ticks
+def _apply_paper_plot_layout(
+    figure: go.Figure,
+    title: str,
+    x_title: str,
+    y_title: str,
+    height: int = 520,
+) -> go.Figure:
+    """Apply a consistent layout to single-axis paper figures."""
+    figure.update_layout(
+        title=dict(text=title, x=0.0, xanchor="left"),
+        xaxis_title=x_title,
+        yaxis_title=y_title,
+        height=height,
+        margin=dict(l=20, r=20, t=70, b=20),
+        legend=dict(orientation="h", y=1.08),
+        hovermode="x unified",
+    )
+    return figure
 
 
-def _mark_start_end_dates(
-    ax: plt.Axes,
+def _add_start_end_vlines(
+    figure: go.Figure,
     dates: pd.Series,
     start_date: Any | None = None,
     end_date: Any | None = None,
+    row: Any = "all",
+    col: Any = "all",
 ) -> None:
-    """Mark start/end dates and avoid nearby tick-label collisions."""
+    """Mark the displayed sample start and end in a Plotly figure."""
     parsed_dates = pd.to_datetime(dates, errors="coerce").dropna()
     if parsed_dates.empty:
         return
@@ -1378,95 +1334,115 @@ def _mark_start_end_dates(
     label_end = max(data_start, min(label_end, data_end))
     if label_end < label_start:
         label_start, label_end = label_end, label_start
-
-    figure_width = ax.figure.get_size_inches()[0] if ax.figure is not None else 8
-    max_ticks = max(2, min(6, int(figure_width // 1.8)))
-    ticks = _even_date_ticks(label_start, label_end, max_ticks=max_ticks)
-    labels = []
-    for tick in ticks:
-        if tick == label_start:
-            labels.append(f"Start\n{_format_axis_date(tick)}")
-        elif tick == label_end:
-            labels.append(f"End\n{_format_axis_date(tick)}")
-        else:
-            labels.append(tick.strftime("%Y-%m-%d"))
-
-    ax.set_xlim(label_start, label_end)
-    ax.set_xticks(ticks)
-    ax.set_xticklabels(labels, rotation=30, ha="right")
-    ax.tick_params(axis="x", labelsize=10, colors="#111827")
-    ax.axvline(label_start, color="#111827", linestyle=":", linewidth=1.1)
-    ax.axvline(label_end, color="#111827", linestyle=":", linewidth=1.1)
-    ax.annotate(
-        "Start",
-        xy=(label_start, 1.0),
-        xycoords=("data", "axes fraction"),
-        xytext=(3, -8),
-        textcoords="offset points",
-        ha="left",
-        va="top",
-        fontsize=8,
-        color="#111827",
+    figure.add_vline(
+        x=label_start,
+        line=dict(color="#E58A4A", width=1.1, dash="dot"),
+        annotation_text="Start",
+        annotation_position="top left",
+        row=row,
+        col=col,
     )
-    ax.annotate(
-        "End",
-        xy=(label_end, 1.0),
-        xycoords=("data", "axes fraction"),
-        xytext=(-3, -8),
-        textcoords="offset points",
-        ha="right",
-        va="top",
-        fontsize=8,
-        color="#111827",
+    figure.add_vline(
+        x=label_end,
+        line=dict(color="#94A3B8", width=1.1, dash="dot"),
+        annotation_text="End",
+        annotation_position="top right",
+        row=row,
+        col=col,
     )
 
 
-def _plot_selected_scale(scale_df: pd.DataFrame, target: str, effect: dict[str, Any]) -> None:
+def _plot_selected_scale(
+    scale_df: pd.DataFrame,
+    target: str,
+    effect: dict[str, Any],
+) -> None:
     """Plot normalized actual target and selected scale."""
-    _setup_plot()
     column = f"{target}_SelectedScale"
     plot_df = scale_df[["Date", target, column]].dropna().copy()
+    if plot_df.empty:
+        return
     for col in [target, column]:
         plot_df[f"{col}_Normalized"] = _normalise_series(plot_df[col])
-    fig, ax = plt.subplots(figsize=(10, 5))
-    ax.plot(plot_df["Date"], plot_df[f"{target}_Normalized"], label=f"Actual {target}", linewidth=1.4)
-    ax.plot(plot_df["Date"], plot_df[f"{column}_Normalized"], label=f"{target} {effect['SelectedScale']}", linewidth=1.8)
-    ax.axvline(pd.to_datetime(effect["MinimumDate"]), color="#DC2626", linestyle="--", linewidth=1)
-    ax.axvline(pd.to_datetime(effect["MaximumDate"]), color="#334155", linestyle="--", linewidth=1)
-    ax.set_xlabel("Date")
-    ax.set_ylabel("Normalized value")
-    _mark_start_end_dates(
-        ax,
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=plot_df["Date"],
+        y=plot_df[f"{target}_Normalized"],
+        name=f"Actual {target}",
+        line=dict(color="#94A3B8", width=1.4),
+    ))
+    fig.add_trace(go.Scatter(
+        x=plot_df["Date"],
+        y=plot_df[f"{column}_Normalized"],
+        name=f"{target} {effect['SelectedScale']}",
+        line=dict(color="#E58A4A", width=1.8),
+    ))
+    fig.add_vline(
+        x=pd.to_datetime(effect["MinimumDate"]),
+        line=dict(color="#DC2626", width=1, dash="dash"),
+    )
+    fig.add_vline(
+        x=pd.to_datetime(effect["MaximumDate"]),
+        line=dict(color="#334155", width=1, dash="dash"),
+    )
+    _add_start_end_vlines(
+        fig,
         plot_df["Date"],
         start_date=effect.get("EventStartDate", plot_df["Date"].min()),
         end_date=plot_df["Date"].max(),
     )
-    ax.legend(frameon=False)
-    ax.grid(True, color="#D9D9D9", linewidth=0.5, alpha=0.85)
-    _save_fig(fig, OUTPUT_PATHS["scale_figure"], OUTPUT_PATHS["scale_figure_pdf"])
+    _apply_paper_plot_layout(
+        fig,
+        f"{target}: selected scale {effect['SelectedScale']}",
+        "Date",
+        "Normalized value",
+        height=500,
+    )
+    _save_plotly_figure(fig, OUTPUT_PATHS["scale_figure"])
 
 
-def _plot_price_event(data: pd.DataFrame, targets: list[str], event_start_date: Any | None) -> None:
+def _plot_price_event(
+    data: pd.DataFrame,
+    targets: list[str],
+    event_start_date: Any | None,
+) -> None:
     """Plot selected crude-oil prices and the event start."""
-    _setup_plot()
     plot_targets = [target for target in targets if target in data.columns]
     if not plot_targets:
         return
     plot_df = data[["Date", *plot_targets]].dropna(subset=plot_targets, how="all").copy()
     if plot_df.empty:
         return
-    fig, ax = plt.subplots(figsize=(10, 5))
+    fig = go.Figure()
     for target in plot_targets:
-        ax.plot(plot_df["Date"], plot_df[target], label=target, linewidth=1.5)
+        fig.add_trace(go.Scatter(
+            x=plot_df["Date"],
+            y=plot_df[target],
+            name=target,
+            line=dict(width=1.5),
+        ))
     event_date = _normalise_plot_date(event_start_date)
     if event_date is not None:
-        ax.axvline(event_date, color="#DC2626", linestyle="--", linewidth=1.2, label="Event start")
-    ax.set_xlabel("Date")
-    ax.set_ylabel("Price")
-    _mark_start_end_dates(ax, plot_df["Date"], start_date=event_start_date or plot_df["Date"].min(), end_date=plot_df["Date"].max())
-    ax.legend(frameon=False)
-    ax.grid(True, color="#D9D9D9", linewidth=0.5, alpha=0.85)
-    _save_fig(fig, OUTPUT_PATHS["price_event_figure"], OUTPUT_PATHS["price_event_figure_pdf"])
+        fig.add_vline(
+            x=event_date,
+            line=dict(color="#DC2626", width=1.2, dash="dash"),
+            annotation_text="Event start",
+            annotation_position="top left",
+        )
+    _add_start_end_vlines(
+        fig,
+        plot_df["Date"],
+        start_date=event_start_date or plot_df["Date"].min(),
+        end_date=plot_df["Date"].max(),
+    )
+    _apply_paper_plot_layout(
+        fig,
+        "Crude-oil price event chart",
+        "Date",
+        "Price",
+        height=500,
+    )
+    _save_plotly_figure(fig, OUTPUT_PATHS["price_event_figure"])
 
 
 def _plot_vmd_decomposition_figures(
@@ -1476,8 +1452,7 @@ def _plot_vmd_decomposition_figures(
     start_date: Any | None = None,
     end_date: Any | None = None,
 ) -> None:
-    """Save VMD decomposition figures for selected paper variables."""
-    _setup_plot()
+    """Save Plotly VMD decomposition figures for selected paper variables."""
     for variable in list(dict.fromkeys(variables)):
         if variable not in data.columns:
             continue
@@ -1493,60 +1468,59 @@ def _plot_vmd_decomposition_figures(
             continue
         plot_df = pd.concat([series_df[["Date", variable]], imfs], axis=1)
         fig = _create_vmd_decomposition_figure(plot_df, variable, vmd_k)
-        date_axis = fig.axes[1] if vmd_k > 12 else fig.axes[-1]
-        _mark_start_end_dates(
-            date_axis,
+        _add_start_end_vlines(
+            fig,
             plot_df["Date"],
             start_date=start_date or plot_df["Date"].min(),
             end_date=end_date or plot_df["Date"].max(),
         )
-        date_axis.set_xlabel("Date")
-        png, pdf = _figure_variant_paths(f"paper_vmd_decomposition_{_safe_file_token(variable)}")
-        _save_fig(fig, png, pdf)
+        json_path = _figure_variant_paths(
+            f"paper_vmd_decomposition_{_safe_file_token(variable)}"
+        )
+        _save_plotly_figure(fig, json_path)
 
 
 def _create_vmd_decomposition_figure(
     plot_df: pd.DataFrame,
     variable: str,
     vmd_k: int,
-) -> plt.Figure:
-    """Create a readable VMD figure with bounded complexity for high K."""
+) -> go.Figure:
+    """Create a readable dynamic VMD figure with bounded complexity for high K."""
+    dates = pd.to_datetime(plot_df["Date"], errors="coerce")
     if vmd_k <= 12:
         rows = vmd_k + 1
-        fig, axes = plt.subplots(
-            rows,
-            1,
-            figsize=(10, max(5.2, 1.35 * rows)),
-            sharex=True,
+        titles = [variable] + [f"IMF{mode_index}" for mode_index in range(1, vmd_k + 1)]
+        fig = make_subplots(
+            rows=rows,
+            cols=1,
+            shared_xaxes=True,
+            vertical_spacing=0.035,
+            subplot_titles=titles,
         )
-        axes = np.atleast_1d(axes)
-        axes[0].plot(plot_df["Date"], plot_df[variable], color="#111827", linewidth=1.2)
-        axes[0].set_ylabel(variable)
-        axes[0].set_title(f"VMD decomposition of {variable}")
+        fig.add_trace(go.Scatter(
+            x=dates,
+            y=plot_df[variable],
+            name=variable,
+            line=dict(color="#94A3B8", width=1.2),
+        ), row=1, col=1)
         for mode_index in range(1, vmd_k + 1):
             column = f"{variable}_IMF{mode_index}"
-            axes[mode_index].plot(
-                plot_df["Date"],
-                plot_df[column],
-                color="#64748B",
-                linewidth=1.0,
-            )
-            axes[mode_index].set_ylabel(f"IMF{mode_index}")
-        for axis in axes:
-            axis.grid(True, color="#D9D9D9", linewidth=0.5, alpha=0.85)
+            fig.add_trace(go.Scatter(
+                x=dates,
+                y=plot_df[column],
+                name=f"IMF{mode_index}",
+                line=dict(color="#64748B", width=1.0),
+                showlegend=False,
+            ), row=mode_index + 1, col=1)
+        fig.update_yaxes(title_text=variable, row=1, col=1)
+        fig.update_xaxes(title_text="Date", row=rows, col=1)
+        fig.update_layout(
+            title=dict(text=f"VMD decomposition of {variable}", x=0.0, xanchor="left"),
+            height=max(520, 110 * rows),
+            margin=dict(l=20, r=20, t=70, b=20),
+            hovermode="x unified",
+        )
         return fig
-
-    fig, (source_axis, heatmap_axis) = plt.subplots(
-        2,
-        1,
-        figsize=(10, 7.5),
-        gridspec_kw={"height_ratios": [1, 3]},
-        sharex=True,
-    )
-    source_axis.plot(plot_df["Date"], plot_df[variable], color="#111827", linewidth=1.2)
-    source_axis.set_ylabel(variable)
-    source_axis.set_title(f"VMD decomposition of {variable}")
-    source_axis.grid(True, color="#D9D9D9", linewidth=0.5, alpha=0.85)
 
     mode_columns = [f"{variable}_IMF{mode_index}" for mode_index in range(1, vmd_k + 1)]
     mode_matrix = plot_df[mode_columns].to_numpy(dtype=float).T
@@ -1554,23 +1528,38 @@ def _create_vmd_decomposition_figure(
     row_scales = np.nanstd(mode_matrix, axis=1, keepdims=True)
     row_scales[~np.isfinite(row_scales) | (row_scales <= 1e-12)] = 1.0
     normalized_modes = np.clip((mode_matrix - row_means) / row_scales, -3, 3)
-    date_values = mdates.date2num(pd.to_datetime(plot_df["Date"]).to_numpy())
-    image = heatmap_axis.imshow(
-        normalized_modes,
-        aspect="auto",
-        interpolation="nearest",
-        cmap="RdBu_r",
-        vmin=-3,
-        vmax=3,
-        extent=[date_values[0], date_values[-1], vmd_k + 0.5, 0.5],
+    mode_labels = [f"IMF{mode_index}" for mode_index in range(1, vmd_k + 1)]
+    fig = make_subplots(
+        rows=2,
+        cols=1,
+        shared_xaxes=True,
+        vertical_spacing=0.06,
+        row_heights=[0.25, 0.75],
+        subplot_titles=[variable, "Normalized IMF"],
     )
-    tick_modes = np.unique(np.linspace(1, vmd_k, min(8, vmd_k), dtype=int))
-    heatmap_axis.set_yticks(tick_modes)
-    heatmap_axis.set_yticklabels([f"IMF{mode_index}" for mode_index in tick_modes])
-    heatmap_axis.set_ylabel("Normalized IMF")
-    heatmap_axis.xaxis_date()
-    colorbar = fig.colorbar(image, ax=heatmap_axis, pad=0.02)
-    colorbar.set_label("Standard deviations")
+    fig.add_trace(go.Scatter(
+        x=dates,
+        y=plot_df[variable],
+        name=variable,
+        line=dict(color="#94A3B8", width=1.2),
+    ), row=1, col=1)
+    fig.add_trace(go.Heatmap(
+        z=normalized_modes,
+        x=dates,
+        y=mode_labels,
+        colorscale="RdBu_r",
+        zmin=-3,
+        zmax=3,
+        colorbar=dict(title="Standard deviations", thickness=14),
+    ), row=2, col=1)
+    fig.update_yaxes(title_text=variable, row=1, col=1)
+    fig.update_xaxes(title_text="Date", row=2, col=1)
+    fig.update_layout(
+        title=dict(text=f"VMD decomposition of {variable}", x=0.0, xanchor="left"),
+        height=620,
+        margin=dict(l=20, r=20, t=70, b=20),
+        hovermode="x unified",
+    )
     return fig
 
 
@@ -1582,8 +1571,7 @@ def _plot_hht_imf1_frequency(
     end_date: Any | None = None,
 ) -> None:
     """Plot normalized HHT instantaneous frequency for target IMF1 components."""
-    _setup_plot()
-    rows = []
+    rows: list[pd.DataFrame] = []
     for target in targets:
         if target not in data.columns:
             continue
@@ -1601,103 +1589,165 @@ def _plot_hht_imf1_frequency(
         if len(freq) == 0:
             continue
         freq_series = pd.Series(freq, dtype=float)
-        rows.append(
-            pd.DataFrame(
-                {
-                    "Date": series_df["Date"].iloc[1 : len(freq) + 1].to_numpy(),
-                    "Target": target,
-                    "NormalizedFrequency": _normalise_series(freq_series).to_numpy(),
-                }
-            )
-        )
+        rows.append(pd.DataFrame({
+            "Date": series_df["Date"].iloc[1 : len(freq) + 1].to_numpy(),
+            "Target": target,
+            "NormalizedFrequency": _normalise_series(freq_series).to_numpy(),
+        }))
     if not rows:
         return
     plot_df = pd.concat(rows, ignore_index=True)
-    fig, ax = plt.subplots(figsize=(10, 5))
+    fig = go.Figure()
     for target, target_df in plot_df.groupby("Target"):
-        ax.plot(target_df["Date"], target_df["NormalizedFrequency"], label=f"{target} IMF1", linewidth=1.2)
+        fig.add_trace(go.Scatter(
+            x=target_df["Date"],
+            y=target_df["NormalizedFrequency"],
+            name=f"{target} IMF1",
+            line=dict(width=1.2),
+        ))
     event_date = _normalise_plot_date(event_start_date)
     if event_date is not None:
-        ax.axvline(event_date, color="#DC2626", linestyle="--", linewidth=1.0, label="Event start")
-    ax.set_xlabel("Date")
-    ax.set_ylabel("Normalized instantaneous frequency")
-    _mark_start_end_dates(
-        ax,
+        fig.add_vline(
+            x=event_date,
+            line=dict(color="#DC2626", width=1.0, dash="dash"),
+            annotation_text="Event start",
+            annotation_position="top left",
+        )
+    _add_start_end_vlines(
+        fig,
         plot_df["Date"],
         start_date=event_start_date or plot_df["Date"].min(),
         end_date=end_date or plot_df["Date"].max(),
     )
-    ax.legend(frameon=False)
-    ax.grid(True, color="#D9D9D9", linewidth=0.5, alpha=0.85)
-    _save_fig(fig, OUTPUT_PATHS["hht_imf1_figure"], OUTPUT_PATHS["hht_imf1_figure_pdf"])
+    _apply_paper_plot_layout(
+        fig,
+        "HHT IMF1 instantaneous frequency",
+        "Date",
+        "Normalized instantaneous frequency",
+        height=520,
+    )
+    _save_plotly_figure(fig, OUTPUT_PATHS["hht_imf1_figure"])
 
 
-def _plot_selected_scale_panel(items: list[tuple[str, pd.DataFrame, dict[str, Any]]]) -> None:
+def _plot_selected_scale_panel(
+    items: list[tuple[str, pd.DataFrame, dict[str, Any]]],
+) -> None:
     """Plot normalized actual prices and selected scales for all targets."""
-    _setup_plot()
     items = [item for item in items if not item[1].empty]
     if not items:
         return
-    fig, axes = plt.subplots(len(items), 1, figsize=(10, max(5, 4.2 * len(items))), sharex=False)
-    axes = np.atleast_1d(axes)
-    for ax, (target, scale_df, effect) in zip(axes, items):
+    fig = make_subplots(
+        rows=len(items),
+        cols=1,
+        shared_xaxes=False,
+        vertical_spacing=0.07,
+        subplot_titles=[
+            f"{target}: selected scale {effect['SelectedScale']}"
+            for target, _, effect in items
+        ],
+    )
+    for index, (target, scale_df, effect) in enumerate(items, start=1):
         column = f"{target}_SelectedScale"
         plot_df = scale_df[["Date", target, column]].dropna().copy()
         if plot_df.empty:
             continue
-        ax.plot(plot_df["Date"], _normalise_series(plot_df[target]), label=f"Actual {target}", linewidth=1.3)
-        ax.plot(
-            plot_df["Date"],
-            _normalise_series(plot_df[column]),
-            label=f"{target} {effect['SelectedScale']}",
-            linewidth=1.6,
+        fig.add_trace(go.Scatter(
+            x=plot_df["Date"],
+            y=_normalise_series(plot_df[target]),
+            name=f"Actual {target}",
+            line=dict(color="#94A3B8", width=1.3),
+        ), row=index, col=1)
+        fig.add_trace(go.Scatter(
+            x=plot_df["Date"],
+            y=_normalise_series(plot_df[column]),
+            name=f"{target} {effect['SelectedScale']}",
+            line=dict(color="#E58A4A", width=1.6),
+        ), row=index, col=1)
+        fig.add_vline(
+            x=pd.to_datetime(effect["MinimumDate"]),
+            line=dict(color="#DC2626", width=1, dash="dash"),
+            row=index,
+            col=1,
         )
-        ax.axvline(pd.to_datetime(effect["MinimumDate"]), color="#DC2626", linestyle="--", linewidth=1)
-        ax.axvline(pd.to_datetime(effect["MaximumDate"]), color="#334155", linestyle="--", linewidth=1)
-        ax.set_title(f"{target}: selected scale {effect['SelectedScale']}")
-        ax.set_ylabel("Normalized value")
-        _mark_start_end_dates(
-            ax,
+        fig.add_vline(
+            x=pd.to_datetime(effect["MaximumDate"]),
+            line=dict(color="#334155", width=1, dash="dash"),
+            row=index,
+            col=1,
+        )
+        _add_start_end_vlines(
+            fig,
             plot_df["Date"],
             start_date=effect.get("EventStartDate", plot_df["Date"].min()),
             end_date=plot_df["Date"].max(),
+            row=index,
+            col=1,
         )
-        ax.legend(frameon=False)
-        ax.grid(True, color="#D9D9D9", linewidth=0.5, alpha=0.85)
-    axes[-1].set_xlabel("Date")
-    _save_fig(fig, OUTPUT_PATHS["scale_figure"], OUTPUT_PATHS["scale_figure_pdf"])
+        fig.update_yaxes(title_text="Normalized value", row=index, col=1)
+    fig.update_xaxes(title_text="Date", row=len(items), col=1)
+    fig.update_layout(
+        height=max(500, 400 * len(items)),
+        margin=dict(l=20, r=20, t=70, b=20),
+        legend=dict(orientation="h", y=1.04),
+        hovermode="x unified",
+    )
+    _save_plotly_figure(fig, OUTPUT_PATHS["scale_figure"])
 
 
 def _plot_scale_statistics(stats: pd.DataFrame) -> None:
     """Plot variance contribution and correlation by IMF."""
-    _setup_plot()
     if stats.empty:
         return
     groups = list(stats.groupby("Target")) if "Target" in stats.columns else [("Target", stats)]
-    fig, axes = plt.subplots(len(groups), 1, figsize=(9, max(5, 4.2 * len(groups))), sharex=False)
-    axes = np.atleast_1d(axes)
-    for ax1, (target, group) in zip(axes, groups):
+    fig = make_subplots(
+        rows=len(groups),
+        cols=1,
+        shared_xaxes=False,
+        vertical_spacing=0.10,
+        subplot_titles=[str(target) for target, _ in groups],
+        specs=[[{"secondary_y": True}] for _ in groups],
+    )
+    for index, (target, group) in enumerate(groups, start=1):
         labels = group["IMF"].astype(str).tolist()
-        x = np.arange(len(labels))
-        ax1.bar(x - 0.18, group["VarianceContributionPercent"], width=0.36, label="Variance contribution (%)", color="#94A3B8")
-        ax2 = ax1.twinx()
-        ax2.bar(x + 0.18, group["CorrelationWithOriginal"], width=0.36, label="Correlation", color="#DC2626", alpha=0.75)
-        ax1.set_xticks(x)
-        ax1.set_xticklabels(labels)
-        ax1.set_xlabel("IMF")
-        ax1.set_ylabel("Variance contribution (%)")
-        ax2.set_ylabel("Correlation")
-        ax1.set_title(str(target))
-        ax1.grid(True, axis="y", color="#D9D9D9", linewidth=0.5, alpha=0.85)
-        lines1, labels1 = ax1.get_legend_handles_labels()
-        lines2, labels2 = ax2.get_legend_handles_labels()
-        ax1.legend(lines1 + lines2, labels1 + labels2, frameon=False, loc="upper left")
-    _save_fig(fig, OUTPUT_PATHS["stats_figure"], OUTPUT_PATHS["stats_figure_pdf"])
+        fig.add_trace(go.Bar(
+            x=labels,
+            y=pd.to_numeric(group["VarianceContributionPercent"], errors="coerce"),
+            name="Variance contribution (%)",
+            offsetgroup=0,
+            marker_color="#94A3B8",
+        ), row=index, col=1, secondary_y=False)
+        fig.add_trace(go.Bar(
+            x=labels,
+            y=pd.to_numeric(group["CorrelationWithOriginal"], errors="coerce"),
+            name="Correlation",
+            offsetgroup=1,
+            marker_color="#DC2626",
+            opacity=0.75,
+        ), row=index, col=1, secondary_y=True)
+        fig.update_yaxes(
+            title_text="Variance contribution (%)",
+            row=index,
+            col=1,
+            secondary_y=False,
+        )
+        fig.update_yaxes(
+            title_text="Correlation",
+            row=index,
+            col=1,
+            secondary_y=True,
+        )
+    fig.update_xaxes(title_text="IMF", row=len(groups), col=1)
+    fig.update_layout(
+        barmode="group",
+        height=max(500, 430 * len(groups)),
+        margin=dict(l=20, r=20, t=70, b=20),
+        legend=dict(orientation="h", y=1.04),
+    )
+    _save_plotly_figure(fig, OUTPUT_PATHS["stats_figure"])
 
 
 def _plot_mrgc_heatmap(screening: pd.DataFrame) -> None:
     """Plot MRGC retained/dropped heatmap for candidate variables and levels."""
-    _setup_plot()
     if screening.empty:
         return
     index_columns = ["Target", "CandidateVariable"] if "Target" in screening.columns else ["CandidateVariable"]
@@ -1717,27 +1767,42 @@ def _plot_mrgc_heatmap(screening: pd.DataFrame) -> None:
         key=lambda value: int(value.replace("IMF", "")),
     )
     pivot = pivot.reindex(columns=["Original", *imf_levels], fill_value=0)
-    fig, ax = plt.subplots(figsize=(9, max(4, 0.45 * len(pivot) + 1.5)))
-    image = ax.imshow(pivot.to_numpy(dtype=float), cmap="Reds", vmin=0, vmax=1, aspect="auto")
-    ax.set_xticks(np.arange(len(pivot.columns)))
-    ax.set_xticklabels(pivot.columns)
-    ax.set_yticks(np.arange(len(pivot.index)))
     if isinstance(pivot.index, pd.MultiIndex):
-        ax.set_yticklabels([f"{target} | {variable}" for target, variable in pivot.index])
+        row_labels = [f"{target} | {variable}" for target, variable in pivot.index]
     else:
-        ax.set_yticklabels(pivot.index)
-    ax.set_xlabel("Resolution level")
-    ax.set_ylabel("Candidate variable")
-    for i in range(len(pivot.index)):
-        for j in range(len(pivot.columns)):
-            ax.text(j, i, "Yes" if pivot.iloc[i, j] else "No", ha="center", va="center", color="#111827", fontsize=8)
-    fig.colorbar(image, ax=ax, fraction=0.03, pad=0.02, label="Retained")
-    _save_fig(fig, OUTPUT_PATHS["mrgc_figure"], OUTPUT_PATHS["mrgc_figure_pdf"])
+        row_labels = [str(item) for item in pivot.index]
+    z = pivot.to_numpy(dtype=float)
+    fig = go.Figure(go.Heatmap(
+        z=z,
+        x=pivot.columns,
+        y=row_labels,
+        colorscale="Reds",
+        zmin=0,
+        zmax=1,
+        colorbar=dict(title="Retained"),
+    ))
+    for row_index, row_label in enumerate(row_labels):
+        for col_index, column_label in enumerate(pivot.columns):
+            retained = bool(pivot.iloc[row_index, col_index])
+            fig.add_annotation(
+                x=column_label,
+                y=row_label,
+                text="Yes" if retained else "No",
+                showarrow=False,
+                font=dict(color="#FFFFFF" if retained else "#D6D6D6", size=11),
+            )
+    fig.update_layout(
+        title=dict(text="MRGC retained variable heatmap", x=0.0, xanchor="left"),
+        xaxis_title="Resolution level",
+        yaxis_title="Candidate variable",
+        height=max(420, 42 * len(row_labels) + 120),
+        margin=dict(l=20, r=20, t=70, b=20),
+    )
+    _save_plotly_figure(fig, OUTPUT_PATHS["mrgc_figure"])
 
 
 def _plot_contributions(contribution: pd.DataFrame) -> None:
     """Plot external relative contribution weights."""
-    _setup_plot()
     if contribution.empty:
         return
     groups = list(contribution.groupby("Target")) if "Target" in contribution.columns else [("Target", contribution)]
@@ -1748,41 +1813,52 @@ def _plot_contributions(contribution: pd.DataFrame) -> None:
             else "SelectedScale"
         )
         plot_df = group.sort_values("ExternalRelativeWeight", ascending=False).copy()
-        fig_width = max(9.5, 0.72 * len(plot_df) + 3.0)
-        fig, ax = plt.subplots(figsize=(fig_width, 5.2))
-        x = np.arange(len(plot_df))
-        ax.bar(
-            x,
-            pd.to_numeric(plot_df["ExternalRelativeWeight"], errors="coerce"),
-            color="#64748B",
-            width=0.68,
+        fig = go.Figure(go.Bar(
+            x=plot_df["ExternalVariable"].astype(str),
+            y=pd.to_numeric(plot_df["ExternalRelativeWeight"], errors="coerce"),
+            marker_color="#64748B",
+        ))
+        _apply_paper_plot_layout(
+            fig,
+            f"{target} {selected_scale} external relative contribution",
+            "External variable",
+            "External relative weight (%)",
+            height=520,
         )
-        ax.set_xticks(x)
-        ax.set_xticklabels(plot_df["ExternalVariable"].astype(str), rotation=35, ha="right")
-        ax.set_xlabel("External variable")
-        ax.set_ylabel("External relative weight (%)")
-        ax.set_title(f"{target} {selected_scale} external relative contribution")
-        ax.grid(True, axis="y", color="#D9D9D9", linewidth=0.5, alpha=0.85)
-        png, pdf = _figure_variant_paths(
+        fig.update_xaxes(tickangle=35)
+        json_path = _figure_variant_paths(
             f"paper_external_contribution_{_safe_file_token(target)}_{_safe_file_token(selected_scale)}"
         )
-        _save_fig(fig, png, pdf)
+        _save_plotly_figure(fig, json_path)
 
-    fig, axes = plt.subplots(len(groups), 1, figsize=(9.5, max(5, 3.4 * len(groups))), sharex=False)
-    axes = np.atleast_1d(axes)
-    for ax, (target, group) in zip(axes, groups):
+    fig = make_subplots(
+        rows=len(groups),
+        cols=1,
+        shared_xaxes=False,
+        vertical_spacing=0.08,
+        subplot_titles=[str(target) for target, _ in groups],
+    )
+    for index, (target, group) in enumerate(groups, start=1):
         plot_df = group.sort_values("ExternalRelativeWeight", ascending=True)
-        ax.barh(plot_df["ExternalVariable"], plot_df["ExternalRelativeWeight"], color="#64748B")
-        ax.set_xlabel("External relative weight (%)")
-        ax.set_ylabel("External variable")
-        ax.set_title(str(target))
-        ax.grid(True, axis="x", color="#D9D9D9", linewidth=0.5, alpha=0.85)
-    _save_fig(fig, OUTPUT_PATHS["contribution_figure"], OUTPUT_PATHS["contribution_figure_pdf"])
+        fig.add_trace(go.Bar(
+            x=pd.to_numeric(plot_df["ExternalRelativeWeight"], errors="coerce"),
+            y=plot_df["ExternalVariable"].astype(str),
+            orientation="h",
+            marker_color="#64748B",
+            name=str(target),
+        ), row=index, col=1)
+        fig.update_xaxes(title_text="External relative weight (%)", row=index, col=1)
+        fig.update_yaxes(title_text="External variable", row=index, col=1)
+    fig.update_layout(
+        height=max(500, 340 * len(groups)),
+        margin=dict(l=20, r=20, t=70, b=20),
+        showlegend=False,
+    )
+    _save_plotly_figure(fig, OUTPUT_PATHS["contribution_figure"])
 
 
 def _plot_net_impacts(net_impacts: pd.DataFrame) -> None:
     """Plot narrow and broad net impacts."""
-    _setup_plot()
     if net_impacts.empty:
         return
     labels = ["NarrowImpact", "BroadImpact", "NEI"]
@@ -1790,59 +1866,192 @@ def _plot_net_impacts(net_impacts: pd.DataFrame) -> None:
         "Target",
         pd.Series([f"Target {idx + 1}" for idx in range(len(net_impacts))]),
     ).astype(str).tolist()
-    x = np.arange(len(target_labels))
-    width = 0.24
-    fig, ax = plt.subplots(figsize=(8.5, 4.8))
-    for offset, label, color in zip([-width, 0, width], labels, ["#DC2626", "#64748B", "#CBD5E1"]):
-        ax.bar(x + offset, pd.to_numeric(net_impacts[label], errors="coerce"), width=width, label=label, color=color)
-    ax.set_xticks(x)
-    ax.set_xticklabels(target_labels)
-    ax.set_ylabel("Net impact")
-    ax.legend(frameon=False)
-    ax.grid(True, axis="y", color="#D9D9D9", linewidth=0.5, alpha=0.85)
-    _save_fig(fig, OUTPUT_PATHS["net_impact_figure"], OUTPUT_PATHS["net_impact_figure_pdf"])
+    fig = go.Figure()
+    for label, color in zip(labels, ["#DC2626", "#64748B", "#CBD5E1"]):
+        fig.add_trace(go.Bar(
+            x=target_labels,
+            y=pd.to_numeric(net_impacts[label], errors="coerce"),
+            name=label,
+            marker_color=color,
+        ))
+    _apply_paper_plot_layout(
+        fig,
+        "Narrow and broad net impacts",
+        "Target",
+        "Net impact",
+        height=480,
+    )
+    fig.update_layout(barmode="group")
+    _save_plotly_figure(fig, OUTPUT_PATHS["net_impact_figure"])
 
 
-def _plot_break_fit(fit_df: pd.DataFrame, break_summary: pd.DataFrame, target: str) -> None:
+def _plot_break_fit(
+    fit_df: pd.DataFrame,
+    break_summary: pd.DataFrame,
+    target: str,
+) -> None:
     """Plot fixed-break trend fit."""
-    _setup_plot()
     if fit_df.empty:
         return
-    value_col = [column for column in fit_df.columns if column.endswith("_SelectedScale")][0]
+    value_cols = [column for column in fit_df.columns if column.endswith("_SelectedScale")]
+    if not value_cols:
+        return
+    value_col = value_cols[0]
     break_date = pd.to_datetime(break_summary["BreakDate"].iloc[0])
-    fig, ax = plt.subplots(figsize=(10, 5))
-    ax.plot(fit_df["Date"], fit_df[value_col], label=f"{target} selected scale", linewidth=1.3)
-    ax.plot(fit_df["Date"], fit_df["BreakModelFit"], label="Break-model fit", linewidth=1.5)
-    ax.axvline(break_date, color="#DC2626", linestyle="--", linewidth=1)
-    ax.set_xlabel("Date")
-    ax.set_ylabel("Selected-scale value")
-    _mark_start_end_dates(ax, fit_df["Date"], start_date=break_date, end_date=fit_df["Date"].max())
-    ax.legend(frameon=False)
-    ax.grid(True, color="#D9D9D9", linewidth=0.5, alpha=0.85)
-    _save_fig(fig, OUTPUT_PATHS["break_figure"], OUTPUT_PATHS["break_figure_pdf"])
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=fit_df["Date"],
+        y=fit_df[value_col],
+        name=f"{target} selected scale",
+        line=dict(color="#94A3B8", width=1.3),
+    ))
+    fig.add_trace(go.Scatter(
+        x=fit_df["Date"],
+        y=fit_df["BreakModelFit"],
+        name="Break-model fit",
+        line=dict(color="#E58A4A", width=1.5),
+    ))
+    fig.add_vline(
+        x=break_date,
+        line=dict(color="#DC2626", width=1, dash="dash"),
+    )
+    _add_start_end_vlines(
+        fig,
+        fit_df["Date"],
+        start_date=break_date,
+        end_date=fit_df["Date"].max(),
+    )
+    _apply_paper_plot_layout(
+        fig,
+        f"{target}: event-start trend-break fit",
+        "Date",
+        "Selected-scale value",
+        height=500,
+    )
+    _save_plotly_figure(fig, OUTPUT_PATHS["break_figure"])
 
 
-def _plot_break_fit_panel(items: list[tuple[str, pd.DataFrame, pd.DataFrame]]) -> None:
+def _plot_break_fit_panel(
+    items: list[tuple[str, pd.DataFrame, pd.DataFrame]],
+) -> None:
     """Plot fixed-break trend fits for all selected targets."""
-    _setup_plot()
     items = [item for item in items if not item[1].empty and not item[2].empty]
     if not items:
         return
-    fig, axes = plt.subplots(len(items), 1, figsize=(10, max(5, 4.2 * len(items))), sharex=False)
-    axes = np.atleast_1d(axes)
-    for ax, (target, fit_df, break_summary) in zip(axes, items):
-        value_col = [column for column in fit_df.columns if column.endswith("_SelectedScale")][0]
+    fig = make_subplots(
+        rows=len(items),
+        cols=1,
+        shared_xaxes=False,
+        vertical_spacing=0.07,
+        subplot_titles=[f"{target}: event-start trend-break fit" for target, _, _ in items],
+    )
+    for index, (target, fit_df, break_summary) in enumerate(items, start=1):
+        value_cols = [column for column in fit_df.columns if column.endswith("_SelectedScale")]
+        if not value_cols:
+            continue
+        value_col = value_cols[0]
         break_date = pd.to_datetime(break_summary["BreakDate"].iloc[0])
-        ax.plot(fit_df["Date"], fit_df[value_col], label=f"{target} selected scale", linewidth=1.3)
-        ax.plot(fit_df["Date"], fit_df["BreakModelFit"], label="Break-model fit", linewidth=1.5)
-        ax.axvline(break_date, color="#DC2626", linestyle="--", linewidth=1)
-        ax.set_title(f"{target}: event-start trend-break fit")
-        ax.set_ylabel("Selected-scale value")
-        _mark_start_end_dates(ax, fit_df["Date"], start_date=break_date, end_date=fit_df["Date"].max())
-        ax.legend(frameon=False)
-        ax.grid(True, color="#D9D9D9", linewidth=0.5, alpha=0.85)
-    axes[-1].set_xlabel("Date")
-    _save_fig(fig, OUTPUT_PATHS["break_figure"], OUTPUT_PATHS["break_figure_pdf"])
+        fig.add_trace(go.Scatter(
+            x=fit_df["Date"],
+            y=fit_df[value_col],
+            name=f"{target} selected scale",
+            line=dict(color="#94A3B8", width=1.3),
+        ), row=index, col=1)
+        fig.add_trace(go.Scatter(
+            x=fit_df["Date"],
+            y=fit_df["BreakModelFit"],
+            name="Break-model fit",
+            line=dict(color="#E58A4A", width=1.5),
+        ), row=index, col=1)
+        fig.add_vline(
+            x=break_date,
+            line=dict(color="#DC2626", width=1, dash="dash"),
+            row=index,
+            col=1,
+        )
+        _add_start_end_vlines(
+            fig,
+            fit_df["Date"],
+            start_date=break_date,
+            end_date=fit_df["Date"].max(),
+            row=index,
+            col=1,
+        )
+        fig.update_yaxes(title_text="Selected-scale value", row=index, col=1)
+    fig.update_xaxes(title_text="Date", row=len(items), col=1)
+    fig.update_layout(
+        height=max(500, 400 * len(items)),
+        margin=dict(l=20, r=20, t=70, b=20),
+        legend=dict(orientation="h", y=1.04),
+        hovermode="x unified",
+    )
+    _save_plotly_figure(fig, OUTPUT_PATHS["break_figure"])
+
+
+def _plot_optimal_break_rss_profiles(profile_df: pd.DataFrame) -> None:
+    """Plot optimal-break RSS profiles for selected targets."""
+    if profile_df.empty:
+        return
+    groups = list(profile_df.groupby("Target"))
+    fig = make_subplots(
+        rows=len(groups),
+        cols=1,
+        shared_xaxes=False,
+        vertical_spacing=0.07,
+        subplot_titles=[f"{target}: optimal-break RSS profile" for target, _ in groups],
+    )
+    for index, (target, group) in enumerate(groups, start=1):
+        group = group.sort_values("CandidateBreakDate")
+        fig.add_trace(go.Scatter(
+            x=group["CandidateBreakDate"],
+            y=group["BreakModelRSS"],
+            name="Break-model RSS",
+            line=dict(color="#64748B", width=1.4),
+        ), row=index, col=1)
+        event_date = _normalise_plot_date(
+            group["EventStartDate"].dropna().iloc[0] if group["EventStartDate"].notna().any() else None
+        )
+        optimal_date = _normalise_plot_date(
+            group["OptimalBreakDate"].dropna().iloc[0] if group["OptimalBreakDate"].notna().any() else None
+        )
+        if event_date is not None:
+            fig.add_vline(
+                x=event_date,
+                line=dict(color="#DC2626", width=1, dash="dash"),
+                row=index,
+                col=1,
+            )
+        if optimal_date is not None:
+            fig.add_vline(
+                x=optimal_date,
+                line=dict(color="#E58A4A", width=1, dash="dot"),
+                row=index,
+                col=1,
+            )
+        _add_start_end_vlines(
+            fig,
+            group["CandidateBreakDate"],
+            start_date=group["CandidateBreakDate"].min(),
+            end_date=group["CandidateBreakDate"].max(),
+            row=index,
+            col=1,
+        )
+        fig.update_yaxes(title_text="RSS", row=index, col=1)
+    fig.update_xaxes(title_text="Candidate break date", row=len(groups), col=1)
+    fig.update_layout(
+        height=max(500, 400 * len(groups)),
+        margin=dict(l=20, r=20, t=70, b=20),
+        legend=dict(orientation="h", y=1.04),
+        hovermode="x unified",
+    )
+    _save_plotly_figure(fig, OUTPUT_PATHS["optimal_break_rss_figure"])
+
+
+def _figure_variant_paths(stem: str) -> Path:
+    """Return the JSON path for one dynamic paper figure."""
+    return FIGURES_DIR / f"{stem}.json"
+
+
 
 
 def _break_model_rss(y: np.ndarray, t: np.ndarray, break_index: int) -> float:
@@ -1885,37 +2094,6 @@ def _optimal_break_rss_profile(scale_df: pd.DataFrame, target: str, effect: dict
     profile["OptimalBreakDate"] = best_date
     profile["IsOptimalBreak"] = pd.to_datetime(profile["CandidateBreakDate"]).eq(pd.to_datetime(best_date))
     return profile
-
-
-def _plot_optimal_break_rss_profiles(profile_df: pd.DataFrame) -> None:
-    """Plot optimal-break RSS profiles for selected targets."""
-    _setup_plot()
-    if profile_df.empty:
-        return
-    groups = list(profile_df.groupby("Target"))
-    fig, axes = plt.subplots(len(groups), 1, figsize=(10, max(5, 4.0 * len(groups))), sharex=False)
-    axes = np.atleast_1d(axes)
-    for ax, (target, group) in zip(axes, groups):
-        group = group.sort_values("CandidateBreakDate")
-        ax.plot(group["CandidateBreakDate"], group["BreakModelRSS"], color="#64748B", linewidth=1.4, label="Break-model RSS")
-        event_date = _normalise_plot_date(group["EventStartDate"].dropna().iloc[0] if group["EventStartDate"].notna().any() else None)
-        optimal_date = _normalise_plot_date(group["OptimalBreakDate"].dropna().iloc[0] if group["OptimalBreakDate"].notna().any() else None)
-        if event_date is not None:
-            ax.axvline(event_date, color="#DC2626", linestyle="--", linewidth=1.0, label="Event start")
-        if optimal_date is not None:
-            ax.axvline(optimal_date, color="#111827", linestyle=":", linewidth=1.0, label="Optimal break")
-        ax.set_title(f"{target}: optimal-break RSS profile")
-        ax.set_ylabel("RSS")
-        _mark_start_end_dates(
-            ax,
-            group["CandidateBreakDate"],
-            start_date=group["CandidateBreakDate"].min(),
-            end_date=group["CandidateBreakDate"].max(),
-        )
-        ax.legend(frameon=False)
-        ax.grid(True, color="#D9D9D9", linewidth=0.5, alpha=0.85)
-    axes[-1].set_xlabel("Candidate break date")
-    _save_fig(fig, OUTPUT_PATHS["optimal_break_rss_figure"], OUTPUT_PATHS["optimal_break_rss_figure_pdf"])
 
 
 def _save_dashboard(
