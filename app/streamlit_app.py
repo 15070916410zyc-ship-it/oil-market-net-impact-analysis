@@ -7076,6 +7076,30 @@ def _apply_dark_plot_theme(figure: Any) -> Any:
     return figure
 
 
+def _forecast_chart_default_range(
+    history_dates: Any,
+    forecast_dates: Any,
+    minimum_forecast_share: float = 0.40,
+) -> tuple[pd.Timestamp, pd.Timestamp]:
+    """Return an initial date range where the forecast occupies enough width."""
+    if not 0.0 < minimum_forecast_share < 1.0:
+        raise ValueError("minimum_forecast_share must be between 0 and 1.")
+    history_index = pd.DatetimeIndex(pd.to_datetime(history_dates, errors="coerce")).dropna()
+    forecast_index = pd.DatetimeIndex(pd.to_datetime(forecast_dates, errors="coerce")).dropna()
+    if history_index.empty or forecast_index.empty:
+        raise ValueError("History and forecast dates are required for the chart range.")
+
+    history_start = pd.Timestamp(history_index.min())
+    history_end = pd.Timestamp(history_index.max())
+    forecast_end = pd.Timestamp(forecast_index.max())
+    forecast_span = max(forecast_end - history_end, pd.Timedelta(days=1))
+    maximum_history_span = forecast_span * (
+        (1.0 - minimum_forecast_share) / minimum_forecast_share
+    )
+    visible_start = max(history_start, history_end - maximum_history_span)
+    return pd.Timestamp(visible_start), forecast_end
+
+
 def _render_quick_mode_results(result: dict[str, Any]) -> None:
     """Render quick-mode outputs with interactive paper-channel charts."""
     import plotly.express as px
@@ -7893,18 +7917,40 @@ def render_oil_price_forecast_panel() -> None:
         line=dict(color="#E58A4A", width=2.5, dash="dash"),
         hovertemplate="%{x|%Y-%m-%d}<br>$%{y:.2f}<extra></extra>",
     ))
+    visible_start, visible_end = _forecast_chart_default_range(
+        history["Date"],
+        forecast["Date"],
+    )
     figure.update_layout(
         title=dict(
             text=ui_text(f"{target} forecast and prediction intervals", f"{target} 价格预测与预测区间"),
             x=0.0,
             xanchor="left",
         ),
-        height=520, margin=dict(l=12, r=12, t=78, b=10), hovermode="x unified",
+        height=560, margin=dict(l=12, r=12, t=78, b=10), hovermode="x unified",
         legend=dict(orientation="h", y=1.04, x=0), xaxis_title=None,
         yaxis_title=ui_text("USD / barrel", "美元/桶"),
+        dragmode="pan",
+        uirevision=f"{target}-{int(horizon)}-{int(history_months)}",
     )
     _apply_dark_plot_theme(figure)
-    st.plotly_chart(figure, use_container_width=True, key=f"{target.lower()}_price_forecast_chart")
+    figure.update_xaxes(
+        range=[visible_start, visible_end],
+        fixedrange=False,
+        rangeslider=dict(
+            visible=True,
+            thickness=0.09,
+            bgcolor="#1B1B1B",
+            bordercolor="#4A4A4A",
+            borderwidth=1,
+        ),
+    )
+    st.plotly_chart(
+        figure,
+        use_container_width=True,
+        key=f"{target.lower()}_price_forecast_chart",
+        config={"scrollZoom": True, "displaylogo": False, "responsive": True},
+    )
 
     if selected_intervals:
         final_forecast = forecast.iloc[-1]
