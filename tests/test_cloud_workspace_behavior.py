@@ -146,6 +146,9 @@ class CloudWorkspaceBehaviorTests(unittest.TestCase):
         self.assertIn("tickangle=0", renderer)
         self.assertIn("hamilton_crisis_display_window", renderer)
         self.assertIn("Date (daily)", renderer)
+        self.assertIn("chart_width", renderer)
+        self.assertIn("overflow-x:auto", renderer)
+        self.assertIn("st.iframe", renderer)
         self.assertNotIn('tickmode="auto"', renderer)
 
     def test_analysis_results_are_inline_not_a_top_level_tab(self) -> None:
