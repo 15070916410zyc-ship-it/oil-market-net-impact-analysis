@@ -5390,17 +5390,20 @@ def display_variable_pool_update_result(summary: dict[str, Any]) -> None:
 def quality_filtered_explanatory_variables(
     requested_variables: list[str],
     target_variables: list[str],
+    minimum_coverage: float | None = None,
 ) -> tuple[list[str], list[str]]:
     """Keep only explanatory variables that passed the latest pool quality filter."""
     quality = load_excel_if_exists(PATHS["variable_pool_quality_report"])
     if quality is None or quality.empty or "Variable" not in quality.columns:
         return requested_variables, []
-    kept_variables = set(
-        quality.loc[
-            quality.get("Action", pd.Series(index=quality.index, dtype=str)).astype(str).eq("Kept"),
-            "Variable",
-        ].astype(str)
-    )
+    passes_quality = quality.get(
+        "Action",
+        pd.Series(index=quality.index, dtype=str),
+    ).astype(str).eq("Kept")
+    if minimum_coverage is not None and "Coverage" in quality.columns:
+        coverage = pd.to_numeric(quality["Coverage"], errors="coerce")
+        passes_quality &= coverage.ge(float(minimum_coverage))
+    kept_variables = set(quality.loc[passes_quality, "Variable"].astype(str))
     target_set = set(target_variables)
     kept = [
         variable
@@ -5521,6 +5524,7 @@ def run_paper_replication_setup_workflow(
         protected_variables=options.get("paper_target_variables"),
         extra_registry_entries=options.get("api_catalog_registry_entries"),
         download_workers=refresh_strategy["download_workers"],
+        drop_below_coverage=options.get("analysis_mode") == "quick",
     )
     variable_pool_summary = summarize_variable_pool_update(
         required_start_date=paper_sample_start_text,
@@ -5560,6 +5564,11 @@ def run_paper_replication_setup_workflow(
     filtered_explanatory, dropped_explanatory = quality_filtered_explanatory_variables(
         requested_explanatory,
         target_variables,
+        minimum_coverage=(
+            float(options.get("min_data_coverage", 0.60))
+            if options.get("analysis_mode") == "quick"
+            else None
+        ),
     )
     variable_pool_summary["candidate_variables_for_next_step"] = filtered_explanatory
     variable_pool_summary["dropped_explanatory_variables"] = dropped_explanatory
@@ -5690,6 +5699,11 @@ def run_paper_replication_after_variable_confirmation(
     filtered_explanatory, dropped_explanatory = quality_filtered_explanatory_variables(
         requested_explanatory,
         target_variables,
+        minimum_coverage=(
+            float(options.get("min_data_coverage", 0.60))
+            if options.get("analysis_mode") == "quick"
+            else None
+        ),
     )
     if dropped_explanatory:
         report(
@@ -5720,6 +5734,7 @@ def run_paper_replication_after_variable_confirmation(
         target_variables=target_variables,
         candidate_variables=filtered_explanatory,
         vmd_k=int(options.get("vmd_imf_count", 4)),
+        adaptive_rolling_window=options.get("analysis_mode") == "quick",
     )
 
 
@@ -5745,6 +5760,11 @@ def run_paper_replication_vmd_review(
     filtered_explanatory, dropped_explanatory = quality_filtered_explanatory_variables(
         requested_explanatory,
         target_variables,
+        minimum_coverage=(
+            float(options.get("min_data_coverage", 0.60))
+            if options.get("analysis_mode") == "quick"
+            else None
+        ),
     )
     if not filtered_explanatory:
         raise ValueError(
@@ -5798,6 +5818,11 @@ def run_paper_replication_h_review(
     filtered_explanatory, dropped_explanatory = quality_filtered_explanatory_variables(
         requested_explanatory,
         target_variables,
+        minimum_coverage=(
+            float(options.get("min_data_coverage", 0.60))
+            if options.get("analysis_mode") == "quick"
+            else None
+        ),
     )
     if not filtered_explanatory:
         raise ValueError(
@@ -7571,10 +7596,17 @@ def render_quick_pipeline_tab(options: dict[str, Any]) -> None:
                 status.success(ui_text("Quick analysis completed.", "快速分析已完成。"))
                 st.session_state["quick_last_result"] = result
             except Exception as exc:  # noqa: BLE001
+                error_text = safe_exception_text(exc)
+                if "too few aligned observations for rolling FEVD" in str(exc):
+                    error_text = ui_text(
+                        "The common valid sample is still too short for the selected variables. "
+                        "Reduce the number of explanatory variables or choose a longer event window.",
+                        "共同有效样本仍不足以估计所选变量。请减少解释变量，或延长事件窗口后重试。",
+                    )
                 status.error(
                     ui_text(
-                        f"Quick analysis failed: {safe_exception_text(exc)}",
-                        f"快速分析失败：{safe_exception_text(exc)}",
+                        f"Quick analysis failed: {error_text}",
+                        f"快速分析失败：{error_text}",
                     )
                 )
     quick_result = st.session_state.get("quick_last_result")

@@ -863,6 +863,43 @@ def _rolling_var_fevd(
     return pd.Series(out_dates), np.vstack(out_shares)
 
 
+def _resolve_fevd_rolling_window(
+    dates: pd.Series,
+    event_start: pd.Timestamp,
+    event_end: pd.Timestamp,
+    lag: int,
+    n_vars: int,
+    requested_window: int = PAPER_ROLLING_WINDOW,
+    adaptive: bool = False,
+) -> int:
+    """Return the fixed paper window or a feasible quick-mode window."""
+    requested_window = max(1, int(requested_window))
+    if not adaptive:
+        return requested_window
+
+    ordered_dates = pd.to_datetime(dates, errors="coerce").reset_index(drop=True)
+    event_positions = np.where(
+        (ordered_dates >= pd.Timestamp(event_start))
+        & (ordered_dates <= pd.Timestamp(event_end))
+    )[0]
+    if not len(event_positions):
+        raise ValueError("Quick analysis has no aligned observations inside the event window.")
+
+    rows_available_at_event_start = int(event_positions[0]) + 1
+    effective_window = min(requested_window, rows_available_at_event_start)
+    minimum_rows = max(
+        int(lag) + int(n_vars) + 6,
+        (int(n_vars) + 1) * int(lag) + 4,
+    )
+    if effective_window < minimum_rows:
+        raise ValueError(
+            "Quick analysis has too few aligned observations for rolling FEVD: "
+            f"{rows_available_at_event_start} available through the first event observation, "
+            f"but at least {minimum_rows} are required for {n_vars} variables and VAR lag {lag}."
+        )
+    return effective_window
+
+
 def _build_selected_scale_var_data(
     data: pd.DataFrame,
     target: str,
@@ -889,6 +926,7 @@ def _contribution_decomposition(
     selected_scale_drivers: list[str] | None = None,
     candidate_variables: list[str] | None = None,
     vmd_k: int = 4,
+    adaptive_rolling_window: bool = False,
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """Estimate selected-scale VAR FEVD and contribution tables."""
     selected_levels = str(effect["SelectedScale"]).split("+")
@@ -922,11 +960,20 @@ def _contribution_decomposition(
     h = int(effect["FEVD_h"])
     event_start = pd.to_datetime(effect["EventStartDate"])
     maximum_date = pd.to_datetime(effect["MaximumDate"])
+    rolling_window = _resolve_fevd_rolling_window(
+        dates=var_data["Date"],
+        event_start=event_start,
+        event_end=maximum_date,
+        lag=lag,
+        n_vars=len(columns),
+        requested_window=PAPER_ROLLING_WINDOW,
+        adaptive=adaptive_rolling_window,
+    )
     fevd_dates, fevd_shares = _rolling_var_fevd(
         dates=var_data["Date"],
         values=values,
         lag=lag,
-        rolling_window=PAPER_ROLLING_WINDOW,
+        rolling_window=rolling_window,
         horizon=h,
         event_start=event_start,
         event_end=maximum_date,
@@ -981,7 +1028,7 @@ def _contribution_decomposition(
                 "VMDSource": _vmd_source_note(),
                 "VMD_K": vmd_k,
                 "FEVD_h": h,
-                "RollingWindow": PAPER_ROLLING_WINDOW,
+                "RollingWindow": rolling_window,
                 "MinimumDate": minimum_date,
                 "MaximumDate": maximum_date,
                 "DriverSelectionRule": driver_selection_rule,
@@ -1030,7 +1077,7 @@ def _contribution_decomposition(
                 "VMDSource": _vmd_source_note(),
                 "VMD_K": vmd_k,
                 "FEVD_h": h,
-                "RollingWindow": PAPER_ROLLING_WINDOW,
+                "RollingWindow": rolling_window,
                 "MinDate": effect["MinimumDate"],
                 "MaxDate": effect["MaximumDate"],
                 "DriverSelectionRule": driver_selection_rule,
@@ -2045,6 +2092,7 @@ def run_paper_replication_pipeline(
     target_variables: list[str] | None = None,
     candidate_variables: list[str] | None = None,
     vmd_k: int = 4,
+    adaptive_rolling_window: bool = False,
 ) -> dict[str, pd.DataFrame]:
     """Run the paper-method replication workflow and save tables/figures."""
     global _THESIS_VMD_ACTIVE
@@ -2122,6 +2170,7 @@ def run_paper_replication_pipeline(
             selected_scale_drivers=selected_drivers,
             candidate_variables=candidates,
             vmd_k=vmd_k,
+            adaptive_rolling_window=adaptive_rolling_window,
         )
         break_summary, break_fit = _structural_break_test(scale_df, target, effect)
         optimal_profile = _optimal_break_rss_profile(scale_df, target, effect)
