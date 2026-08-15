@@ -7764,6 +7764,15 @@ def _render_warning_results(payload: dict[str, Any]) -> None:
     ))
 
     regime_history = regime.probability_history.copy()
+    regime_dates = pd.to_datetime(regime_history["Date"], errors="coerce")
+    if len(regime_dates.dropna()) <= 24:
+        date_ticks = regime_dates.dropna().tolist()
+    else:
+        date_ticks = pd.date_range(
+            regime_dates.min(),
+            regime_dates.max(),
+            periods=12,
+        )
     regime_figure = go.Figure()
     regime_figure.add_trace(go.Scatter(
         x=regime_history["Date"],
@@ -7785,16 +7794,21 @@ def _render_warning_results(payload: dict[str, Any]) -> None:
     )
     regime_figure.update_layout(
         title=ui_text("Oil-market crisis-state probability", "油市危机状态概率"),
-        height=440,
-        margin=dict(l=20, r=20, t=40, b=20),
+        height=900,
+        margin=dict(l=48, r=20, t=56, b=130),
         hovermode="x unified",
         xaxis=dict(
             title=ui_text("Date", "日期"),
-            dtick=86400000,
+            type="date",
+            tickmode="array",
+            tickvals=date_ticks,
             tickformat="%Y-%m-%d",
-            tickangle=-45,
+            tickangle=-90,
+            tickfont=dict(size=9),
+            automargin=True,
         ),
         yaxis=dict(title=ui_text("Probability", "概率"), range=[0, 100]),
+        uirevision="crisis-regime-daily-date-axis",
     )
     _apply_dark_plot_theme(regime_figure)
     st.plotly_chart(regime_figure, use_container_width=True, key="hamilton_crisis_regime_probability")
