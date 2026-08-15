@@ -80,6 +80,26 @@ class CloudWorkspaceBehaviorTests(unittest.TestCase):
         self.assertIn("Forecast-end ranges", renderer)
         self.assertNotIn("Empirical 80% band", renderer)
 
+    def test_price_forecast_chart_reserves_two_fifths_and_supports_navigation(self) -> None:
+        import inspect
+
+        import pandas as pd
+
+        from app import streamlit_app as app
+
+        history = pd.date_range("2025-01-01", periods=220, freq="B")
+        forecast = pd.date_range(history[-1] + pd.offsets.BDay(), periods=20, freq="B")
+        visible_start, visible_end = app._forecast_chart_default_range(history, forecast)
+        forecast_share = (visible_end - history[-1]) / (visible_end - visible_start)
+
+        self.assertGreaterEqual(float(forecast_share), 0.40)
+        self.assertGreater(visible_start, history[0])
+        renderer = inspect.getsource(app.render_oil_price_forecast_panel)
+        self.assertIn('dragmode="pan"', renderer)
+        self.assertIn("rangeslider=dict(", renderer)
+        self.assertIn('"scrollZoom": True', renderer)
+        self.assertIn("fixedrange=False", renderer)
+
     def test_price_forecast_ui_accepts_custom_days_and_history_months(self) -> None:
         import inspect
 
