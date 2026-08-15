@@ -3880,9 +3880,8 @@ def render_analysis_window_controls(
 
         requested_window_end = (start_timestamp - pd.offsets.BDay(1)).normalize()
         if analysis_mode == "quick":
-            window_start_timestamp, requested_window_end = automatic_estimation_window(
-                start_timestamp,
-                available_start=local_start,
+            window_start_timestamp, requested_window_end = requested_quick_estimation_window(
+                start_timestamp
             )
         else:
             default_window_dates = pd.bdate_range(
@@ -3941,6 +3940,14 @@ def render_analysis_window_controls(
         "window_trading_days": int(window_trading_days),
     })
     return updated
+
+
+def requested_quick_estimation_window(event_start: Any) -> tuple[pd.Timestamp, pd.Timestamp]:
+    """Request the full quick-mode history even when it is not cached locally yet."""
+    return automatic_estimation_window(
+        event_start,
+        trading_days=QUICK_ESTIMATION_TRADING_DAYS,
+    )
 
 
 def run_update_market_data(options: dict[str, Any]) -> None:
@@ -7539,10 +7546,7 @@ def render_quick_pipeline_tab(options: dict[str, Any]) -> None:
             "api_catalog_registry_entries": api_registry_entries,
         }
     )
-    start, end = automatic_estimation_window(
-        quick_options["start_date"],
-        available_start=get_date_range_if_exists(PATHS["clean_market"])[0],
-    )
+    start, end = requested_quick_estimation_window(quick_options["start_date"])
     quick_options["window_start_date"] = start.strftime("%Y-%m-%d")
     quick_options["window_end_date"] = end.strftime("%Y-%m-%d")
     quick_options["window_trading_days"] = business_day_count(start, end)

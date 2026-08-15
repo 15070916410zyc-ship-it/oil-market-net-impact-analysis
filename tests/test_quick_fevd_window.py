@@ -15,6 +15,15 @@ from src.paper_replication import (
 
 
 class QuickFevdWindowTests(unittest.TestCase):
+    def test_quick_estimation_window_is_not_clipped_to_local_cache(self) -> None:
+        from app import streamlit_app as app
+
+        start, end = app.requested_quick_estimation_window("2024-01-02")
+
+        self.assertEqual(end, pd.Timestamp("2024-01-01"))
+        self.assertEqual(len(pd.bdate_range(start, end)), app.QUICK_ESTIMATION_TRADING_DAYS)
+        self.assertLess(start, pd.Timestamp("2024-01-02"))
+
     def test_professional_mode_keeps_fixed_paper_window(self) -> None:
         dates = pd.Series(pd.bdate_range("2024-01-01", periods=100))
 
