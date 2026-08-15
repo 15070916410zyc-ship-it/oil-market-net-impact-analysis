@@ -4,7 +4,11 @@ import numpy as np
 import pandas as pd
 import unittest
 
-from src.price_forecast import run_brent_price_forecast, run_oil_price_forecast
+from src.price_forecast import (
+    PREDICTION_INTERVAL_LEVELS,
+    run_brent_price_forecast,
+    run_oil_price_forecast,
+)
 
 
 def synthetic_brent(rows: int = 420) -> pd.DataFrame:
@@ -27,21 +31,22 @@ class PriceForecastTests(unittest.TestCase):
         self.assertEqual(len(result.forecast), 10)
         expected_columns = ["Date", "PointForecast"] + [
             f"{bound}{level}"
-            for level in (50, 80, 90, 95)
+            for level in PREDICTION_INTERVAL_LEVELS
             for bound in ("Lower", "Upper")
         ]
         self.assertEqual(list(result.forecast.columns), expected_columns)
         self.assertTrue(result.forecast[expected_columns[1:]].notna().all().all())
-        for level in (50, 80, 90, 95):
+        for level in PREDICTION_INTERVAL_LEVELS:
             self.assertTrue((result.forecast[f"Lower{level}"] < result.forecast[f"Upper{level}"]).all())
             self.assertTrue((result.forecast[f"Lower{level}"] <= result.forecast["PointForecast"]).all())
             self.assertTrue((result.forecast["PointForecast"] <= result.forecast[f"Upper{level}"]).all())
-        self.assertTrue((result.forecast["Lower95"] <= result.forecast["Lower90"]).all())
-        self.assertTrue((result.forecast["Lower90"] <= result.forecast["Lower80"]).all())
-        self.assertTrue((result.forecast["Lower80"] <= result.forecast["Lower50"]).all())
-        self.assertTrue((result.forecast["Upper50"] <= result.forecast["Upper80"]).all())
-        self.assertTrue((result.forecast["Upper80"] <= result.forecast["Upper90"]).all())
-        self.assertTrue((result.forecast["Upper90"] <= result.forecast["Upper95"]).all())
+        for narrower, wider in zip(PREDICTION_INTERVAL_LEVELS, PREDICTION_INTERVAL_LEVELS[1:]):
+            self.assertTrue(
+                (result.forecast[f"Lower{wider}"] <= result.forecast[f"Lower{narrower}"]).all()
+            )
+            self.assertTrue(
+                (result.forecast[f"Upper{narrower}"] <= result.forecast[f"Upper{wider}"]).all()
+            )
         self.assertEqual(result.model_summary["IMF"].tolist(), ["IMF1", "IMF2", "IMF3", "IMF4", "IMF5"])
         self.assertEqual(result.model_summary.loc[0, "Model"], "BPNN")
         self.assertEqual(set(result.model_summary.loc[1:, "Model"]), {"AR-Ridge"})

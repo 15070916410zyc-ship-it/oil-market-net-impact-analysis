@@ -1797,6 +1797,12 @@ def apply_custom_css() -> None:
             --oil-surface: #151D21;
             --oil-surface-raised: #1A2429;
             --oil-line: rgba(237, 242, 244, 0.11);
+            /* UI theme tokens: edit these values to restyle charts and tables. */
+            --codex-panel: #2B2B2B;
+            --codex-panel-soft: #323232;
+            --codex-panel-deep: #242424;
+            --codex-panel-line: #484848;
+            --codex-panel-muted: #B8B8B8;
         }
         html, body, .stApp, [data-testid="stAppViewContainer"] {
             background:
@@ -2486,6 +2492,50 @@ def apply_custom_css() -> None:
         [data-testid="stTable"] [data-testid="stTableStyledTable"] th p {
             color: #B7C2C7 !important;
             -webkit-text-fill-color: #B7C2C7 !important;
+        }
+        /* Codex-style neutral data surfaces, separated from the near-black app canvas. */
+        [data-testid="stPlotlyChart"] {
+            background: var(--codex-panel) !important;
+            border: 1px solid var(--codex-panel-line) !important;
+            border-radius: 14px !important;
+            padding: 0.55rem 0.7rem 0.35rem !important;
+            overflow: hidden !important;
+        }
+        body [data-testid="stDataFrame"],
+        body [data-testid="stTable"] {
+            background: var(--codex-panel) !important;
+            border: 1px solid var(--codex-panel-line) !important;
+            color: var(--oil-ink) !important;
+            --text-color: var(--oil-ink) !important;
+            --background-color: var(--codex-panel) !important;
+            --secondary-background-color: var(--codex-panel-soft) !important;
+        }
+        body div[data-testid="stTable"] div,
+        body div[data-testid="stTable"] span,
+        body div[data-testid="stTable"] [role="table"],
+        body div[data-testid="stTable"] [role="row"],
+        body div[data-testid="stTable"] [role="columnheader"],
+        body div[data-testid="stTable"] [role="cell"] {
+            background: var(--codex-panel) !important;
+            background-color: var(--codex-panel) !important;
+            color: var(--oil-ink) !important;
+            -webkit-text-fill-color: var(--oil-ink) !important;
+            border-color: var(--codex-panel-line) !important;
+            font-variant-numeric: tabular-nums;
+        }
+        body [data-testid="stTable"] [data-testid="stTableStyledTable"] th,
+        body [data-testid="stTable"] [data-testid="stTableStyledTable"] th p {
+            background: var(--codex-panel-soft) !important;
+            background-color: var(--codex-panel-soft) !important;
+            color: #D4D4D4 !important;
+            -webkit-text-fill-color: #D4D4D4 !important;
+        }
+        body [data-testid="stDataFrame"] {
+            background-color: var(--codex-panel) !important;
+        }
+        body [data-testid="stDataFrame"] .dvn-scroller,
+        body [data-testid="stDataFrame"] canvas[data-testid="data-grid-canvas"] {
+            background: transparent !important;
         }
         hr { border-color: var(--oil-line) !important; }
         @media (max-width: 760px) {
@@ -6940,18 +6990,26 @@ def render_professional_pipeline_tab(options: dict[str, Any]) -> None:
 
 
 def _apply_dark_plot_theme(figure: Any) -> Any:
-    """Apply the dashboard's graphite theme to interactive Plotly figures."""
+    """Apply the Codex-gray data-surface theme to interactive Plotly figures."""
     figure.update_layout(
         template="plotly_dark",
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(color="#C9D3D8"),
-        title_font=dict(color="#EDF2F4"),
-        legend=dict(bgcolor="rgba(0,0,0,0)"),
-        hoverlabel=dict(bgcolor="#1A2429", bordercolor="#36444B", font_color="#EDF2F4"),
+        paper_bgcolor="#2B2B2B",
+        plot_bgcolor="#242424",
+        font=dict(color="#D6D6D6"),
+        title_font=dict(color="#F0F0F0"),
+        legend=dict(bgcolor="rgba(43,43,43,0.88)"),
+        hoverlabel=dict(bgcolor="#343434", bordercolor="#666666", font_color="#F2F2F2"),
     )
-    figure.update_xaxes(gridcolor="rgba(237,242,244,0.08)", zerolinecolor="rgba(237,242,244,0.10)")
-    figure.update_yaxes(gridcolor="rgba(237,242,244,0.08)", zerolinecolor="rgba(237,242,244,0.10)")
+    figure.update_xaxes(
+        gridcolor="#424242",
+        linecolor="#5A5A5A",
+        zerolinecolor="#555555",
+    )
+    figure.update_yaxes(
+        gridcolor="#424242",
+        linecolor="#5A5A5A",
+        zerolinecolor="#555555",
+    )
     return figure
 
 
@@ -7684,7 +7742,12 @@ def render_oil_price_forecast_panel() -> None:
 
     history = result.history
     forecast = result.forecast
-    available_intervals = [level for level in (50, 80, 90, 95) if f"Lower{level}" in forecast]
+    available_intervals = sorted(
+        int(column.removeprefix("Lower"))
+        for column in forecast.columns
+        if re.fullmatch(r"Lower\d+", str(column))
+        and f"Upper{str(column).removeprefix('Lower')}" in forecast.columns
+    )
     selected_intervals = st.multiselect(
         ui_text("Prediction intervals to display", "显示的预测区间"),
         options=available_intervals,
@@ -7706,21 +7769,36 @@ def render_oil_price_forecast_panel() -> None:
         line=dict(color="#D9E2E6", width=2.2), hovertemplate="%{x|%Y-%m-%d}<br>$%{y:.2f}<extra></extra>",
     ))
     interval_colors = {
-        50: "rgba(229, 138, 74, 0.28)",
-        80: "rgba(229, 138, 74, 0.20)",
-        90: "rgba(229, 138, 74, 0.14)",
-        95: "rgba(229, 138, 74, 0.09)",
+        50: ("#5EC4B2", "rgba(94, 196, 178, 0.28)"),
+        60: ("#64B5F6", "rgba(100, 181, 246, 0.24)"),
+        70: ("#9180E3", "rgba(145, 128, 227, 0.21)"),
+        80: ("#F0B060", "rgba(240, 176, 96, 0.19)"),
+        90: ("#E98972", "rgba(233, 137, 114, 0.16)"),
+        95: ("#D97098", "rgba(217, 112, 152, 0.13)"),
+        99: ("#B486D8", "rgba(180, 134, 216, 0.10)"),
     }
     for level in sorted(selected_intervals, reverse=True):
+        line_color, fill_color = interval_colors.get(
+            level,
+            ("#A6A6A6", "rgba(166, 166, 166, 0.14)"),
+        )
+        interval_hover = ui_text(
+            f"<b>%{{x|%Y-%m-%d}}</b><br>{level}% lower: $%{{customdata[0]:.2f}}"
+            f"<br>{level}% upper: $%{{customdata[1]:.2f}}<extra></extra>",
+            f"<b>%{{x|%Y-%m-%d}}</b><br>{level}% 下界：$%{{customdata[0]:.2f}}"
+            f"<br>{level}% 上界：$%{{customdata[1]:.2f}}<extra></extra>",
+        )
         figure.add_trace(go.Scatter(
             x=forecast["Date"], y=forecast[f"Upper{level}"], showlegend=False,
-            line=dict(color="rgba(229, 138, 74, 0.01)", width=0), hoverinfo="skip",
+            line=dict(color=line_color, width=0.8), hoverinfo="skip",
         ))
         figure.add_trace(go.Scatter(
             x=forecast["Date"], y=forecast[f"Lower{level}"],
             name=ui_text(f"{level}% prediction interval", f"{level}% 预测区间"),
-            fill="tonexty", fillcolor=interval_colors[level],
-            line=dict(color="rgba(229, 138, 74, 0.01)", width=0), hoverinfo="skip",
+            fill="tonexty", fillcolor=fill_color,
+            line=dict(color=line_color, width=0.8),
+            customdata=forecast[[f"Lower{level}", f"Upper{level}"]].to_numpy(),
+            hovertemplate=interval_hover,
         ))
     figure.add_trace(go.Scatter(
         x=forecast["Date"], y=forecast["PointForecast"], name=ui_text("Forecast", "预测价格"),
@@ -7739,6 +7817,27 @@ def render_oil_price_forecast_panel() -> None:
     )
     _apply_dark_plot_theme(figure)
     st.plotly_chart(figure, use_container_width=True, key=f"{target.lower()}_price_forecast_chart")
+
+    if selected_intervals:
+        final_forecast = forecast.iloc[-1]
+        interval_summary = pd.DataFrame([
+            {
+                ui_text("Interval", "预测区间"): f"{level}%",
+                ui_text("Lower", "下界"): f"${float(final_forecast[f'Lower{level}']):.2f}",
+                ui_text("Point forecast", "点预测"): f"${float(final_forecast['PointForecast']):.2f}",
+                ui_text("Upper", "上界"): f"${float(final_forecast[f'Upper{level}']):.2f}",
+                ui_text("Width", "区间宽度"): (
+                    f"${float(final_forecast[f'Upper{level}'] - final_forecast[f'Lower{level}']):.2f}"
+                ),
+            }
+            for level in sorted(selected_intervals)
+        ])
+        st.markdown(ui_text("#### Forecast-end ranges", "#### 预测期末区间范围"))
+        st.caption(ui_text(
+            f"Values for {pd.Timestamp(final_forecast['Date']).strftime('%Y-%m-%d')}. Hover over the chart for daily bounds.",
+            f"以下为 {pd.Timestamp(final_forecast['Date']).strftime('%Y-%m-%d')} 的区间数值；将鼠标移到图中可查看每日上下界。",
+        ))
+        st.table(interval_summary)
 
     validation_columns = st.columns(3)
     validation_columns[0].metric(ui_text("Out-of-sample RMSE", "样本外 RMSE"), f"${float(metrics['ValidationRMSE']):.2f}")
