@@ -56,6 +56,7 @@ def quality_filter_variables(
     max_missing_rate: float | None = None,
     max_stale_days: int = 14,
     min_variance: float = 1e-10,
+    drop_below_coverage: bool = False,
 ) -> tuple[list[str], pd.DataFrame]:
     """Flag coverage issues while dropping only unusable variables.
 
@@ -101,6 +102,8 @@ def quality_filter_variables(
 
         drop_reasons: list[str] = []
         coverage_below_threshold = coverage < min_coverage or missing_rate > max_missing_rate
+        if coverage_below_threshold and drop_below_coverage:
+            drop_reasons.append("coverage_below_threshold")
         if pd.isna(latest_date):
             drop_reasons.append("no_usable_values")
         elif end_timestamp - latest_date > pd.Timedelta(days=max_stale_days):
@@ -1494,6 +1497,7 @@ def build_expanded_variable_pool(
     extra_registry_entries: list[dict[str, Any]] | None = None,
     strict_complete_case: bool = True,
     download_workers: int = 1,
+    drop_below_coverage: bool = False,
 ) -> pd.DataFrame:
     """Build and optionally merge the expanded explanatory-variable pool.
 
@@ -1696,6 +1700,7 @@ def build_expanded_variable_pool(
         end_date=end_date,
         min_coverage=min_coverage,
         max_stale_days=max_stale_days,
+        drop_below_coverage=drop_below_coverage,
     )
     quality_df.to_excel(OUTPUT_PATHS["quality_report"], index=False)
 
