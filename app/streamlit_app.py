@@ -7764,22 +7764,17 @@ def _render_warning_results(payload: dict[str, Any]) -> None:
     ))
 
     regime_history = regime.probability_history.copy()
-    regime_history["Day"] = pd.Series(
-        range(1, len(regime_history) + 1),
-        index=regime_history.index,
-    )
     regime_figure = go.Figure()
     regime_figure.add_trace(go.Scatter(
-        x=regime_history["Day"],
+        x=regime_history["Date"],
         y=regime_history["CrisisRegimeProbability"],
         name=ui_text("Filtered crisis-state probability", "危机状态过滤概率"),
         line=dict(color="#5FB3A7", width=2.3),
         fill="tozeroy",
         fillcolor="rgba(95, 179, 167, 0.12)",
-        customdata=regime_history["Date"],
         hovertemplate=ui_text(
-            "Day %{x}<br>%{customdata|%Y-%m-%d}<br>%{y:.1f}%<extra></extra>",
-            "第 %{x} 天<br>%{customdata|%Y-%m-%d}<br>%{y:.1f}%<extra></extra>",
+            "%{x|%Y-%m-%d}<br>%{y:.1f}%<extra></extra>",
+            "%{x|%Y-%m-%d}<br>%{y:.1f}%<extra></extra>",
         ),
     ))
     regime_figure.add_hline(
@@ -7793,7 +7788,12 @@ def _render_warning_results(payload: dict[str, Any]) -> None:
         height=440,
         margin=dict(l=20, r=20, t=40, b=20),
         hovermode="x unified",
-        xaxis=dict(title=ui_text("Day", "天")),
+        xaxis=dict(
+            title=ui_text("Date", "日期"),
+            dtick=86400000,
+            tickformat="%Y-%m-%d",
+            tickangle=-45,
+        ),
         yaxis=dict(title=ui_text("Probability", "概率"), range=[0, 100]),
     )
     _apply_dark_plot_theme(regime_figure)

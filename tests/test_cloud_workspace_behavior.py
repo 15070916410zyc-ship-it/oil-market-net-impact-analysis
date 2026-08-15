@@ -133,6 +133,17 @@ class CloudWorkspaceBehaviorTests(unittest.TestCase):
         self.assertNotIn("MarkovRegression", original_model)
         self.assertNotIn("fetch_google_trends_timeline", original_model)
 
+    def test_crisis_probability_chart_uses_daily_date_axis(self) -> None:
+        import inspect
+
+        from app import streamlit_app as app
+
+        renderer = inspect.getsource(app._render_warning_results)
+        self.assertIn('x=regime_history["Date"]', renderer)
+        self.assertIn("dtick=86400000", renderer)
+        self.assertIn('tickformat="%Y-%m-%d"', renderer)
+        self.assertNotIn('regime_history["Day"]', renderer)
+
     def test_analysis_results_are_inline_not_a_top_level_tab(self) -> None:
         from app import streamlit_app as app
 
