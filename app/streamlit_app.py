@@ -3144,7 +3144,7 @@ def render_main_header() -> None:
         f'<a class="skip-link" href="#main-content">{ui_text("Skip to main content", "跳到主要内容")}</a>',
         unsafe_allow_html=True,
     )
-    brand_col, settings_col, language_col = st.columns([0.72, 0.17, 0.11])
+    brand_col, settings_col, language_col = st.columns([0.82, 0.10, 0.08])
     with brand_col:
         st.markdown(
             f'<div class="research-brand"><span class="research-brand-mark"><i></i></span>'
@@ -3156,10 +3156,10 @@ def render_main_header() -> None:
     with language_col:
         render_language_switcher()
 
-    title = ui_text("See the market clearly. Plan the next move.", "看清油价变化，安排下一步")
+    title = ui_text("See oil clearly. Know the next move.", "看清油价，也看清下一步")
     subtitle = ui_text(
-        "Bring scattered data, forecasts and risk signals into one clear decision view.",
-        "把分散的数据、预测和风险信号，整理成一份清楚的判断。",
+        "One continuous view from market drivers to forecasts, risk, hedging and investment research.",
+        "从影响因素、价格预测和风险预警，一直看到套保与投资研究建议。",
     )
     st.markdown(
         f"""
@@ -3866,7 +3866,7 @@ def render_cloud_api_tool_menu() -> None:
         badge_text = ui_text("Your API keys are ready", "你的 API 密钥已就绪")
 
     st.markdown('<div class="top-tool-menu">', unsafe_allow_html=True)
-    with st.popover(ui_text("Enter API keys", "填写 API 密钥"), use_container_width=True):
+    with st.popover("API", use_container_width=False):
         st.markdown(
             f'<span class="api-status-badge {badge_class}">{badge_text}</span>',
             unsafe_allow_html=True,
@@ -3897,7 +3897,7 @@ def render_top_tool_menu() -> None:
         badge_text = ui_text("API configured", "API 已配置")
 
     st.markdown('<div class="top-tool-menu">', unsafe_allow_html=True)
-    with st.popover(ui_text("API data source settings", "API 数据源设置"), use_container_width=True):
+    with st.popover("API", use_container_width=False):
         st.markdown(
             f'<span class="api-status-badge {badge_class}">{badge_text}</span>',
             unsafe_allow_html=True,
@@ -7655,27 +7655,27 @@ def _apply_dark_plot_theme(figure: Any) -> Any:
     """Apply the bright workspace theme to interactive Plotly figures."""
     figure.update_layout(
         template="plotly_white",
-        paper_bgcolor="#FFFFFF",
-        plot_bgcolor="#FFFFFF",
-        font=dict(color="#211D2A", family="Inter, Segoe UI, Microsoft YaHei UI, sans-serif"),
-        title_font=dict(color="#211D2A"),
-        legend=dict(bgcolor="rgba(255,255,255,0.90)", bordercolor="#DDE2EB", borderwidth=1),
-        hoverlabel=dict(bgcolor="#211D2A", bordercolor="#211D2A", font_color="#FFFFFF"),
-        colorway=["#6972CB", "#354554", "#9BA6D9", "#70899D", "#B6BDD0", "#55786F"],
+        paper_bgcolor="#FCFCF8",
+        plot_bgcolor="#FCFCF8",
+        font=dict(color="#1F2825", family="Aptos, Segoe UI, Microsoft YaHei UI, sans-serif"),
+        title_font=dict(color="#1F2825"),
+        legend=dict(bgcolor="rgba(252,252,248,0.92)", bordercolor="#DCE2DD", borderwidth=1),
+        hoverlabel=dict(bgcolor="#1F2825", bordercolor="#1F2825", font_color="#FFFFFF"),
+        colorway=["#356B65", "#526F78", "#75918A", "#8E9C97", "#AAB5B0", "#445653"],
     )
     figure.update_xaxes(
-        gridcolor="#E9ECF2",
-        linecolor="#CBD2DF",
-        zerolinecolor="#DDE2EB",
-        tickfont=dict(color="#687487"),
-        title_font=dict(color="#211D2A"),
+        gridcolor="#E8ECE8",
+        linecolor="#C8D0CB",
+        zerolinecolor="#DCE2DD",
+        tickfont=dict(color="#68736E"),
+        title_font=dict(color="#1F2825"),
     )
     figure.update_yaxes(
-        gridcolor="#E9ECF2",
-        linecolor="#CBD2DF",
-        zerolinecolor="#DDE2EB",
-        tickfont=dict(color="#687487"),
-        title_font=dict(color="#211D2A"),
+        gridcolor="#E8ECE8",
+        linecolor="#C8D0CB",
+        zerolinecolor="#DCE2DD",
+        tickfont=dict(color="#68736E"),
+        title_font=dict(color="#1F2825"),
     )
     return figure
 
@@ -8957,12 +8957,10 @@ def render_price_forecast_tab(options: dict[str, Any]) -> None:
 
 
 def main_navigation_labels() -> list[str]:
-    """Return decision, data, research, and forecast workspaces."""
+    """Return the two user-facing product modes."""
     return [
-        ui_text("Market outlook", "市场判断"),
-        ui_text("Data center", "数据中心"),
-        ui_text("Research tools", "研究工具"),
-        ui_text("Risk monitoring", "风险监测"),
+        ui_text("Decision view", "决策模式"),
+        ui_text("Professional research", "专业模式"),
     ]
 
 
@@ -8975,19 +8973,84 @@ def main() -> None:
 
     render_main_header()
 
-    tabs = st.tabs(main_navigation_labels())
-    with tabs[0]:
-        from app.executive_dashboard import render_decision_dashboard
+    navigation = main_navigation_labels()
+    active_mode = st.radio(
+        ui_text("Workspace", "工作模式"),
+        navigation,
+        horizontal=True,
+        label_visibility="collapsed",
+        key="primary_workspace_mode",
+    )
+    if active_mode == navigation[0]:
+        decision_module = importlib.import_module("app.executive_dashboard")
+        importlib.reload(decision_module)
+        decision_module.render_decision_dashboard(ui_text, _apply_dark_plot_theme)
+        return
 
-        render_decision_dashboard(ui_text, _apply_dark_plot_theme)
-    with tabs[1]:
-        from app.data_library import render_data_library
-
-        render_data_library(ui_text, _apply_dark_plot_theme)
-    with tabs[2]:
-        options = render_run_pipeline_tab(options)
-    with tabs[3]:
-        render_price_forecast_tab(options)
+    st.markdown(
+        f"""
+        <section class="section-intro view-reveal">
+          <p class="section-kicker">{ui_text("PROFESSIONAL RESEARCH", "专业研究")}</p>
+          <h2>{ui_text("Inspect every step and control every assumption", "查看每一步，也控制每个假设")}</h2>
+          <p>{ui_text("Choose a workspace below. Date windows, IMF counts, variables, validation and intermediate charts remain available.", "净影响分析、价格预测、危机预警和变量数据库相互独立；时间范围、IMF 数量、变量选择、验证结果和中间图表全部保留。")}</p>
+        </section>
+        """,
+        unsafe_allow_html=True,
+    )
+    professional_labels = {
+        "net_impact": ui_text("Net-impact analysis", "净影响分析"),
+        "forecast": ui_text("Price forecast", "价格预测"),
+        "warning": ui_text("Crisis warning", "危机预警"),
+        "data": ui_text("Connected data", "连接的数据"),
+    }
+    active_label = st.radio(
+        ui_text("Professional workspace", "专业工具"),
+        list(professional_labels.values()),
+        horizontal=True,
+        label_visibility="collapsed",
+        key="professional_workspace_mode",
+    )
+    active_workspace = next(key for key, label in professional_labels.items() if label == active_label)
+    if active_workspace == "net_impact":
+        latest_payload = st.session_state.get("price_forecast_last_result")
+        if isinstance(latest_payload, dict) and latest_payload.get("result") is not None:
+            decision_module = importlib.import_module("app.executive_dashboard")
+            importlib.reload(decision_module)
+            latest_result = latest_payload["result"]
+            st.markdown(ui_text("### Latest market context", "### 最新市场背景"))
+            context_figure = decision_module._main_forecast_figure(latest_result, "daily", ui_text)
+            _apply_dark_plot_theme(context_figure)
+            st.plotly_chart(
+                context_figure,
+                use_container_width=True,
+                config={"scrollZoom": True, "displaylogo": False, "responsive": True},
+                key="professional_net_impact_context",
+            )
+        run_options = render_analysis_window_controls(options, "professional")
+        render_professional_pipeline_tab(run_options)
+        st.divider()
+        render_paper_replication_tab()
+    elif active_workspace == "forecast":
+        render_oil_price_forecast_panel()
+    elif active_workspace == "warning":
+        latest_regime = st.session_state.get("decision_regime_latest")
+        if latest_regime is not None:
+            decision_module = importlib.import_module("app.executive_dashboard")
+            importlib.reload(decision_module)
+            st.markdown(ui_text("### Latest risk context", "### 最新风险背景"))
+            risk_context = decision_module._risk_figure(latest_regime, ui_text)
+            _apply_dark_plot_theme(risk_context)
+            st.plotly_chart(
+                risk_context,
+                use_container_width=True,
+                config={"scrollZoom": True, "displaylogo": False, "responsive": True},
+                key="professional_warning_context",
+            )
+        render_crisis_warning_tab(options)
+    else:
+        data_module = importlib.import_module("app.data_library")
+        importlib.reload(data_module)
+        data_module.render_data_library(ui_text, _apply_dark_plot_theme)
 
 
 if __name__ == "__main__":

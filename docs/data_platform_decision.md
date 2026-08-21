@@ -2,14 +2,34 @@
 
 ## Current decision
 
-Do not add an external SQL database to the single-app deployment yet. The current workload is a provider catalog plus bounded analytical time series, so the simpler and more reliable architecture is:
+Use PostgreSQL 18 for the production research library and keep SQLite as a zero-configuration local fallback. The application selects the backend from `DATABASE_URL`; API keys remain in deployment secrets and are never stored in either database.
 
-1. Search official provider metadata live through FRED and EIA v2.
-2. Register only the selected series in the current analysis session.
-3. Refresh selected observations through the existing download layer.
-4. Cache model-ready files locally and preserve the existing downloadable audit workbooks.
+The database persists only data that users choose to add, plus compact six-hour analysis snapshots. It does not copy the full FRED or EIA catalogs. Search follows a two-level path:
 
-This avoids copying entire third-party catalogs into a database, keeps provider metadata current, and does not add a database service to Streamlit deployment. FRED exposes a full-text series-search API; EIA v2 exposes a self-documenting route tree, facets, frequencies, and series metadata.
+1. Match the synchronized index of connected official series immediately.
+2. If no indexed series matches, expand the same query into the live FRED and EIA catalogs.
+3. Fetch observations only for the selected series.
+4. Let the user choose a date range and frequency, download Excel, or add the series to the shared research library.
+
+This preserves current provider metadata, avoids an unnecessary catalog replica, and gives common oil, inventory, interest-rate, currency, and risk queries a fast path.
+
+## Data model
+
+The migration `migrations/202608220001_research_store_pg18.sql` creates:
+
+- `research_variables`: one durable definition per provider and series identifier, including the full request-safe registry entry;
+- `series_observations`: time-partitioned observations keyed by variable, observation date, and retrieval time;
+- `analysis_snapshots`: latest successful result summaries keyed by result type, target, as-of date, and parameter signature.
+
+PostgreSQL 18 native UUIDv7 identifiers keep time locality without application-generated IDs. Composite indexes support variable/time lookups, GIN supports JSON metadata, and BRIN supports long observation histories. SQLite mirrors the same logical entities for local development and automated tests.
+
+## Refresh and failure behavior
+
+- Decision results and official-catalog search results use a six-hour cache.
+- The decision page offers a manual refresh control.
+- A failed provider does not discard successful results from other providers.
+- The page keeps the most recent successful result visible while fresh data is prepared.
+- Added variables and observations are upserted, so a refresh extends rather than duplicates the series.
 
 ## Source-governance rule
 
@@ -21,26 +41,14 @@ Source selection follows this order:
 4. Mark spot/futures or index/futures substitutions as proxy fallbacks.
 5. Remove only exact duplicates with the same provider type and series identifier.
 
-The current registry audit contains 24 variables and 50 source entries. It contains no exact provider-series duplicates. The multiple providers are therefore retained, while 5 definition-changing proxy fallbacks are explicitly labelled in the website.
+The website exposes the source audit in professional mode. Multiple providers remain when they provide genuine fallback coverage; exact duplicates are removed without collapsing definition-changing proxies.
 
-## When PostgreSQL becomes justified
+## Production setup
 
-Add PostgreSQL only when at least one of these requirements becomes real:
+1. Provision PostgreSQL 18.
+2. Apply `migrations/202608220001_research_store_pg18.sql` with a migration role.
+3. Give the application role `SELECT`, `INSERT`, and `UPDATE` on the three application tables and required sequences; do not give it schema-owner privileges.
+4. Add the connection string as the deployment secret `DATABASE_URL`.
+5. Keep FRED, EIA, and model API credentials as separate deployment secrets.
 
-- multiple authenticated enterprises need separate portfolios and hedge policies;
-- users need durable saved searches and shared data selections;
-- every recommendation needs an immutable as-of audit trail;
-- provider observations must be versioned by both observation date and retrieval date;
-- scheduled refresh jobs run independently of Streamlit sessions;
-- the local cache exceeds practical repository or ephemeral-disk limits.
-
-At that point the production target should be PostgreSQL 18 with UUIDv7 identifiers, `timestamptz` audit fields, temporal validity for source mappings and hedge policies, and time-based partitioning for large observation tables. Until then, direct official catalog search plus local analytical caching is the lower-risk design.
-
-## Live verification on 2026-08-21
-
-- FRED catalog search returned current metadata.
-- EIA catalog search returned current petroleum stock series after using the verified Windows system TLS transport fallback.
-- Brent, OVX, 10-year Treasury yield, VIX, and EIA crude-stock data refreshed successfully.
-- WTI fell through to the Yahoo chart endpoint when the EIA futures response was empty and the Yahoo package endpoint was rate-limited, preserving daily continuity while recording the actual source.
-
-The source audit and actual-source fields remain visible and downloadable from the Data Center page.
+Without `DATABASE_URL`, the app reports `SQLite | local fallback` and remains fully usable on one machine. With it, the same UI reports `PostgreSQL | shared`, and saved variables become available to all application instances using that database.

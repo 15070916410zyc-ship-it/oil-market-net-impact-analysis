@@ -17,6 +17,17 @@ import pandas as pd
 
 
 class CloudWorkspaceBehaviorTests(unittest.TestCase):
+    def test_chinese_catalog_queries_use_official_english_keywords(self) -> None:
+        from app.data_library import _catalog_query, _indexed_catalog_results
+
+        self.assertEqual(_catalog_query("原油库存"), "crude oil stocks")
+        self.assertEqual(_catalog_query("美国通胀预期"), "US inflation expectations")
+        self.assertEqual(_catalog_query("WTI"), "WTI")
+        indexed = _indexed_catalog_results("原油库存")
+        self.assertTrue(indexed)
+        self.assertEqual(indexed[0]["source"], "EIA")
+        self.assertIn("registry_entry", indexed[0])
+
     def test_market_download_workers_run_independent_series_concurrently(self) -> None:
         from src import data_fetcher
 
@@ -150,7 +161,7 @@ class CloudWorkspaceBehaviorTests(unittest.TestCase):
 
         self.assertEqual(
             app.main_navigation_labels(),
-            ["市场判断", "数据中心", "研究工具", "风险监测"],
+            ["决策模式", "专业模式"],
         )
         with (
             patch.object(app.st, "markdown"),
@@ -374,17 +385,18 @@ class CloudWorkspaceBehaviorTests(unittest.TestCase):
         from app import streamlit_app as app
 
         figure = app._apply_dark_plot_theme(go.Figure())
-        self.assertEqual(figure.layout.paper_bgcolor, "#FFFFFF")
-        self.assertEqual(figure.layout.plot_bgcolor, "#FFFFFF")
-        self.assertEqual(figure.layout.font.color, "#211D2A")
+        self.assertEqual(figure.layout.paper_bgcolor, "#FCFCF8")
+        self.assertEqual(figure.layout.plot_bgcolor, "#FCFCF8")
+        self.assertEqual(figure.layout.font.color, "#1F2825")
 
         with patch.object(app.st, "markdown") as markdown:
             app.apply_custom_css()
         css = markdown.call_args.args[0]
-        self.assertIn("--canvas: #f4f1e9;", css)
-        self.assertIn("--surface: #fbfaf6;", css)
-        self.assertIn("@keyframes art-field-scroll", css)
+        self.assertIn("--canvas: #f7f7f2;", css)
+        self.assertIn("--surface: #fcfcf8;", css)
+        self.assertIn("@keyframes ambient-field", css)
         self.assertIn("animation-timeline: scroll(root block)", css)
+        self.assertIn("animation-timeline: view()", css)
         self.assertIn('[data-testid="stPlotlyChart"]', css)
         self.assertIn('[data-testid="stDataFrame"]', css)
 
@@ -397,7 +409,7 @@ class CloudWorkspaceBehaviorTests(unittest.TestCase):
         css = markdown.call_args.args[0]
         self.assertIn("button:focus-visible", css)
         self.assertIn('[role="tab"]:focus-visible', css)
-        self.assertIn("outline: 3px solid rgba(105, 114, 203, 0.3)", css)
+        self.assertIn("outline: 3px solid rgba(53, 107, 101, 0.28)", css)
         self.assertIn("outline-offset: 2px", css)
 
     def test_data_surfaces_and_expanders_stay_bright(self) -> None:
@@ -447,7 +459,7 @@ class CloudWorkspaceBehaviorTests(unittest.TestCase):
         plotly_chart.assert_called_once()
         rendered = plotly_chart.call_args.args[0]
         self.assertEqual(len(rendered.data), 1)
-        self.assertEqual(rendered.layout.paper_bgcolor, "#FFFFFF")
+        self.assertEqual(rendered.layout.paper_bgcolor, "#FCFCF8")
 
     def test_cloud_runtime_detection_supports_override_and_streamlit_marker(self) -> None:
         from app.streamlit_app import is_cloud_runtime

@@ -126,8 +126,11 @@ VARIABLE_ECONOMIC_CATEGORIES: "OrderedDict[str, dict[str, Any]]" = OrderedDict(
                 "label_zh": "地缘政治与政策风险",
                 "explanation_en": "Conflict, sanctions, trade policy and policy uncertainty.",
                 "explanation_zh": "冲突、制裁、贸易政策及政策不确定性。",
-                "variables": ("GPRD", "EPU", "TPU", "EMV"),
-                "keywords": ("geopolit", "conflict", "war", "sanction", "policy uncertainty", "trade policy"),
+                "variables": ("GPRD", "EPU", "TPU", "EMV", "SanctionsRisk", "OilPolicyUncertainty"),
+                "keywords": (
+                    "geopolit", "conflict", "war", "sanction", "policy uncertainty",
+                    "trade policy", "embargo", "shipping disruption", "opec policy",
+                ),
             },
         ),
         (
@@ -137,8 +140,11 @@ VARIABLE_ECONOMIC_CATEGORIES: "OrderedDict[str, dict[str, Any]]" = OrderedDict(
                 "label_zh": "市场风险偏好",
                 "explanation_en": "Volatility, stress and rapid changes in risk appetite.",
                 "explanation_zh": "波动率、市场压力与风险偏好的快速变化。",
-                "variables": ("OVX", "VIX"),
-                "keywords": ("volatility", "fear", "stress", "risk premium", "uncertainty index"),
+                "variables": ("OVX", "VIX", "MOVE", "STLFSI", "HighYieldSpread"),
+                "keywords": (
+                    "volatility", "fear", "stress", "risk premium", "uncertainty index",
+                    "financial stress", "credit spread", "option implied volatility",
+                ),
             },
         ),
         (
@@ -148,8 +154,11 @@ VARIABLE_ECONOMIC_CATEGORIES: "OrderedDict[str, dict[str, Any]]" = OrderedDict(
                 "label_zh": "金融资产与避险",
                 "explanation_en": "Equity pricing, safe-haven demand and cross-asset allocation.",
                 "explanation_zh": "股票定价、避险需求与跨资产配置。",
-                "variables": ("Gold", "Silver", "SP500", "Nasdaq"),
-                "keywords": ("stock market", "equity", "gold", "silver", "safe haven", "s&p 500", "nasdaq"),
+                "variables": ("Gold", "Silver", "SP500", "Nasdaq", "MSCIWorld", "CommodityIndex"),
+                "keywords": (
+                    "stock market", "equity", "gold", "silver", "safe haven",
+                    "s&p 500", "nasdaq", "asset allocation", "commodity index",
+                ),
             },
         ),
         (
@@ -159,8 +168,11 @@ VARIABLE_ECONOMIC_CATEGORIES: "OrderedDict[str, dict[str, Any]]" = OrderedDict(
                 "label_zh": "原油基准与价格预期",
                 "explanation_en": "Spot and futures benchmarks that transmit price discovery.",
                 "explanation_zh": "承担价格发现功能的原油现货与期货基准。",
-                "variables": ("WTI", "Brent", "ShanghaiSC"),
-                "keywords": ("crude oil price", "crude oil future", "brent", "west texas", "wti"),
+                "variables": ("WTI", "Brent", "ShanghaiSC", "DubaiCrude", "OPECBasket", "CrudeCurveSlope"),
+                "keywords": (
+                    "crude oil price", "crude oil future", "brent", "west texas", "wti",
+                    "dubai crude", "opec basket", "term structure", "crack spread", "calendar spread",
+                ),
             },
         ),
         (
@@ -170,8 +182,14 @@ VARIABLE_ECONOMIC_CATEGORIES: "OrderedDict[str, dict[str, Any]]" = OrderedDict(
                 "label_zh": "实物供给与生产",
                 "explanation_en": "Extraction, output capacity, imports, exports and transport flows.",
                 "explanation_zh": "开采、产能、进出口及运输流量。",
-                "variables": (),
-                "keywords": ("production", "supply", "output", "rig", "import", "export", "pipeline"),
+                "variables": (
+                    "USCrudeProduction", "OPECProduction", "RigCount", "CrudeImports",
+                    "CrudeExports", "FreightRates", "PipelineFlows", "SpareCapacity",
+                ),
+                "keywords": (
+                    "production", "supply", "output", "rig", "import", "export", "pipeline",
+                    "field production", "spare capacity", "tanker", "freight", "oil supply",
+                ),
             },
         ),
         (
@@ -181,8 +199,14 @@ VARIABLE_ECONOMIC_CATEGORIES: "OrderedDict[str, dict[str, Any]]" = OrderedDict(
                 "label_zh": "库存、炼化与成品油",
                 "explanation_en": "Stock buffers, refinery activity and refined-product markets.",
                 "explanation_zh": "库存缓冲、炼厂活动与成品油市场。",
-                "variables": ("CrudeStocks", "Gasoline", "HeatingOil", "ShanghaiFU"),
-                "keywords": ("stock", "storage", "inventory", "refin", "gasoline", "distillate", "heating oil"),
+                "variables": (
+                    "CrudeStocks", "SPRStocks", "GasolineStocks", "DistillateStocks",
+                    "RefineryUtilization", "RefineryInputs", "Gasoline", "HeatingOil", "ShanghaiFU",
+                ),
+                "keywords": (
+                    "stock", "storage", "inventory", "refin", "gasoline", "distillate",
+                    "heating oil", "strategic petroleum reserve", "refinery utilization", "product supplied",
+                ),
             },
         ),
         (
@@ -192,8 +216,14 @@ VARIABLE_ECONOMIC_CATEGORIES: "OrderedDict[str, dict[str, Any]]" = OrderedDict(
                 "label_zh": "实体经济与能源需求",
                 "explanation_en": "Industrial activity, consumption, mobility and end-use demand.",
                 "explanation_zh": "工业活动、消费、出行与终端能源需求。",
-                "variables": ("Copper",),
-                "keywords": ("consumption", "demand", "industrial production", "gdp", "sales", "freight", "copper"),
+                "variables": (
+                    "Copper", "INDPRO", "GlobalPMI", "RetailSales", "VehicleMiles",
+                    "AirTraffic", "PetroleumDemand", "ChinaIndustrialProduction",
+                ),
+                "keywords": (
+                    "consumption", "demand", "industrial production", "gdp", "sales", "freight",
+                    "copper", "pmi", "vehicle miles", "air traffic", "product supplied", "mobility",
+                ),
             },
         ),
         (
@@ -203,8 +233,14 @@ VARIABLE_ECONOMIC_CATEGORIES: "OrderedDict[str, dict[str, Any]]" = OrderedDict(
                 "label_zh": "货币与金融条件",
                 "explanation_en": "Policy rates, yields, liquidity and financing conditions.",
                 "explanation_zh": "政策利率、国债收益率、流动性与融资条件。",
-                "variables": ("TNote10Y", "US2Y", "FedFunds"),
-                "keywords": ("interest rate", "yield", "treasury", "federal funds", "liquidity", "credit"),
+                "variables": (
+                    "TNote10Y", "US2Y", "FedFunds", "RealYield10Y", "InflationExpectation",
+                    "CreditSpread", "MoneySupply", "FinancialConditions",
+                ),
+                "keywords": (
+                    "interest rate", "yield", "treasury", "federal funds", "liquidity", "credit",
+                    "real yield", "inflation expectation", "money supply", "financial conditions",
+                ),
             },
         ),
         (
@@ -214,8 +250,11 @@ VARIABLE_ECONOMIC_CATEGORIES: "OrderedDict[str, dict[str, Any]]" = OrderedDict(
                 "label_zh": "汇率与跨境定价",
                 "explanation_en": "Dollar valuation and exchange-rate transmission into commodity prices.",
                 "explanation_zh": "美元估值及汇率向大宗商品价格的传导。",
-                "variables": ("DollarIndex", "CNYUSD"),
-                "keywords": ("exchange rate", "currency", "dollar", "foreign exchange", "broad dollar"),
+                "variables": ("DollarIndex", "CNYUSD", "EURUSD", "EmergingMarketFX", "TradeWeightedDollar"),
+                "keywords": (
+                    "exchange rate", "currency", "dollar", "foreign exchange", "broad dollar",
+                    "trade weighted", "renminbi", "euro", "emerging market currency",
+                ),
             },
         ),
         (
@@ -225,8 +264,11 @@ VARIABLE_ECONOMIC_CATEGORIES: "OrderedDict[str, dict[str, Any]]" = OrderedDict(
                 "label_zh": "替代能源与相对成本",
                 "explanation_en": "Natural gas, coal and power prices that alter fuel substitution.",
                 "explanation_zh": "影响燃料替代的天然气、煤炭与电力价格。",
-                "variables": ("NaturalGas",),
-                "keywords": ("natural gas", "coal", "electricity", "power price", "renewable", "fuel switching"),
+                "variables": ("NaturalGas", "CoalPrice", "PowerPrice", "LNGPrice", "CarbonPrice"),
+                "keywords": (
+                    "natural gas", "coal", "electricity", "power price", "renewable",
+                    "fuel switching", "lng", "carbon allowance", "alternative fuel",
+                ),
             },
         ),
         (
