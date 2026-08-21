@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import base64
 import json
 import os
 import re
+import subprocess
 import time
 import warnings
 import uuid
@@ -460,6 +462,29 @@ def _safe_http_get(url: str, timeout: int = 30, retries: int = 3) -> bytes:
             last_error = exc
             if attempt < retries:
                 time.sleep(min(2 * attempt, 5))
+    # Some managed Windows networks terminate OpenSSL connections while the
+    # native Schannel stack remains trusted.  Keep certificate verification on
+    # and use PowerShell only as a Windows-specific transport fallback.  The
+    # URL is passed over stdin so API keys do not appear in process arguments.
+    if os.name == "nt":
+        script = (
+            "$ErrorActionPreference='Stop';"
+            "$u=[Console]::In.ReadToEnd().Trim();"
+            f"$r=Invoke-WebRequest -UseBasicParsing -Uri $u -TimeoutSec {max(1, int(timeout))};"
+            "[Console]::Out.Write([Convert]::ToBase64String($r.RawContentStream.ToArray()))"
+        )
+        try:
+            completed = subprocess.run(
+                ["powershell", "-NoProfile", "-NonInteractive", "-Command", script],
+                input=str(url),
+                text=True,
+                capture_output=True,
+                timeout=max(5, int(timeout) + 5),
+                check=True,
+            )
+            return base64.b64decode(completed.stdout.strip(), validate=True)
+        except Exception as exc:  # noqa: BLE001 - raise original provider context below.
+            last_error = exc
     if last_error is not None:
         raise last_error
     raise RuntimeError(f"Could not download URL: {url}")

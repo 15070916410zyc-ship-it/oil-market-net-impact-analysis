@@ -2575,7 +2575,7 @@ def apply_custom_css() -> None:
         [data-testid="stPlotlyChart"] {
             background: var(--codex-panel) !important;
             border: 1px solid var(--codex-panel-line) !important;
-            border-radius: 14px !important;
+            border-radius: 18px !important;
             padding: 0.55rem 0.7rem 0.35rem !important;
             overflow: hidden !important;
         }
@@ -2587,6 +2587,8 @@ def apply_custom_css() -> None:
             --text-color: var(--oil-ink) !important;
             --background-color: var(--codex-panel) !important;
             --secondary-background-color: var(--codex-panel-soft) !important;
+            border-radius: 16px !important;
+            overflow: hidden;
         }
         body div[data-testid="stTable"] div,
         body div[data-testid="stTable"] span,
@@ -2615,10 +2617,507 @@ def apply_custom_css() -> None:
         body [data-testid="stDataFrame"] canvas[data-testid="data-grid-canvas"] {
             background: transparent !important;
         }
+        .decision-hero,
+        .data-library-intro {
+            position: relative;
+            overflow: hidden;
+            margin: 0.2rem 0 1.25rem;
+            padding: 1.65rem 1.85rem 1.85rem;
+            background:
+                radial-gradient(circle at 92% -20%, rgba(229, 138, 74, 0.22), transparent 20rem),
+                linear-gradient(118deg, rgba(27, 38, 43, 0.96), rgba(18, 26, 30, 0.96));
+            border: 1px solid rgba(237, 242, 244, 0.12);
+            border-radius: 18px;
+            box-shadow: 0 22px 46px rgba(0, 0, 0, 0.20);
+        }
+        .data-library-intro {
+            background:
+                radial-gradient(circle at 90% -30%, rgba(86, 143, 151, 0.22), transparent 21rem),
+                linear-gradient(118deg, rgba(25, 37, 42, 0.96), rgba(17, 25, 29, 0.96));
+        }
+        .decision-hero span,
+        .data-library-intro span {
+            color: var(--oil-accent);
+            font-size: 0.7rem;
+            font-weight: 760;
+            letter-spacing: 0.14em;
+        }
+        .decision-hero h2,
+        .data-library-intro h2 {
+            max-width: 52rem;
+            margin: 0.55rem 0 0.7rem;
+            color: var(--oil-ink) !important;
+            font-size: clamp(1.7rem, 2.4vw, 2.55rem);
+            font-weight: 590;
+            line-height: 1.12;
+            text-wrap: balance;
+        }
+        .decision-hero p,
+        .data-library-intro p {
+            max-width: 68rem;
+            margin: 0;
+            color: #AEBAC0 !important;
+            font-size: 0.96rem;
+            line-height: 1.65;
+            text-wrap: pretty;
+        }
+        /* Bright spatial workspace: warm canvas, oversized type, floating color
+           fields, and calm data cards instead of an all-dark application shell. */
+        :root {
+            --oil-ink: #173238;
+            --oil-muted: #60777C;
+            --oil-accent: #F26A4B;
+            --oil-accent-dark: #D94F35;
+            --oil-canvas: #F6F4EE;
+            --oil-surface: #FFFFFF;
+            --oil-surface-raised: #FFFDFC;
+            --oil-line: rgba(23, 50, 56, 0.11);
+            --codex-panel: #FFFFFF;
+            --codex-panel-soft: #F3F6F3;
+            --codex-panel-deep: #EAF1EF;
+            --codex-panel-line: #DCE6E2;
+            --codex-panel-muted: #6A7F83;
+            --oil-blue: #3E83F8;
+            --oil-mint: #9AD7C6;
+            --oil-butter: #F6D68D;
+        }
+        html, body, .stApp, [data-testid="stAppViewContainer"] {
+            background:
+                radial-gradient(circle at 88% 2%, rgba(62, 131, 248, 0.14), transparent 26rem),
+                radial-gradient(circle at 7% 20%, rgba(154, 215, 198, 0.20), transparent 28rem),
+                linear-gradient(145deg, #F9F7F2 0%, #F3F6F1 54%, #F8F5EF 100%) !important;
+            color: var(--oil-ink) !important;
+            color-scheme: light !important;
+            --text-color: var(--oil-ink) !important;
+            --background-color: var(--oil-canvas) !important;
+            --secondary-background-color: #FFFFFF !important;
+            --primary-color: var(--oil-accent) !important;
+        }
+        [data-testid="stHeader"] {
+            background: rgba(249, 247, 242, 0.76) !important;
+            border-bottom: 1px solid rgba(23, 50, 56, 0.07) !important;
+            backdrop-filter: blur(20px) saturate(145%);
+        }
+        .block-container {
+            max-width: 1380px;
+            padding-top: 2.4rem;
+            padding-bottom: 5rem;
+        }
+        h1, h2, h3, h4, h5, h6,
+        p, label, span,
+        [data-testid="stMarkdownContainer"],
+        [data-testid="stMarkdownContainer"] p,
+        [data-testid="stMarkdownContainer"] span {
+            color: var(--oil-ink);
+        }
+        h1, h2, h3, h4 {
+            color: var(--oil-ink) !important;
+            letter-spacing: -0.045em;
+        }
+        [data-testid="stSidebar"] {
+            background: rgba(247, 246, 241, 0.94) !important;
+            border-right: 1px solid rgba(23, 50, 56, 0.09) !important;
+            backdrop-filter: blur(18px);
+        }
+        [data-testid="stSidebar"] *,
+        [data-testid="stSidebar"] p,
+        [data-testid="stSidebar"] span,
+        [data-testid="stSidebar"] label {
+            color: var(--oil-ink) !important;
+            -webkit-text-fill-color: var(--oil-ink) !important;
+        }
+        [data-testid="stSidebar"] [data-testid="stVerticalBlockBorderWrapper"] {
+            background: rgba(255, 255, 255, 0.78) !important;
+            border: 1px solid rgba(23, 50, 56, 0.09) !important;
+            border-radius: 20px !important;
+            box-shadow: 0 16px 40px rgba(44, 72, 69, 0.06) !important;
+        }
+        .sidebar-kicker,
+        .section-kicker,
+        .dashboard-eyebrow {
+            color: var(--oil-accent) !important;
+        }
+        .dashboard-header {
+            min-height: 260px;
+            padding: 2.7rem 3rem 2.9rem !important;
+            background:
+                radial-gradient(circle at 90% 8%, rgba(62, 131, 248, 0.24), transparent 18rem),
+                radial-gradient(circle at 75% 92%, rgba(154, 215, 198, 0.32), transparent 21rem),
+                linear-gradient(126deg, rgba(255, 255, 255, 0.96) 18%, rgba(255, 247, 231, 0.90) 100%) !important;
+            border: 1px solid rgba(23, 50, 56, 0.09) !important;
+            border-radius: 30px !important;
+            box-shadow: 0 28px 75px rgba(48, 78, 75, 0.12) !important;
+            transform: translateZ(0);
+            animation: oil-reveal 700ms cubic-bezier(.2,.8,.2,1) both;
+        }
+        .dashboard-header::before {
+            width: 290px;
+            height: 290px;
+            right: 5%;
+            top: -84px;
+            border-radius: 42% 58% 55% 45%;
+            background:
+                radial-gradient(circle at 35% 35%, rgba(255,255,255,0.85), transparent 19%),
+                linear-gradient(145deg, rgba(242, 106, 75, 0.92), rgba(246, 214, 141, 0.88) 48%, rgba(62, 131, 248, 0.82));
+            filter: blur(0);
+            opacity: 0.88;
+            box-shadow: inset -20px -25px 55px rgba(23, 50, 56, 0.13), 0 30px 60px rgba(47, 96, 111, 0.18);
+            animation: oil-orbit 9s ease-in-out infinite;
+        }
+        .dashboard-header::after {
+            background: linear-gradient(104deg, rgba(255,255,255,0.94) 34%, rgba(255,255,255,0.12) 72%) !important;
+        }
+        .dashboard-header h1 {
+            max-width: 880px;
+            margin: 0 0 1rem !important;
+            color: var(--oil-ink) !important;
+            font-size: clamp(2.5rem, 4.4vw, 5rem);
+            font-weight: 620;
+            line-height: 0.98;
+            letter-spacing: -0.065em;
+        }
+        .dashboard-header .dashboard-subtitle {
+            max-width: 760px;
+            color: var(--oil-muted) !important;
+            font-size: 1rem;
+            line-height: 1.65;
+        }
+        .stTabs [data-baseweb="tab-list"] {
+            width: 100%;
+            margin: 1.45rem 0 1.85rem;
+            padding: 0.38rem;
+            gap: 0.34rem;
+            background: rgba(255, 255, 255, 0.72) !important;
+            border: 1px solid rgba(23, 50, 56, 0.09) !important;
+            border-radius: 18px !important;
+            box-shadow: 0 14px 36px rgba(48, 78, 75, 0.07) !important;
+            backdrop-filter: blur(18px);
+        }
+        .stTabs [data-baseweb="tab"] {
+            color: var(--oil-muted) !important;
+            border-radius: 13px !important;
+            transition: transform 180ms ease, background-color 180ms ease, box-shadow 180ms ease;
+        }
+        .stTabs [data-baseweb="tab"] p,
+        .stTabs [data-baseweb="tab"] span {
+            color: var(--oil-muted) !important;
+            -webkit-text-fill-color: var(--oil-muted) !important;
+        }
+        .stTabs [data-baseweb="tab"]:hover {
+            background: rgba(154, 215, 198, 0.18) !important;
+            transform: translateY(-1px);
+        }
+        .stTabs [aria-selected="true"],
+        .stTabs [aria-selected="true"]:hover {
+            background: var(--oil-ink) !important;
+            box-shadow: 0 9px 24px rgba(23, 50, 56, 0.20) !important;
+            transform: translateY(0);
+        }
+        .stTabs [aria-selected="true"] p,
+        .stTabs [aria-selected="true"] span {
+            color: #FFFFFF !important;
+            -webkit-text-fill-color: #FFFFFF !important;
+        }
+        .decision-hero,
+        .data-library-intro {
+            min-height: 190px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            padding: 2.15rem 2.4rem 2.35rem;
+            background:
+                radial-gradient(circle at 89% 0%, rgba(242, 106, 75, 0.20), transparent 20rem),
+                radial-gradient(circle at 72% 115%, rgba(246, 214, 141, 0.30), transparent 18rem),
+                rgba(255, 255, 255, 0.82) !important;
+            border: 1px solid rgba(23, 50, 56, 0.09) !important;
+            border-radius: 26px !important;
+            box-shadow: 0 22px 58px rgba(48, 78, 75, 0.09) !important;
+            backdrop-filter: blur(16px);
+            animation: oil-reveal 650ms 90ms cubic-bezier(.2,.8,.2,1) both;
+        }
+        .data-library-intro {
+            background:
+                radial-gradient(circle at 90% -10%, rgba(62, 131, 248, 0.18), transparent 20rem),
+                radial-gradient(circle at 72% 120%, rgba(154, 215, 198, 0.38), transparent 19rem),
+                rgba(255, 255, 255, 0.84) !important;
+        }
+        .decision-hero span,
+        .data-library-intro span {
+            color: var(--oil-accent) !important;
+        }
+        .decision-hero h2,
+        .data-library-intro h2 {
+            color: var(--oil-ink) !important;
+            font-size: clamp(2rem, 3.2vw, 3.8rem);
+            font-weight: 610;
+            letter-spacing: -0.055em;
+        }
+        .decision-hero p,
+        .data-library-intro p {
+            color: var(--oil-muted) !important;
+        }
+        div[data-testid="stMetric"],
+        div[data-testid="stVerticalBlockBorderWrapper"],
+        div[data-testid="stExpander"],
+        [data-testid="stPlotlyChart"],
+        body [data-testid="stDataFrame"],
+        body [data-testid="stTable"] {
+            background: rgba(255, 255, 255, 0.91) !important;
+            border: 1px solid rgba(23, 50, 56, 0.10) !important;
+            border-radius: 20px !important;
+            box-shadow: 0 14px 40px rgba(48, 78, 75, 0.06) !important;
+        }
+        div[data-testid="stMetric"] {
+            padding: 1.15rem 1.25rem !important;
+            transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+        }
+        div[data-testid="stMetric"]:hover {
+            transform: translateY(-3px);
+            border-color: rgba(242, 106, 75, 0.30) !important;
+            box-shadow: 0 20px 44px rgba(48, 78, 75, 0.11) !important;
+        }
+        div[data-testid="stMetricLabel"],
+        div[data-testid="stMetricLabel"] p,
+        div[data-testid="stMetricLabel"] span {
+            color: var(--oil-muted) !important;
+            -webkit-text-fill-color: var(--oil-muted) !important;
+        }
+        div[data-testid="stMetricValue"],
+        div[data-testid="stMetricValue"] div,
+        div[data-testid="stMetricValue"] span,
+        div[data-testid="stMetricDelta"],
+        div[data-testid="stMetricDelta"] * {
+            color: var(--oil-ink) !important;
+            -webkit-text-fill-color: var(--oil-ink) !important;
+        }
+        [data-testid="stPlotlyChart"] {
+            padding: 0.65rem 0.75rem 0.4rem !important;
+            overflow: hidden !important;
+        }
+        body div[data-testid="stTable"] div,
+        body div[data-testid="stTable"] span,
+        body div[data-testid="stTable"] [role="table"],
+        body div[data-testid="stTable"] [role="row"],
+        body div[data-testid="stTable"] [role="columnheader"],
+        body div[data-testid="stTable"] [role="cell"] {
+            background: #FFFFFF !important;
+            background-color: #FFFFFF !important;
+            color: var(--oil-ink) !important;
+            -webkit-text-fill-color: var(--oil-ink) !important;
+            border-color: var(--codex-panel-line) !important;
+        }
+        body [data-testid="stTable"] [data-testid="stTableStyledTable"] th,
+        body [data-testid="stTable"] [data-testid="stTableStyledTable"] th p {
+            background: var(--codex-panel-soft) !important;
+            color: var(--oil-muted) !important;
+            -webkit-text-fill-color: var(--oil-muted) !important;
+        }
+        div[data-testid="stExpander"],
+        div[data-testid="stExpander"] details,
+        div[data-testid="stExpander"] summary,
+        div[data-testid="stExpander"] summary *,
+        div[data-testid="stExpanderDetails"] {
+            background: rgba(255, 255, 255, 0.92) !important;
+            color: var(--oil-ink) !important;
+            -webkit-text-fill-color: var(--oil-ink) !important;
+            border-color: var(--codex-panel-line) !important;
+        }
+        div[data-testid="stAlert"] {
+            background: rgba(234, 241, 239, 0.82) !important;
+            border: 1px solid rgba(23, 50, 56, 0.10) !important;
+            border-radius: 16px !important;
+            color: var(--oil-ink) !important;
+        }
+        div[data-testid="stAlert"] * {
+            color: var(--oil-ink) !important;
+            -webkit-text-fill-color: var(--oil-ink) !important;
+        }
+        div[data-baseweb="input"],
+        div[data-testid="stTextInput"] div[data-baseweb="input"],
+        div[data-testid="stDateInput"] div[data-baseweb="input"],
+        div[data-baseweb="select"],
+        div[data-baseweb="select"] > div,
+        div[data-testid="stSelectbox"] div[data-baseweb="select"],
+        div[data-testid="stMultiSelect"] div[data-baseweb="select"],
+        [data-baseweb="textarea"],
+        div[data-testid="stTextArea"] textarea,
+        [data-testid="stFileUploaderDropzone"] {
+            background: rgba(255, 255, 255, 0.94) !important;
+            border-color: rgba(23, 50, 56, 0.14) !important;
+            color: var(--oil-ink) !important;
+            border-radius: 14px !important;
+        }
+        div[data-testid="stSelectbox"] div[data-baseweb="select"] *,
+        div[data-testid="stMultiSelect"] div[data-baseweb="select"] *,
+        [data-testid="stSidebar"] div[data-baseweb="select"] *,
+        [data-testid="stSidebar"] div[data-baseweb="input"] * {
+            background-color: transparent !important;
+            color: var(--oil-ink) !important;
+            -webkit-text-fill-color: var(--oil-ink) !important;
+        }
+        div[data-testid="stSelectbox"],
+        div[data-testid="stMultiSelect"],
+        div[data-testid="stSelectbox"] > label,
+        div[data-testid="stMultiSelect"] > label,
+        div[data-testid="stSelectbox"] > label *,
+        div[data-testid="stMultiSelect"] > label * {
+            background: transparent !important;
+            background-color: transparent !important;
+            color: var(--oil-ink) !important;
+            -webkit-text-fill-color: var(--oil-ink) !important;
+        }
+        body div[data-testid] [data-testid="stWidgetLabel"],
+        body div[data-testid] [data-testid="stWidgetLabel"] * {
+            background: transparent !important;
+            color: var(--oil-muted) !important;
+            -webkit-text-fill-color: var(--oil-muted) !important;
+            opacity: 1 !important;
+        }
+        div[data-baseweb="select"] svg,
+        div[data-baseweb="select"] svg * {
+            fill: var(--oil-muted) !important;
+            stroke: var(--oil-muted) !important;
+        }
+        input, textarea,
+        div[data-baseweb="input"] *,
+        div[data-baseweb="select"] * {
+            color: var(--oil-ink) !important;
+            -webkit-text-fill-color: var(--oil-ink) !important;
+        }
+        input::placeholder,
+        textarea::placeholder {
+            color: #829497 !important;
+            -webkit-text-fill-color: #829497 !important;
+        }
+        div[data-testid="stButton"] button,
+        div[data-testid="stDownloadButton"] button {
+            min-height: 2.7rem;
+            background: #FFFFFF !important;
+            border: 1px solid rgba(23, 50, 56, 0.16) !important;
+            border-radius: 14px !important;
+            color: var(--oil-ink) !important;
+            box-shadow: 0 8px 22px rgba(48, 78, 75, 0.06);
+            transition: transform 180ms ease, box-shadow 180ms ease, background-color 180ms ease;
+        }
+        div[data-testid="stButton"] button *,
+        div[data-testid="stDownloadButton"] button * {
+            color: var(--oil-ink) !important;
+            -webkit-text-fill-color: var(--oil-ink) !important;
+        }
+        div[data-testid="stButton"] button:hover,
+        div[data-testid="stDownloadButton"] button:hover {
+            background: #FFF9F4 !important;
+            border-color: rgba(242, 106, 75, 0.42) !important;
+            transform: translateY(-2px);
+            box-shadow: 0 13px 28px rgba(48, 78, 75, 0.10);
+        }
+        div[data-testid="stButton"] button[kind="primary"],
+        .stTabs div[data-testid="stButton"] button[kind="primary"] {
+            background: var(--oil-accent) !important;
+            border-color: var(--oil-accent) !important;
+            color: #FFFFFF !important;
+            box-shadow: 0 12px 28px rgba(242, 106, 75, 0.24) !important;
+        }
+        div[data-testid="stButton"] button[kind="primary"] *,
+        .stTabs div[data-testid="stButton"] button[kind="primary"] * {
+            color: #FFFFFF !important;
+            -webkit-text-fill-color: #FFFFFF !important;
+        }
+        [data-testid="stRadio"] > div,
+        .stTabs [data-testid="stRadio"] > div {
+            background: rgba(231, 237, 233, 0.86) !important;
+            border: 1px solid rgba(23, 50, 56, 0.08) !important;
+            border-radius: 999px !important;
+            box-shadow: none !important;
+        }
+        [data-testid="stRadio"] label p {
+            color: var(--oil-muted) !important;
+            -webkit-text-fill-color: var(--oil-muted) !important;
+        }
+        [data-testid="stRadio"] label:has(input:checked),
+        .stTabs [data-testid="stRadio"] label:has(input:checked) {
+            background: #FFFFFF !important;
+            box-shadow: 0 4px 14px rgba(48, 78, 75, 0.12) !important;
+        }
+        [data-testid="stRadio"] label:has(input:checked) p,
+        .stTabs [data-testid="stRadio"] label:has(input:checked) p {
+            color: var(--oil-ink) !important;
+            -webkit-text-fill-color: var(--oil-ink) !important;
+        }
+        .window-summary,
+        .variable-selection-summary {
+            background: rgba(255, 255, 255, 0.86) !important;
+            border-color: rgba(23, 50, 56, 0.10) !important;
+            border-radius: 16px !important;
+            color: var(--oil-ink) !important;
+        }
+        .window-summary > div {
+            border-right-color: rgba(23, 50, 56, 0.10) !important;
+        }
+        .window-summary span,
+        .variable-selection-summary span {
+            color: var(--oil-muted) !important;
+            -webkit-text-fill-color: var(--oil-muted) !important;
+        }
+        .window-summary strong,
+        .variable-selection-summary strong {
+            color: var(--oil-ink) !important;
+            -webkit-text-fill-color: var(--oil-ink) !important;
+        }
+        .variable-selection-summary::before {
+            background: var(--oil-accent) !important;
+            color: #FFFFFF !important;
+        }
+        div[data-testid="stCheckbox"] label[data-selected="true"] > div:first-of-type {
+            background: var(--oil-accent) !important;
+            border-color: var(--oil-accent) !important;
+        }
+        hr { border-color: rgba(23, 50, 56, 0.10) !important; }
+        @keyframes oil-reveal {
+            from { opacity: 0; transform: translateY(18px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes oil-orbit {
+            0%, 100% { transform: translate3d(0, 0, 0) rotate(-8deg); border-radius: 42% 58% 55% 45%; }
+            50% { transform: translate3d(-18px, 15px, 0) rotate(8deg); border-radius: 56% 44% 42% 58%; }
+        }
+        [data-testid="stMetricValue"] {
+            font-variant-numeric: tabular-nums;
+            letter-spacing: -0.025em;
+        }
+        div[data-testid="stButton"] button,
+        div[data-testid="stDownloadButton"] button,
+        div[data-baseweb="input"],
+        div[data-baseweb="select"] > div,
+        [data-baseweb="textarea"] {
+            border-radius: 13px !important;
+        }
+        .stTabs [data-baseweb="tab-list"] {
+            border-radius: 15px !important;
+        }
+        .stTabs [data-baseweb="tab"] {
+            border-radius: 11px !important;
+        }
+        button:focus-visible,
+        [role="tab"]:focus-visible,
+        input:focus-visible,
+        [role="combobox"]:focus-visible {
+            outline: 2px solid var(--oil-accent) !important;
+            outline-offset: 2px !important;
+        }
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+                scroll-behavior: auto !important;
+            }
+        }
         hr { border-color: var(--oil-line) !important; }
         @media (max-width: 760px) {
             .block-container { padding-left: 1rem; padding-right: 1rem; }
-            .dashboard-header { min-height: auto; padding: 1.6rem !important; border-radius: 14px !important; }
+            .dashboard-header { min-height: auto; padding: 1.6rem !important; border-radius: 22px !important; }
+            .dashboard-header::before { width: 180px; height: 180px; right: -70px; top: -65px; }
             .dashboard-header h1 { font-size: 2.35rem; }
             .stTabs [data-baseweb="tab-list"] { width: 100%; }
             .stTabs [data-baseweb="tab"] { padding: 0.5rem 0.35rem; }
@@ -2633,10 +3132,10 @@ def apply_custom_css() -> None:
 def render_main_header() -> None:
     """Render the dashboard header."""
     eyebrow = ui_text("OIL MARKET RESEARCH LAB", "原油市场研究台")
-    title = ui_text("Crisis-aware oil market intelligence", "危机事件下的原油市场分析")
+    title = ui_text("Oil market decision & research cockpit", "原油市场决策与科研驾驶舱")
     subtitle = ui_text(
-        "Net impact · WTI / Brent forecast · five-day risk signal",
-        "净影响分析 · WTI / Brent 价格预测 · 五日风险预警",
+        "Investment view · enterprise hedge · official data search · professional research",
+        "投资研究 · 企业套保 · 官方数据搜索 · 专业科研分析",
     )
     title_col, tools_col = st.columns([0.79, 0.21])
     with title_col:
@@ -7128,25 +7627,30 @@ def render_professional_pipeline_tab(options: dict[str, Any]) -> None:
 
 
 def _apply_dark_plot_theme(figure: Any) -> Any:
-    """Apply the Codex-gray data-surface theme to interactive Plotly figures."""
+    """Apply the bright workspace theme to interactive Plotly figures."""
     figure.update_layout(
-        template="plotly_dark",
-        paper_bgcolor="#2B2B2B",
-        plot_bgcolor="#242424",
-        font=dict(color="#D6D6D6"),
-        title_font=dict(color="#F0F0F0"),
-        legend=dict(bgcolor="rgba(43,43,43,0.88)"),
-        hoverlabel=dict(bgcolor="#343434", bordercolor="#666666", font_color="#F2F2F2"),
+        template="plotly_white",
+        paper_bgcolor="#FFFFFF",
+        plot_bgcolor="#FFFFFF",
+        font=dict(color="#173238", family="Aptos, Segoe UI, Microsoft YaHei UI, sans-serif"),
+        title_font=dict(color="#173238"),
+        legend=dict(bgcolor="rgba(255,255,255,0.88)", bordercolor="#DCE6E2", borderwidth=1),
+        hoverlabel=dict(bgcolor="#173238", bordercolor="#173238", font_color="#FFFFFF"),
+        colorway=["#F26A4B", "#3E83F8", "#53A98F", "#E6AA43", "#8A6FD1", "#4C7A82"],
     )
     figure.update_xaxes(
-        gridcolor="#424242",
-        linecolor="#5A5A5A",
-        zerolinecolor="#555555",
+        gridcolor="#E8EFEC",
+        linecolor="#C9D7D2",
+        zerolinecolor="#DCE6E2",
+        tickfont=dict(color="#60777C"),
+        title_font=dict(color="#173238"),
     )
     figure.update_yaxes(
-        gridcolor="#424242",
-        linecolor="#5A5A5A",
-        zerolinecolor="#555555",
+        gridcolor="#E8EFEC",
+        linecolor="#C9D7D2",
+        zerolinecolor="#DCE6E2",
+        tickfont=dict(color="#60777C"),
+        title_font=dict(color="#173238"),
     )
     return figure
 
@@ -7990,7 +8494,7 @@ def render_oil_price_forecast_panel() -> None:
     figure = go.Figure()
     figure.add_trace(go.Scatter(
         x=history["Date"], y=history["Actual"], name=ui_text("Actual", "实际价格"),
-        line=dict(color="#D9E2E6", width=2.2), hovertemplate="%{x|%Y-%m-%d}<br>$%{y:.2f}<extra></extra>",
+        line=dict(color="#42656D", width=2.2), hovertemplate="%{x|%Y-%m-%d}<br>$%{y:.2f}<extra></extra>",
     ))
     interval_colors = {
         50: ("#5EC4B2", "rgba(94, 196, 178, 0.28)"),
@@ -8026,7 +8530,7 @@ def render_oil_price_forecast_panel() -> None:
         ))
     figure.add_trace(go.Scatter(
         x=forecast_display["Date"], y=forecast_display["PointForecast"], name=ui_text("Forecast", "预测价格"),
-        line=dict(color="#E58A4A", width=2.5, dash="dash"),
+        line=dict(color="#F26A4B", width=2.5, dash="dash"),
         hovertemplate="%{x|%Y-%m-%d}<br>$%{y:.2f}<extra></extra>",
     ))
     visible_start, visible_end = _forecast_chart_default_range(
@@ -8416,10 +8920,12 @@ def render_price_forecast_tab(options: dict[str, Any]) -> None:
 
 
 def main_navigation_labels() -> list[str]:
-    """Return the two top-level workspaces; analysis results are inline."""
+    """Return decision, data, research, and forecast workspaces."""
     return [
-        ui_text("Run analysis", "运行分析"),
-        ui_text("Price forecast", "价格预测"),
+        ui_text("Decision cockpit", "决策驾驶舱"),
+        ui_text("Data center", "数据中心"),
+        ui_text("Research analysis", "科研分析"),
+        ui_text("Forecast & risk", "预测与风险"),
     ]
 
 
@@ -8435,8 +8941,16 @@ def main() -> None:
 
     tabs = st.tabs(main_navigation_labels())
     with tabs[0]:
-        options = render_run_pipeline_tab(options)
+        from app.executive_dashboard import render_decision_dashboard
+
+        render_decision_dashboard(ui_text, _apply_dark_plot_theme)
     with tabs[1]:
+        from app.data_library import render_data_library
+
+        render_data_library(ui_text, _apply_dark_plot_theme)
+    with tabs[2]:
+        options = render_run_pipeline_tab(options)
+    with tabs[3]:
         render_price_forecast_tab(options)
 
 

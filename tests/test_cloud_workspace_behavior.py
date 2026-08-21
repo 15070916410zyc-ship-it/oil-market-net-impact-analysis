@@ -148,7 +148,10 @@ class CloudWorkspaceBehaviorTests(unittest.TestCase):
     def test_analysis_results_are_inline_not_a_top_level_tab(self) -> None:
         from app import streamlit_app as app
 
-        self.assertEqual(app.main_navigation_labels(), ["运行分析", "价格预测"])
+        self.assertEqual(
+            app.main_navigation_labels(),
+            ["决策驾驶舱", "数据中心", "科研分析", "预测与风险"],
+        )
         with (
             patch.object(app.st, "markdown"),
             patch.object(app.st, "radio", return_value="professional"),
@@ -365,19 +368,22 @@ class CloudWorkspaceBehaviorTests(unittest.TestCase):
         self.assertNotIn("paper", app.localized_workflow_value(legacy_value, "en").lower())
         self.assertNotIn("论文", app.localized_workflow_value(legacy_value, "zh"))
 
-    def test_charts_and_tables_use_codex_gray_data_surfaces(self) -> None:
+    def test_charts_and_tables_use_bright_data_surfaces(self) -> None:
         import plotly.graph_objects as go
 
         from app import streamlit_app as app
 
         figure = app._apply_dark_plot_theme(go.Figure())
-        self.assertEqual(figure.layout.paper_bgcolor, "#2B2B2B")
-        self.assertEqual(figure.layout.plot_bgcolor, "#242424")
+        self.assertEqual(figure.layout.paper_bgcolor, "#FFFFFF")
+        self.assertEqual(figure.layout.plot_bgcolor, "#FFFFFF")
+        self.assertEqual(figure.layout.font.color, "#173238")
 
         with patch.object(app.st, "markdown") as markdown:
             app.apply_custom_css()
         css = markdown.call_args.args[0]
-        self.assertIn("--codex-panel: #2B2B2B;", css)
+        self.assertIn("--oil-canvas: #F6F4EE;", css)
+        self.assertIn("--codex-panel: #FFFFFF;", css)
+        self.assertIn("@keyframes oil-orbit", css)
         self.assertIn('[data-testid="stPlotlyChart"]', css)
         self.assertIn('body [data-testid="stDataFrame"]', css)
 
@@ -463,7 +469,7 @@ class CloudWorkspaceBehaviorTests(unittest.TestCase):
         plotly_chart.assert_called_once()
         rendered = plotly_chart.call_args.args[0]
         self.assertEqual(len(rendered.data), 1)
-        self.assertEqual(rendered.layout.paper_bgcolor, "#2B2B2B")
+        self.assertEqual(rendered.layout.paper_bgcolor, "#FFFFFF")
 
     def test_cloud_runtime_detection_supports_override_and_streamlit_marker(self) -> None:
         from app.streamlit_app import is_cloud_runtime

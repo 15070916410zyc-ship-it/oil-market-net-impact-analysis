@@ -1,0 +1,58 @@
+from __future__ import annotations
+
+from types import SimpleNamespace
+import unittest
+
+import pandas as pd
+
+from src.decision_support import build_buyer_hedge_scenarios, build_investment_decision
+
+
+def sample_result() -> SimpleNamespace:
+    return SimpleNamespace(
+        metrics={
+            "LatestPrice": 80.0,
+            "ProjectedChangePercent": 6.0,
+            "DirectionalAccuracyPercent": 62.0,
+        },
+        forecast=pd.DataFrame(
+            {
+                "Date": pd.to_datetime(["2026-08-24", "2026-09-18"]),
+                "PointForecast": [82.0, 84.8],
+                "Lower80": [77.0, 76.0],
+                "Upper80": [87.0, 92.0],
+                "Lower95": [74.0, 70.0],
+                "Upper95": [90.0, 98.0],
+            }
+        ),
+    )
+
+
+class DecisionSupportTests(unittest.TestCase):
+    def test_investment_signal_is_bounded_and_validated(self) -> None:
+        decision = build_investment_decision(sample_result())
+        self.assertGreater(decision.score, 0)
+        self.assertLessEqual(decision.position_high, 0.35)
+        self.assertFalse(decision.gated)
+
+    def test_hedge_scenario_reconciles_net_cost(self) -> None:
+        scenarios = build_buyer_hedge_scenarios(
+            sample_result(),
+            exposure_volume=100_000,
+            budget_price=82.0,
+            hedge_ratio=0.60,
+            futures_share=0.70,
+            option_premium=2.0,
+        )
+        calculated = (
+            scenarios["PhysicalCost"]
+            - scenarios["FuturesPnL"]
+            - scenarios["OptionPayoff"]
+            + scenarios["OptionPremium"]
+        )
+        pd.testing.assert_series_equal(calculated, scenarios["NetCost"], check_names=False)
+        self.assertTrue((scenarios["Contracts"] == 60).all())
+
+
+if __name__ == "__main__":
+    unittest.main()

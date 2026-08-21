@@ -3,14 +3,16 @@
 from __future__ import annotations
 
 from collections import OrderedDict
+import json
 import re
 from typing import Any
 
 import pandas as pd
 import requests
 
-from src.data_fetcher import _get_eia_api_key, _get_fred_api_key
+from src.data_fetcher import _get_eia_api_key, _get_fred_api_key, _safe_http_get
 from src.quick_analysis import variable_economic_category
+from src.data_governance import deduplicate_catalog_results, normalize_search_text
 
 
 FRED_SEARCH_URL = "https://api.stlouisfed.org/fred/series/search"
@@ -31,11 +33,19 @@ EIA_DATASET_ROUTES: "OrderedDict[str, dict[str, str]]" = OrderedDict(
     ]
 )
 
+EIA_DISCOVERY_ROOTS = ("petroleum", "natural-gas", "international")
+
 
 def _response_json(url: str, params: list[tuple[str, str]] | dict[str, Any]) -> dict[str, Any]:
-    response = requests.get(url, params=params, timeout=30)
-    response.raise_for_status()
-    payload = response.json()
+    try:
+        response = requests.get(url, params=params, timeout=30)
+        response.raise_for_status()
+        payload = response.json()
+    except requests.exceptions.SSLError:
+        prepared_url = requests.Request("GET", url, params=params).prepare().url
+        if not prepared_url:
+            raise
+        payload = json.loads(_safe_http_get(prepared_url, timeout=30, retries=1).decode("utf-8"))
     if payload.get("error"):
         message = str(payload["error"].get("message") or payload["error"])
         raise RuntimeError(message)
@@ -145,6 +155,77 @@ def search_eia_series(
         if len(results) >= max(1, int(limit)):
             break
     return results
+
+
+def search_eia_datasets(
+    query: str,
+    *,
+    roots: tuple[str, ...] = EIA_DISCOVERY_ROOTS,
+    max_nodes: int = 240,
+    limit: int = 40,
+) -> list[dict[str, str]]:
+    """Discover EIA v2 dataset routes instead of requiring a memorized path.
+
+    EIA exposes a self-documenting route tree.  The traversal is intentionally
+    bounded so a broad query cannot turn one Streamlit rerun into a full crawl.
+    """
+    normalized_query = normalize_search_text(query)
+    if not normalized_query:
+        return []
+    tokens = normalized_query.split()
+    api_key = _get_eia_api_key()
+    pending = [str(root).strip("/") for root in roots if str(root).strip("/")]
+    visited: set[str] = set()
+    matches: list[dict[str, str]] = []
+    while pending and len(visited) < max(1, int(max_nodes)):
+        route = pending.pop(0)
+        if route in visited:
+            continue
+        visited.add(route)
+        try:
+            payload = _response_json(f"{EIA_API_ROOT}/{route}/", {"api_key": api_key})
+        except Exception:  # noqa: BLE001 - one unavailable branch must not block discovery.
+            continue
+        response = payload.get("response", {})
+        label = str(response.get("name") or response.get("description") or route)
+        description = str(response.get("description") or "")
+        searchable = normalize_search_text(f"{route} {label} {description}")
+        is_leaf = bool(response.get("data")) or bool(response.get("facets"))
+        if is_leaf and all(token in searchable for token in tokens):
+            matches.append(
+                {
+                    "route": route,
+                    "title": label,
+                    "description": description,
+                    "default_frequency": str(response.get("defaultFrequency") or ""),
+                }
+            )
+            if len(matches) >= max(1, int(limit)):
+                break
+        for child in response.get("routes", []) or []:
+            child_id = str(child.get("id", "")).strip("/")
+            if not child_id:
+                continue
+            child_route = child_id if child_id.startswith(f"{route}/") else f"{route}/{child_id}"
+            if child_route not in visited:
+                pending.append(child_route)
+    return matches
+
+
+def search_official_catalogs(
+    query: str,
+    *,
+    include_fred: bool = True,
+    eia_routes: list[str] | tuple[str, ...] = (),
+    limit_per_source: int = 30,
+) -> list[dict[str, Any]]:
+    """Search selected official catalogs and return exact-deduplicated results."""
+    results: list[dict[str, Any]] = []
+    if include_fred:
+        results.extend(search_fred_series(query, limit=limit_per_source))
+    for route in eia_routes:
+        results.extend(search_eia_series(query, str(route), limit=limit_per_source))
+    return deduplicate_catalog_results(results)
 
 
 def _safe_variable_name(source: str, series_id: str) -> str:
