@@ -100,7 +100,7 @@ def _main_forecast_figure(result: Any, frequency: str, ui_text: UiText) -> go.Fi
             y=history_view["Price"],
             mode="lines",
             name=ui_text("Observed", "实际价格"),
-            line=dict(color="#42656D", width=2.2),
+            line=dict(color="#354554", width=2.2),
             hovertemplate="%{x|%Y-%m-%d}<br>$%{y:,.2f}<extra></extra>",
         )
     )
@@ -110,7 +110,7 @@ def _main_forecast_figure(result: Any, frequency: str, ui_text: UiText) -> go.Fi
                 x=forecast_view["Date"],
                 y=forecast_view["Upper80"],
                 mode="lines",
-                line=dict(color="rgba(242,106,75,0.30)", width=1),
+                line=dict(color="rgba(105,114,203,0.26)", width=1),
                 hoverinfo="skip",
                 showlegend=False,
             )
@@ -122,8 +122,8 @@ def _main_forecast_figure(result: Any, frequency: str, ui_text: UiText) -> go.Fi
                 mode="lines",
                 name=ui_text("80% empirical range", "80%经验区间"),
                 fill="tonexty",
-                fillcolor="rgba(242,106,75,0.15)",
-                line=dict(color="rgba(242,106,75,0.42)", width=1),
+                fillcolor="rgba(105,114,203,0.13)",
+                line=dict(color="rgba(105,114,203,0.38)", width=1),
                 customdata=forecast_view[["Lower80", "Upper80"]].to_numpy(),
                 hovertemplate=(
                     "%{x|%Y-%m-%d}<br>"
@@ -140,8 +140,8 @@ def _main_forecast_figure(result: Any, frequency: str, ui_text: UiText) -> go.Fi
                 y=forecast_view["PointForecast"],
                 mode="lines+markers",
             name=ui_text("Five-IMF forecast", "五个 IMF 分量预测"),
-                line=dict(color="#F26A4B", width=3),
-                marker=dict(size=5, color="#F6A187"),
+                line=dict(color="#6972CB", width=3),
+                marker=dict(size=5, color="#A98BE8"),
                 hovertemplate="%{x|%Y-%m-%d}<br>$%{y:,.2f}<extra></extra>",
             )
         )
@@ -174,7 +174,7 @@ def _component_figure(result: Any, ui_text: UiText) -> go.Figure:
     final_date = components["Date"].max()
     final = components.loc[components["Date"] == final_date].copy()
     final["Channel"] = final["ChannelZH"] if ui_text("en", "zh") == "zh" else final["ChannelEN"]
-    colors = ["#F26A4B" if value >= 0 else "#3E83F8" for value in final["Forecast"]]
+    colors = ["#6972CB" if value >= 0 else "#70899D" for value in final["Forecast"]]
     figure = go.Figure(
         go.Bar(
             x=final["Forecast"],
@@ -212,7 +212,7 @@ def _hedge_figure(scenarios: pd.DataFrame, ui_text: UiText) -> go.Figure:
             x=labels,
             y=scenarios["NetCost"],
             name=ui_text("Net cost after hedge", "套保后净成本"),
-            marker_color="#F26A4B",
+            marker_color="#6972CB",
             hovertemplate="%{x}<br>$%{y:,.0f}<extra></extra>",
         )
     )
@@ -222,7 +222,7 @@ def _hedge_figure(scenarios: pd.DataFrame, ui_text: UiText) -> go.Figure:
             y=scenarios["BudgetCost"],
             mode="lines",
             name=ui_text("Budget", "预算"),
-            line=dict(color="#173238", width=2, dash="dash"),
+            line=dict(color="#354554", width=2, dash="dash"),
             hovertemplate="%{x}<br>$%{y:,.0f}<extra></extra>",
         )
     )
@@ -241,16 +241,16 @@ def _hedge_figure(scenarios: pd.DataFrame, ui_text: UiText) -> go.Figure:
 def render_decision_dashboard(ui_text: UiText, apply_theme: ThemeFunction) -> None:
     """Render the investor/enterprise result layer without exposing model plumbing."""
     st.markdown(
-        f'<p class="section-kicker">{ui_text("DECISION COCKPIT", "决策驾驶舱")}</p>',
+        f'<p class="section-kicker">{ui_text("MARKET OUTLOOK", "市场判断")}</p>',
         unsafe_allow_html=True,
     )
     st.markdown(
         f"""
         <section class="decision-hero">
           <div>
-            <span>{ui_text("ONE MODEL · TWO DECISIONS", "一套模型 · 两类决策")}</span>
-            <h2>{ui_text("Turn oil-market research into an actionable view", "把油价研究结果转换成可执行的决策视图")}</h2>
-            <p>{ui_text("The five-IMF forecast, validation and risk state stay unchanged. This layer only changes how results are organized for investment research and enterprise procurement hedging.", "底层的五个 IMF 分量预测、样本外验证和风险状态保持不变；这里只按照投资研究和企业采购套保的需要重新组织结果。")}</p>
+            <span>{ui_text("ONE METHOD, TWO USE CASES", "同一套方法，两种用法")}</span>
+            <h2>{ui_text("Today's market outlook", "今天的市场判断")}</h2>
+            <p>{ui_text("Read the direction and range first, then decide whether action is needed. The five-component forecast, validation and risk checks remain unchanged.", "先看方向和区间，再决定是否需要行动。五个 IMF 分量预测、样本外检验和风险判断都保留原样。")}</p>
           </div>
         </section>
         """,
@@ -283,7 +283,7 @@ def render_decision_dashboard(ui_text: UiText, apply_theme: ThemeFunction) -> No
     with action_col:
         st.write("")
         run = st.button(
-            ui_text("Refresh & build decision view", "更新并生成决策视图"),
+            ui_text("Refresh outlook", "重新计算"),
             type="primary",
             use_container_width=True,
             key="executive_run_forecast",
@@ -301,7 +301,7 @@ def render_decision_dashboard(ui_text: UiText, apply_theme: ThemeFunction) -> No
     if result is None:
         st.info(ui_text(
             "Choose a benchmark and build the decision view. Existing forecast results are reused when the settings match.",
-            "选择基准品种后生成决策视图；如果设置相同，系统会直接复用已有预测结果。",
+            "选择品种和观察周期后，即可查看最新判断。相同设置会直接使用已有结果。",
         ))
         return
 
@@ -313,14 +313,14 @@ def render_decision_dashboard(ui_text: UiText, apply_theme: ThemeFunction) -> No
     metric_columns = st.columns(5)
     metric_columns[0].metric(ui_text("Latest price", "最新价格"), f"${float(metrics['LatestPrice']):,.2f}")
     metric_columns[1].metric(ui_text("Horizon change", "预测期涨跌"), f"{float(metrics['ProjectedChangePercent']):+.1f}%")
-    metric_columns[2].metric(ui_text("80% terminal range", "80%期末区间"), f"{float(final['Lower80']):.1f}–{float(final['Upper80']):.1f} USD/bbl")
+    metric_columns[2].metric(ui_text("80% terminal range", "80%期末区间"), f"{float(final['Lower80']):.1f}-{float(final['Upper80']):.1f} USD/bbl")
     metric_columns[3].metric(ui_text("Directional accuracy", "方向准确率"), f"{float(metrics['DirectionalAccuracyPercent']):.1f}%")
     metric_columns[4].metric(ui_text("5-day high-volatility", "未来5日高波动概率"), f"{high_volatility * 100:.1f}%" if high_volatility else ui_text("Not run", "尚未计算"))
 
     mode = st.radio(
-        ui_text("Decision user", "决策用户"),
+        ui_text("How will you use this view?", "你准备怎么用这份判断？"),
         ["investment", "enterprise"],
-        format_func=lambda value: ui_text("Investment research", "期货投资研究") if value == "investment" else ui_text("Enterprise procurement hedge", "企业采购套保"),
+        format_func=lambda value: ui_text("Investment view", "投资判断") if value == "investment" else ui_text("Procurement hedge", "采购套保"),
         horizontal=True,
         key="executive_user_mode",
     )
@@ -335,17 +335,17 @@ def render_decision_dashboard(ui_text: UiText, apply_theme: ThemeFunction) -> No
             confidence = decision.confidence_zh if ui_text("en", "zh") == "zh" else decision.confidence
             gate_reason = decision.gate_reason_zh if ui_text("en", "zh") == "zh" else decision.gate_reason
             st.markdown(f"### {label}")
-            st.metric(ui_text("Research position band", "参考仓位区间"), f"{decision.position_low:.0%}–{decision.position_high:.0%}")
-            st.metric(ui_text("Signal confidence", "信号可信度"), confidence)
-            st.metric(ui_text("Invalidation boundary", "观点失效价"), f"${decision.invalidation_price:,.2f}")
+            st.metric(ui_text("Research position band", "建议仓位"), f"{decision.position_low:.0%}-{decision.position_high:.0%}")
+            st.metric(ui_text("Signal confidence", "信号把握"), confidence)
+            st.metric(ui_text("Invalidation boundary", "判断失效价"), f"${decision.invalidation_price:,.2f}")
             st.caption(gate_reason)
             st.warning(ui_text(
                 "Research signal only. It does not account for an individual's leverage, margin or suitability.",
                 "仅为研究信号，未考虑个人杠杆、保证金承受能力与适当性。",
             ))
         else:
-            st.markdown(f"### {ui_text('Procurement hedge view', '采购套保视图')}")
-            st.metric(ui_text("Suggested coverage band", "建议覆盖比例"), f"{max(0.0, recommendation.hedge_ratio - 0.08):.0%}–{min(1.0, recommendation.hedge_ratio + 0.08):.0%}")
+            st.markdown(f"### {ui_text('Procurement hedge view', '采购套保建议')}")
+            st.metric(ui_text("Suggested coverage band", "建议覆盖比例"), f"{max(0.0, recommendation.hedge_ratio - 0.08):.0%}-{min(1.0, recommendation.hedge_ratio + 0.08):.0%}")
             st.metric(ui_text("Futures layer", "期货层"), f"{recommendation.futures_share:.0%}")
             st.metric(ui_text("Options layer", "期权层"), f"{recommendation.options_share:.0%}")
             st.caption(recommendation.rationale_zh if ui_text("en", "zh") == "zh" else recommendation.rationale)

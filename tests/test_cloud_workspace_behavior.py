@@ -150,7 +150,7 @@ class CloudWorkspaceBehaviorTests(unittest.TestCase):
 
         self.assertEqual(
             app.main_navigation_labels(),
-            ["决策驾驶舱", "数据中心", "科研分析", "预测与风险"],
+            ["市场判断", "数据中心", "研究工具", "风险监测"],
         )
         with (
             patch.object(app.st, "markdown"),
@@ -376,78 +376,56 @@ class CloudWorkspaceBehaviorTests(unittest.TestCase):
         figure = app._apply_dark_plot_theme(go.Figure())
         self.assertEqual(figure.layout.paper_bgcolor, "#FFFFFF")
         self.assertEqual(figure.layout.plot_bgcolor, "#FFFFFF")
-        self.assertEqual(figure.layout.font.color, "#173238")
+        self.assertEqual(figure.layout.font.color, "#211D2A")
 
         with patch.object(app.st, "markdown") as markdown:
             app.apply_custom_css()
         css = markdown.call_args.args[0]
-        self.assertIn("--oil-canvas: #F6F4EE;", css)
-        self.assertIn("--codex-panel: #FFFFFF;", css)
-        self.assertIn("@keyframes oil-orbit", css)
+        self.assertIn("--canvas: #f4f1e9;", css)
+        self.assertIn("--surface: #fbfaf6;", css)
+        self.assertIn("@keyframes art-field-scroll", css)
+        self.assertIn("animation-timeline: scroll(root block)", css)
         self.assertIn('[data-testid="stPlotlyChart"]', css)
-        self.assertIn('body [data-testid="stDataFrame"]', css)
+        self.assertIn('[data-testid="stDataFrame"]', css)
 
-    def test_help_buttons_use_circle_exclamation_icon(self) -> None:
+    def test_interactive_controls_have_visible_keyboard_focus(self) -> None:
         from app import streamlit_app as app
 
         with patch.object(app.st, "markdown") as markdown:
             app.apply_custom_css()
 
         css = markdown.call_args.args[0]
-        self.assertIn('button[aria-label^="Help for"]::after', css)
-        self.assertIn('content: "!";', css)
-        self.assertIn('border-radius: 50%;', css)
-        self.assertIn('button[aria-label^="Help for"]:focus-visible', css)
+        self.assertIn("button:focus-visible", css)
+        self.assertIn('[role="tab"]:focus-visible', css)
+        self.assertIn("outline: 3px solid rgba(105, 114, 203, 0.3)", css)
+        self.assertIn("outline-offset: 2px", css)
 
-    def test_dark_expanders_do_not_cover_dataframe_canvas(self) -> None:
+    def test_data_surfaces_and_expanders_stay_bright(self) -> None:
         from app import streamlit_app as app
 
         with patch.object(app.st, "markdown") as markdown:
             app.apply_custom_css()
 
         css = markdown.call_args.args[0]
-        selector = (
-            '[data-testid="stDataFrame"] .dvn-scroller,\n'
-            '        [data-testid="stDataFrame"] canvas[data-testid="data-grid-canvas"]'
-        )
-        self.assertIn(selector, css)
-        dataframe_override = css.split(selector, maxsplit=1)[1].split("}", maxsplit=1)[0]
-        self.assertIn("background: transparent !important;", dataframe_override)
-        self.assertIn('[data-testid="stTable"] [data-testid="stTableStyledTable"] td p', css)
-        self.assertIn("color: var(--oil-ink) !important;", css)
-        self.assertIn(
-            'div[data-testid="stExpander"] [data-testid="stMarkdownContainer"] a *',
-            css,
-        )
-        self.assertIn("color: #F0A36B !important;", css)
+        self.assertIn('[data-testid="stDataFrame"], [data-testid="stTable"], [data-testid="stPlotlyChart"]', css)
+        self.assertIn("background: var(--surface) !important;", css)
+        self.assertIn('[data-testid="stExpander"]', css)
+        self.assertIn("border-radius: 16px !important;", css)
+        self.assertNotIn("#F26A4B", css)
 
-    def test_dark_theme_contrast_overrides_cover_interactive_controls(self) -> None:
+    def test_bright_theme_covers_interactive_controls(self) -> None:
         from app import streamlit_app as app
 
         with patch.object(app.st, "markdown") as markdown:
             app.apply_custom_css()
 
         css = markdown.call_args.args[0]
-        self.assertIn(
-            'div[data-testid="stExpander"] [data-testid="stWidgetLabel"] '
-            '[data-testid="stMarkdownContainer"] p',
-            css,
-        )
-        self.assertIn(
-            '.stTabs div[data-testid="stExpander"] [data-testid="stRadio"] '
-            'label:has(input:checked) p',
-            css,
-        )
-        self.assertIn('.stTabs div[data-testid="stButton"] button[kind="primary"] p', css)
-        self.assertIn('[data-testid="stFileUploaderDropzone"] [data-has-shortcut] *', css)
-        self.assertIn('button:disabled p', css)
-        self.assertIn('-webkit-text-fill-color: #101416 !important;', css)
-        multiselect_input_override = css.rsplit(
-            'div[data-testid="stMultiSelect"] input {', maxsplit=1
-        )[1].split("}", maxsplit=1)[0]
-        self.assertIn("background: transparent !important;", multiselect_input_override)
-        self.assertIn('div:has(> span[data-baseweb="tag"])', css)
-        self.assertIn("right: 0.25rem !important;", css)
+        self.assertIn('div[data-baseweb="select"] > div', css)
+        self.assertIn("background: var(--surface) !important;", css)
+        self.assertIn('[data-testid="stRadio"] [role="radiogroup"] > label:has(input:checked)', css)
+        self.assertIn('[data-testid="baseButton-primary"]', css)
+        self.assertIn('[data-testid="stFileUploaderDropzone"]', css)
+        self.assertIn("color: var(--ink) !important;", css)
 
     def test_result_plotly_charts_are_loaded_as_dynamic_figures(self) -> None:
         from app import streamlit_app as app

@@ -632,16 +632,13 @@ def localized_workflow_frame(frame: pd.DataFrame, language: LanguageCode | None 
 
 def render_language_switcher() -> None:
     """Render the global Chinese/English website language control."""
-    _, language_col = st.columns([0.62, 0.38])
-    with language_col:
-        st.radio(
-            "Language / 语言",
-            options=["zh", "en"],
-            format_func=lambda value: "中文" if value == "zh" else "English",
-            horizontal=True,
-            label_visibility="collapsed",
-            key=UI_LANGUAGE_STATE,
-        )
+    st.selectbox(
+        "Language / 语言",
+        options=["zh", "en"],
+        format_func=lambda value: "中" if value == "zh" else "EN",
+        label_visibility="collapsed",
+        key=UI_LANGUAGE_STATE,
+    )
 
 
 def configure_page() -> None:
@@ -653,7 +650,19 @@ def configure_page() -> None:
 
 
 def apply_custom_css() -> None:
-    """Apply lightweight professional dashboard styling."""
+    """Apply the unified product design system.
+
+    The early return intentionally retires the historical layered stylesheet
+    below. Keeping that old text in place for one release makes the visual
+    rewrite easy to review without allowing any of its selectors to reach the
+    page.
+    """
+    design_system_module = importlib.import_module("app.design_system")
+    importlib.reload(design_system_module)
+    design_system_module.apply_design_system()
+    return
+
+    # Legacy stylesheet retained temporarily for diff readability.
     st.markdown(
         """
         <style>
@@ -3130,27 +3139,43 @@ def apply_custom_css() -> None:
 
 
 def render_main_header() -> None:
-    """Render the dashboard header."""
-    eyebrow = ui_text("OIL MARKET RESEARCH LAB", "原油市场研究台")
-    title = ui_text("Oil market decision & research cockpit", "原油市场决策与科研驾驶舱")
-    subtitle = ui_text(
-        "Investment view · enterprise hedge · official data search · professional research",
-        "投资研究 · 企业套保 · 官方数据搜索 · 专业科研分析",
+    """Render the editorial navigation over a site-wide art field."""
+    st.markdown(
+        f'<a class="skip-link" href="#main-content">{ui_text("Skip to main content", "跳到主要内容")}</a>',
+        unsafe_allow_html=True,
     )
-    title_col, tools_col = st.columns([0.79, 0.21])
-    with title_col:
+    brand_col, settings_col, language_col = st.columns([0.72, 0.17, 0.11])
+    with brand_col:
         st.markdown(
-            f"""
-            <div class="dashboard-header">
-                <p class="dashboard-eyebrow">{eyebrow}</p>
-                <h1>{title}</h1>
-                <p class="dashboard-subtitle">{subtitle}</p>
-            </div>
-            """,
+            f'<div class="research-brand"><span class="research-brand-mark"><i></i></span>'
+            f'<span>{ui_text("Oil Research Desk", "原油研究台")}</span></div>',
             unsafe_allow_html=True,
         )
-    with tools_col:
+    with settings_col:
         render_top_tool_menu()
+    with language_col:
+        render_language_switcher()
+
+    title = ui_text("See the market clearly. Plan the next move.", "看清油价变化，安排下一步")
+    subtitle = ui_text(
+        "Bring scattered data, forecasts and risk signals into one clear decision view.",
+        "把分散的数据、预测和风险信号，整理成一份清楚的判断。",
+    )
+    st.markdown(
+        f"""
+        <section class="hero-copy" id="main-content">
+          <p class="hero-kicker">{ui_text("MARKET SIGNALS, MADE USEFUL", "把市场信号变成判断")}</p>
+          <h1>{title}</h1>
+          <p>{subtitle}</p>
+          <div class="hero-actions">
+            <a class="hero-action-primary" href="#market-workspaces">{ui_text("View latest outlook", "查看最新判断")}</a>
+            <a class="hero-action-secondary" href="#market-workspaces">{ui_text("Open research tools", "进入专业模式")}</a>
+          </div>
+        </section>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.markdown('<div id="market-workspaces"></div>', unsafe_allow_html=True)
     render_workspace_status_messages()
 
 
@@ -7632,25 +7657,25 @@ def _apply_dark_plot_theme(figure: Any) -> Any:
         template="plotly_white",
         paper_bgcolor="#FFFFFF",
         plot_bgcolor="#FFFFFF",
-        font=dict(color="#173238", family="Aptos, Segoe UI, Microsoft YaHei UI, sans-serif"),
-        title_font=dict(color="#173238"),
-        legend=dict(bgcolor="rgba(255,255,255,0.88)", bordercolor="#DCE6E2", borderwidth=1),
-        hoverlabel=dict(bgcolor="#173238", bordercolor="#173238", font_color="#FFFFFF"),
-        colorway=["#F26A4B", "#3E83F8", "#53A98F", "#E6AA43", "#8A6FD1", "#4C7A82"],
+        font=dict(color="#211D2A", family="Inter, Segoe UI, Microsoft YaHei UI, sans-serif"),
+        title_font=dict(color="#211D2A"),
+        legend=dict(bgcolor="rgba(255,255,255,0.90)", bordercolor="#DDE2EB", borderwidth=1),
+        hoverlabel=dict(bgcolor="#211D2A", bordercolor="#211D2A", font_color="#FFFFFF"),
+        colorway=["#6972CB", "#354554", "#9BA6D9", "#70899D", "#B6BDD0", "#55786F"],
     )
     figure.update_xaxes(
-        gridcolor="#E8EFEC",
-        linecolor="#C9D7D2",
-        zerolinecolor="#DCE6E2",
-        tickfont=dict(color="#60777C"),
-        title_font=dict(color="#173238"),
+        gridcolor="#E9ECF2",
+        linecolor="#CBD2DF",
+        zerolinecolor="#DDE2EB",
+        tickfont=dict(color="#687487"),
+        title_font=dict(color="#211D2A"),
     )
     figure.update_yaxes(
-        gridcolor="#E8EFEC",
-        linecolor="#C9D7D2",
-        zerolinecolor="#DCE6E2",
-        tickfont=dict(color="#60777C"),
-        title_font=dict(color="#173238"),
+        gridcolor="#E9ECF2",
+        linecolor="#CBD2DF",
+        zerolinecolor="#DDE2EB",
+        tickfont=dict(color="#687487"),
+        title_font=dict(color="#211D2A"),
     )
     return figure
 
@@ -8169,7 +8194,7 @@ def _render_warning_results(payload: dict[str, Any]) -> None:
                 x=history["Date"],
                 y=history["RiskScore"],
                 name=ui_text("Five-day risk score", "五日风险分数"),
-                line=dict(color="#E58A4A", width=2.4),
+                line=dict(color="#7658B5", width=2.4),
                 hovertemplate="%{x|%Y-%m-%d}<br>%{y:.1f}<extra></extra>",
             )
         )
@@ -8284,7 +8309,7 @@ def _render_warning_results(payload: dict[str, Any]) -> None:
     regime_figure.add_hline(
         y=50,
         line_dash="dash",
-        line_color="#E58A4A",
+        line_color="#7658B5",
         annotation_text=ui_text("50% reference", "50% 参考线"),
     )
     regime_figure.update_layout(
@@ -8494,16 +8519,16 @@ def render_oil_price_forecast_panel() -> None:
     figure = go.Figure()
     figure.add_trace(go.Scatter(
         x=history["Date"], y=history["Actual"], name=ui_text("Actual", "实际价格"),
-        line=dict(color="#42656D", width=2.2), hovertemplate="%{x|%Y-%m-%d}<br>$%{y:.2f}<extra></extra>",
+        line=dict(color="#354554", width=2.2), hovertemplate="%{x|%Y-%m-%d}<br>$%{y:.2f}<extra></extra>",
     ))
     interval_colors = {
-        50: ("#5EC4B2", "rgba(94, 196, 178, 0.28)"),
-        60: ("#64B5F6", "rgba(100, 181, 246, 0.24)"),
-        70: ("#9180E3", "rgba(145, 128, 227, 0.21)"),
-        80: ("#F0B060", "rgba(240, 176, 96, 0.19)"),
-        90: ("#E98972", "rgba(233, 137, 114, 0.16)"),
-        95: ("#D97098", "rgba(217, 112, 152, 0.13)"),
-        99: ("#B486D8", "rgba(180, 134, 216, 0.10)"),
+        50: ("#6972CB", "rgba(105, 114, 203, 0.25)"),
+        60: ("#7E87D3", "rgba(126, 135, 211, 0.22)"),
+        70: ("#929ADA", "rgba(146, 154, 218, 0.19)"),
+        80: ("#A4AADE", "rgba(164, 170, 222, 0.17)"),
+        90: ("#B6BBE3", "rgba(182, 187, 227, 0.14)"),
+        95: ("#C6CAE9", "rgba(198, 202, 233, 0.12)"),
+        99: ("#D8DAEF", "rgba(216, 218, 239, 0.10)"),
     }
     for level in sorted(selected_intervals, reverse=True):
         line_color, fill_color = interval_colors.get(
@@ -8530,7 +8555,7 @@ def render_oil_price_forecast_panel() -> None:
         ))
     figure.add_trace(go.Scatter(
         x=forecast_display["Date"], y=forecast_display["PointForecast"], name=ui_text("Forecast", "预测价格"),
-        line=dict(color="#F26A4B", width=2.5, dash="dash"),
+        line=dict(color="#6972CB", width=2.5, dash="dash"),
         hovertemplate="%{x|%Y-%m-%d}<br>$%{y:.2f}<extra></extra>",
     ))
     visible_start, visible_end = _forecast_chart_default_range(
@@ -8878,7 +8903,13 @@ def render_crisis_warning_tab(options: dict[str, Any]) -> None:
 def render_run_pipeline_tab(options: dict[str, Any]) -> dict[str, Any]:
     """Route the analysis entry to quick or professional mode."""
     st.markdown(
-        f'<p class="section-kicker">{ui_text("ANALYSIS SETUP", "分析设置")}</p>',
+        f"""
+        <section class="section-intro">
+          <p class="section-kicker">{ui_text("RESEARCH TOOLS", "研究工具")}</p>
+          <h2>{ui_text("Keep the full method. Make the process easier to read.", "保留完整方法，也让过程更好读")}</h2>
+          <p>{ui_text("Professional mode keeps variable selection, five IMF components, walk-forward validation and net-impact analysis intact. Quick mode prepares a comparable baseline automatically.", "专业模式完整保留变量选择、五个 IMF 分量、滚动样本外检验和净影响分析；快速模式则自动准备一套可比较的基线设置。")}</p>
+        </section>
+        """,
         unsafe_allow_html=True,
     )
     analysis_mode = st.radio(
@@ -8886,8 +8917,8 @@ def render_run_pipeline_tab(options: dict[str, Any]) -> dict[str, Any]:
         options=["quick", "professional"],
         index=1,
         format_func=lambda value: {
-            "quick": ui_text("Quick · automatic", "快速模式 · 自动配置"),
-            "professional": ui_text("Professional · guided", "专业模式 · 分步设置"),
+            "quick": ui_text("Quick setup", "快速设置"),
+            "professional": ui_text("Professional research", "专业研究"),
         }[value],
         horizontal=True,
         label_visibility="collapsed",
@@ -8906,7 +8937,13 @@ def render_run_pipeline_tab(options: dict[str, Any]) -> dict[str, Any]:
 def render_price_forecast_tab(options: dict[str, Any]) -> None:
     """Group oil-price forecasting and crisis warning in one workspace."""
     st.markdown(
-        f'<p class="section-kicker">{ui_text("FORECAST WORKSPACE", "预测工作区")}</p>',
+        f"""
+        <section class="section-intro">
+          <p class="section-kicker">{ui_text("RISK MONITORING", "风险监测")}</p>
+          <h2>{ui_text("Watch the forecast path and the risk state together", "把预测路径和风险状态放在一起看")}</h2>
+          <p>{ui_text("Switch between price forecasts and the five-day warning model without losing the current research context.", "在价格预测与五日预警之间切换，当前研究设置和结果会继续保留。")}</p>
+        </section>
+        """,
         unsafe_allow_html=True,
     )
     forecast_tabs = st.tabs([
@@ -8922,10 +8959,10 @@ def render_price_forecast_tab(options: dict[str, Any]) -> None:
 def main_navigation_labels() -> list[str]:
     """Return decision, data, research, and forecast workspaces."""
     return [
-        ui_text("Decision cockpit", "决策驾驶舱"),
+        ui_text("Market outlook", "市场判断"),
         ui_text("Data center", "数据中心"),
-        ui_text("Research analysis", "科研分析"),
-        ui_text("Forecast & risk", "预测与风险"),
+        ui_text("Research tools", "研究工具"),
+        ui_text("Risk monitoring", "风险监测"),
     ]
 
 
@@ -8934,7 +8971,6 @@ def main() -> None:
     configure_page()
     restore_api_credentials_for_request()
     apply_custom_css()
-    render_language_switcher()
     options = default_analysis_options()
 
     render_main_header()

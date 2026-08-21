@@ -43,7 +43,7 @@ def _authority_figure(audit_table: pd.DataFrame, ui_text: UiText) -> go.Figure:
             orientation="h",
             marker=dict(
                 color=summary["AuthorityScore"],
-                colorscale=[[0, "#53636B"], [1, "#E58A4A"]],
+                colorscale=[[0, "#77808A"], [1, "#A98BE8"]],
                 cmin=2,
                 cmax=5,
                 colorbar=dict(title=ui_text("Authority", "权威性")),
@@ -88,7 +88,7 @@ def _preview_figure(data: pd.DataFrame, variable: str, frequency: str, ui_text: 
             x=view["Date"],
             y=view[variable],
             mode="lines+markers" if frequency == "monthly" else "lines",
-            line=dict(color="#E58A4A", width=2.3),
+            line=dict(color="#7658B5", width=2.3),
             marker=dict(size=5),
             name=variable,
             hovertemplate="%{x|%Y-%m-%d}<br>%{y:,.4f}<extra></extra>",
@@ -102,7 +102,7 @@ def _preview_figure(data: pd.DataFrame, variable: str, frequency: str, ui_text: 
         dragmode="pan",
         yaxis_title=variable,
     )
-    figure.update_xaxes(rangeslider=dict(visible=True, thickness=0.09, bgcolor="#20282C"))
+    figure.update_xaxes(rangeslider=dict(visible=True, thickness=0.09, bgcolor="#F1F3F8"))
     return figure
 
 
@@ -116,9 +116,9 @@ def render_data_library(ui_text: UiText, apply_theme: ThemeFunction) -> None:
         f"""
         <section class="data-library-intro">
           <div>
-            <span>{ui_text("SEARCH · VERIFY · REUSE", "搜索 · 验证 · 复用")}</span>
-            <h2>{ui_text("Search official data when the research question changes", "研究需求变化时，直接搜索并接入官方数据")}</h2>
-            <p>{ui_text("FRED supplies searchable macro-financial metadata. EIA v2 supplies discoverable energy routes, facets and series. Selected data stays request-local until you add it to the analysis pool.", "FRED提供可搜索的宏观金融元数据；EIA v2提供可发现的能源数据路径、维度和序列。选中数据在加入分析池前保持为当前会话数据。")}</p>
+            <span>{ui_text("SEARCH, CHECK, USE", "先搜索，再核对")}</span>
+            <h2>{ui_text("Find the data you need", "需要什么数据，直接搜")}</h2>
+            <p>{ui_text("Search official FRED and EIA catalogs by variable, code or economic concept. Preview a series before adding it to the analysis pool.", "按变量名称、代码或经济含义搜索 FRED 与 EIA 官方目录；先预览数据，再决定是否加入分析。")}</p>
           </div>
         </section>
         """,
@@ -126,9 +126,9 @@ def render_data_library(ui_text: UiText, apply_theme: ThemeFunction) -> None:
     )
 
     search_tab, preview_tab, audit_tab = st.tabs([
-        ui_text("Search official catalogs", "搜索官方数据目录"),
-        ui_text("Selected data preview", "已选数据预览"),
-        ui_text("Source audit", "数据来源审计"),
+        ui_text("Search official catalogs", "搜索官方目录"),
+        ui_text("Selected data preview", "数据预览"),
+        ui_text("Source audit", "来源核对"),
     ])
     state_key = "quick_api_catalog_registry_entries"
     item_state_key = "data_library_selected_items"
@@ -145,7 +145,7 @@ def render_data_library(ui_text: UiText, apply_theme: ThemeFunction) -> None:
         )
         query = query_col.text_input(
             ui_text("Variable, code or economic concept", "变量名称、代码或经济概念"),
-            placeholder=ui_text("crude inventory, inflation expectations, DGS10…", "原油库存、通胀预期、DGS10…"),
+            placeholder=ui_text("Crude inventory, inflation expectations, DGS10…", "例如：原油库存、通胀预期、DGS10…"),
             key="data_library_query",
         )
         fixed_routes = list(EIA_DATASET_ROUTES)
