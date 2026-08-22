@@ -199,6 +199,8 @@ class CloudWorkspaceBehaviorTests(unittest.TestCase):
         ):
             app.sync_primary_workspace_from_query(navigation)
             self.assertEqual(session_state["primary_workspace_mode"], "professional")
+            self.assertEqual(session_state["professional_workspace_mode"], "overview")
+            self.assertFalse(session_state["professional_results_expanded"])
 
             session_state["primary_workspace_mode"] = "decision"
             app.sync_primary_workspace_from_query(navigation)
@@ -222,7 +224,55 @@ class CloudWorkspaceBehaviorTests(unittest.TestCase):
         self.assertIn("/?workspace=professional&amp;request=", renderer)
         self.assertIn('target="_self"', renderer)
         self.assertIn("#market-workspaces", renderer)
+        self.assertIn("workspace-mode-switch", renderer)
+        self.assertIn("professional_active", renderer)
         self.assertNotIn('key="primary_workspace_mode"', main_source)
+
+    def test_professional_workspace_opens_on_a_lightweight_home(self) -> None:
+        import inspect
+
+        from app import streamlit_app as app
+
+        main_source = inspect.getsource(app.main)
+        self.assertIn('"overview": ui_text("Professional home", "专业首页")', main_source)
+        self.assertIn("st.segmented_control", main_source)
+        self.assertIn("render_professional_overview()", main_source)
+        self.assertIn("render_professional_results_loader()", main_source)
+        self.assertNotIn("st.radio(\n        ui_text(\"Professional workspace\"", main_source)
+
+    def test_saved_professional_results_are_deferred_until_requested(self) -> None:
+        from app import streamlit_app as app
+
+        with tempfile.TemporaryDirectory() as directory:
+            summary_path = Path(directory) / "summary.xlsx"
+            summary_path.touch()
+            net_impacts_path = Path(directory) / "net_impacts.xlsx"
+            session_state: dict[str, object] = {}
+            with (
+                patch.dict(
+                    app.PATHS,
+                    {"paper_summary": summary_path, "paper_net_impacts": net_impacts_path},
+                ),
+                patch.object(app.st, "session_state", session_state),
+                patch.object(app.st, "markdown"),
+                patch.object(app.st, "button", return_value=False),
+                patch.object(app, "render_paper_replication_tab") as render_results,
+            ):
+                app.render_professional_results_loader()
+            render_results.assert_not_called()
+
+            session_state["professional_results_expanded"] = True
+            with (
+                patch.dict(
+                    app.PATHS,
+                    {"paper_summary": summary_path, "paper_net_impacts": net_impacts_path},
+                ),
+                patch.object(app.st, "session_state", session_state),
+                patch.object(app.st, "button", return_value=False),
+                patch.object(app, "render_paper_replication_tab") as render_results,
+            ):
+                app.render_professional_results_loader()
+            render_results.assert_called_once()
 
     def test_analysis_dates_are_rendered_inside_the_run_workspace(self) -> None:
         import inspect

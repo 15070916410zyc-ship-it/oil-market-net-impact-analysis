@@ -3138,18 +3138,30 @@ def apply_custom_css() -> None:
     )
 
 
-def render_main_header() -> None:
+def render_main_header(active_workspace: str = "decision") -> None:
     """Render the editorial navigation over a site-wide art field."""
     navigation_request = os.urandom(8).hex()
+    decision_active = active_workspace != "professional"
+    professional_active = active_workspace == "professional"
     st.markdown(
         f'<a class="skip-link" href="#main-content">{ui_text("Skip to main content", "跳到主要内容")}</a>',
         unsafe_allow_html=True,
     )
-    brand_col, tools_col = st.columns([0.91, 0.09], gap="small")
+    brand_col, mode_col, tools_col = st.columns([0.67, 0.21, 0.12], gap="small")
     with brand_col:
         st.markdown(
             f'<div class="research-brand"><span class="research-brand-mark"><i></i></span>'
             f'<span>{ui_text("Oil Research Desk", "原油研究台")}</span></div>',
+            unsafe_allow_html=True,
+        )
+    with mode_col:
+        st.markdown(
+            f"""
+            <nav class="workspace-mode-switch" aria-label="{ui_text('Workspace mode', '工作模式')}">
+              <a class="{'is-active' if decision_active else ''}" href="/?workspace=decision&amp;request={navigation_request}#market-workspaces" target="_self">{ui_text('Decision', '决策模式')}</a>
+              <a class="{'is-active' if professional_active else ''}" href="/?workspace=professional&amp;request={navigation_request}#market-workspaces" target="_self">{ui_text('Professional', '专业模式')}</a>
+            </nav>
+            """,
             unsafe_allow_html=True,
         )
     with tools_col:
@@ -3160,20 +3172,44 @@ def render_main_header() -> None:
         with language_col:
             render_language_switcher()
 
-    title = ui_text("See oil clearly. Know the next move.", "看清油价，也看清下一步")
-    subtitle = ui_text(
-        "One continuous view from market drivers to forecasts, risk, hedging and investment research.",
-        "从影响因素、价格预测和风险预警，一直看到套保与投资研究建议。",
-    )
+    if professional_active:
+        kicker = ui_text("PROFESSIONAL RESEARCH", "专业模式已开启")
+        title = ui_text("Control every assumption. Inspect every step.", "控制每个假设，查看每一步")
+        subtitle = ui_text(
+            "Work with the full net-impact, forecast, warning and connected-data toolkit.",
+            "净影响分析、价格预测、风险预警和数据工具相互独立，按需要逐项打开。",
+        )
+        primary_action = (
+            f'<span class="hero-mode-status"><i></i>{ui_text("Professional mode active", "当前：专业模式")}</span>'
+        )
+        secondary_action = (
+            f'<a class="hero-action-secondary" href="/?workspace=decision&amp;request={navigation_request}#market-workspaces" '
+            f'target="_self">{ui_text("Back to decision view", "返回决策模式")}</a>'
+        )
+    else:
+        kicker = ui_text("MARKET SIGNALS, MADE USEFUL", "把市场信号变成判断")
+        title = ui_text("See oil clearly. Know the next move.", "看清油价，也看清下一步")
+        subtitle = ui_text(
+            "One continuous view from market drivers to forecasts, risk, hedging and investment research.",
+            "从影响因素、价格预测和风险预警，一直看到套保与投资研究建议。",
+        )
+        primary_action = (
+            f'<a class="hero-action-primary" href="/?workspace=decision&amp;request={navigation_request}#market-workspaces" '
+            f'target="_self">{ui_text("View latest outlook", "查看最新判断")}</a>'
+        )
+        secondary_action = (
+            f'<a class="hero-action-secondary" href="/?workspace=professional&amp;request={navigation_request}#market-workspaces" '
+            f'target="_self">{ui_text("Open research tools", "进入专业模式")}</a>'
+        )
     st.markdown(
         f"""
         <section class="hero-copy" id="main-content">
-          <p class="hero-kicker">{ui_text("MARKET SIGNALS, MADE USEFUL", "把市场信号变成判断")}</p>
+          <p class="hero-kicker">{kicker}</p>
           <h1>{title}</h1>
           <p>{subtitle}</p>
           <div class="hero-actions">
-            <a class="hero-action-primary" href="/?workspace=decision&amp;request={navigation_request}#market-workspaces" target="_self">{ui_text("View latest outlook", "查看最新判断")}</a>
-            <a class="hero-action-secondary" href="/?workspace=professional&amp;request={navigation_request}#market-workspaces" target="_self">{ui_text("Open research tools", "进入专业模式")}</a>
+            {primary_action}
+            {secondary_action}
           </div>
         </section>
         """,
@@ -9035,6 +9071,66 @@ def sync_primary_workspace_from_query(navigation: list[str]) -> None:
         return
     st.session_state[state_key] = request_signature
     st.session_state["primary_workspace_mode"] = workspace
+    if workspace == "professional":
+        st.session_state["professional_workspace_mode"] = "overview"
+        st.session_state["professional_results_expanded"] = False
+
+
+def render_professional_overview() -> None:
+    """Render a lightweight landing state before any research tool is opened."""
+    st.markdown(
+        f"""
+        <section class="professional-start view-reveal">
+          <div class="professional-start-status"><i></i>{ui_text("Professional mode is ready", "专业模式已就绪")}</div>
+          <h3>{ui_text("Choose one tool. Load only what you need.", "先选工具，再加载需要的内容")}</h3>
+          <p>{ui_text("Entering professional mode no longer opens every historical result. The full research workflow and its confirmation gates remain unchanged inside each tool.", "进入专业模式时不再一次性打开全部历史结果；每项工具中的完整研究流程和确认步骤仍然保留。")}</p>
+          <div class="professional-flow" aria-label="{ui_text('Professional workflow', '专业研究流程')}">
+            <span><b>01</b>{ui_text("Net impact", "净影响")}</span>
+            <span><b>02</b>{ui_text("Price forecast", "价格预测")}</span>
+            <span><b>03</b>{ui_text("Risk warning", "风险预警")}</span>
+            <span><b>04</b>{ui_text("Connected data", "连接数据")}</span>
+          </div>
+        </section>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_professional_results_loader() -> None:
+    """Keep large archived result bundles out of the initial professional render."""
+    has_results = PATHS["paper_summary"].exists() or PATHS["paper_net_impacts"].exists()
+    if not has_results:
+        render_paper_replication_tab()
+        return
+
+    expanded = bool(st.session_state.get("professional_results_expanded", False))
+    if not expanded:
+        st.markdown(
+            f"""
+            <div class="deferred-results-note">
+              <span>{ui_text("SAVED RESEARCH", "已有研究结果")}</span>
+              <strong>{ui_text("The complete historical result package is available on demand", "完整历史结果可按需加载")}</strong>
+              <p>{ui_text("Tables, VMD figures and diagnostic charts stay closed so this page opens quickly.", "表格、VMD 图和诊断图默认保持关闭，避免进入专业模式时长时间等待。")}</p>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        if st.button(
+            ui_text("Load complete saved results", "加载已有完整结果"),
+            key="load_professional_saved_results",
+            use_container_width=True,
+        ):
+            st.session_state["professional_results_expanded"] = True
+            st.rerun()
+        return
+
+    if st.button(
+        ui_text("Close saved results", "收起已有结果"),
+        key="close_professional_saved_results",
+    ):
+        st.session_state["professional_results_expanded"] = False
+        st.rerun()
+    render_paper_replication_tab()
 
 
 def main() -> None:
@@ -9044,13 +9140,12 @@ def main() -> None:
     apply_custom_css()
     options = default_analysis_options()
 
-    render_main_header()
-
     navigation = main_navigation_labels()
     sync_primary_workspace_from_query(navigation)
     stored_mode = st.session_state.get("primary_workspace_mode", "decision")
     active_workspace = "professional" if stored_mode in {"professional", navigation[1]} else "decision"
     st.session_state["primary_workspace_mode"] = active_workspace
+    render_main_header(active_workspace)
     if active_workspace == "decision":
         decision_module = importlib.import_module("app.executive_dashboard")
         importlib.reload(decision_module)
@@ -9060,28 +9155,34 @@ def main() -> None:
     st.markdown(
         f"""
         <section class="section-intro view-reveal">
-          <p class="section-kicker">{ui_text("PROFESSIONAL RESEARCH", "专业研究")}</p>
-          <h2>{ui_text("Inspect every step and control every assumption", "查看每一步，也控制每个假设")}</h2>
-          <p>{ui_text("Choose a workspace below. Date windows, IMF counts, variables, validation and intermediate charts remain available.", "净影响分析、价格预测、危机预警和变量数据库相互独立；时间范围、IMF 数量、变量选择、验证结果和中间图表全部保留。")}</p>
+          <p class="section-kicker">{ui_text("RESEARCH WORKSPACE", "专业工作台")}</p>
+          <h2>{ui_text("Four tools, opened only when needed", "四项工具，按需展开")}</h2>
+          <p>{ui_text("Choose net impact, price forecast, risk warning or connected data below. Date windows, IMF counts, validation and intermediate charts remain available inside each tool.", "从净影响、价格预测、危机预警和连接数据中选择一项；时间范围、IMF 数量、验证结果和中间图表都保留在对应工具内。")}</p>
         </section>
         """,
         unsafe_allow_html=True,
     )
     professional_labels = {
+        "overview": ui_text("Professional home", "专业首页"),
         "net_impact": ui_text("Net-impact analysis", "净影响分析"),
         "forecast": ui_text("Price forecast", "价格预测"),
         "warning": ui_text("Crisis warning", "危机预警"),
         "data": ui_text("Connected data", "连接的数据"),
     }
-    active_label = st.radio(
+    stored_professional_tool = st.session_state.get("professional_workspace_mode")
+    if stored_professional_tool not in professional_labels:
+        st.session_state["professional_workspace_mode"] = "overview"
+    active_workspace = st.segmented_control(
         ui_text("Professional workspace", "专业工具"),
-        list(professional_labels.values()),
-        horizontal=True,
+        list(professional_labels),
+        format_func=professional_labels.get,
         label_visibility="collapsed",
         key="professional_workspace_mode",
     )
-    active_workspace = next(key for key, label in professional_labels.items() if label == active_label)
-    if active_workspace == "net_impact":
+    active_workspace = active_workspace or "overview"
+    if active_workspace == "overview":
+        render_professional_overview()
+    elif active_workspace == "net_impact":
         latest_payload = st.session_state.get("price_forecast_last_result")
         if isinstance(latest_payload, dict) and latest_payload.get("result") is not None:
             decision_module = importlib.import_module("app.executive_dashboard")
@@ -9099,7 +9200,7 @@ def main() -> None:
         run_options = render_analysis_window_controls(options, "professional")
         render_professional_pipeline_tab(run_options)
         st.divider()
-        render_paper_replication_tab()
+        render_professional_results_loader()
     elif active_workspace == "forecast":
         render_oil_price_forecast_panel()
     elif active_workspace == "warning":
