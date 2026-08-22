@@ -3140,6 +3140,7 @@ def apply_custom_css() -> None:
 
 def render_main_header() -> None:
     """Render the editorial navigation over a site-wide art field."""
+    professional_request = os.urandom(8).hex()
     st.markdown(
         f'<a class="skip-link" href="#main-content">{ui_text("Skip to main content", "跳到主要内容")}</a>',
         unsafe_allow_html=True,
@@ -3172,7 +3173,7 @@ def render_main_header() -> None:
           <p>{subtitle}</p>
           <div class="hero-actions">
             <a class="hero-action-primary" href="#market-workspaces">{ui_text("View latest outlook", "查看最新判断")}</a>
-            <a class="hero-action-secondary" href="#market-workspaces">{ui_text("Open research tools", "进入专业模式")}</a>
+            <a class="hero-action-secondary" href="/?workspace=professional&amp;request={professional_request}#market-workspaces" target="_self">{ui_text("Open research tools", "进入专业模式")}</a>
           </div>
         </section>
         """,
@@ -9015,6 +9016,27 @@ def main_navigation_labels() -> list[str]:
     ]
 
 
+def sync_primary_workspace_from_query(navigation: list[str]) -> None:
+    """Consume a hero navigation request without disabling the sticky switcher."""
+    try:
+        workspace = st.query_params.get("workspace")
+        request_token = st.query_params.get("request")
+    except Exception:  # pragma: no cover - old Streamlit runtimes have no query proxy.
+        return
+    if isinstance(workspace, list):
+        workspace = workspace[-1] if workspace else None
+    if isinstance(request_token, list):
+        request_token = request_token[-1] if request_token else None
+    if workspace not in {"decision", "professional"} or not request_token:
+        return
+    request_signature = f"{workspace}:{request_token}"
+    state_key = "primary_workspace_query_request"
+    if st.session_state.get(state_key) == request_signature:
+        return
+    st.session_state[state_key] = request_signature
+    st.session_state["primary_workspace_mode"] = navigation[1 if workspace == "professional" else 0]
+
+
 def main() -> None:
     """Run the Streamlit application."""
     configure_page()
@@ -9025,6 +9047,7 @@ def main() -> None:
     render_main_header()
 
     navigation = main_navigation_labels()
+    sync_primary_workspace_from_query(navigation)
     active_mode = st.radio(
         ui_text("Workspace", "工作模式"),
         navigation,

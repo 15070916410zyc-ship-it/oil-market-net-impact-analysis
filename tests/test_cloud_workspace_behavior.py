@@ -187,6 +187,39 @@ class CloudWorkspaceBehaviorTests(unittest.TestCase):
         results.assert_called_once()
         self.assertEqual(returned["analysis_mode"], "professional")
 
+    def test_hero_professional_link_changes_workspace_once_and_keeps_manual_switch(self) -> None:
+        from app import streamlit_app as app
+
+        navigation = ["决策模式", "专业模式"]
+        session_state: dict[str, str] = {}
+        with (
+            patch.object(app.st, "query_params", {"workspace": "professional", "request": "first"}),
+            patch.object(app.st, "session_state", session_state),
+        ):
+            app.sync_primary_workspace_from_query(navigation)
+            self.assertEqual(session_state["primary_workspace_mode"], "专业模式")
+
+            session_state["primary_workspace_mode"] = "决策模式"
+            app.sync_primary_workspace_from_query(navigation)
+            self.assertEqual(session_state["primary_workspace_mode"], "决策模式")
+
+        with (
+            patch.object(app.st, "query_params", {"workspace": "professional", "request": "second"}),
+            patch.object(app.st, "session_state", session_state),
+        ):
+            app.sync_primary_workspace_from_query(navigation)
+        self.assertEqual(session_state["primary_workspace_mode"], "专业模式")
+
+    def test_hero_professional_link_carries_workspace_and_scroll_target(self) -> None:
+        import inspect
+
+        from app import streamlit_app as app
+
+        renderer = inspect.getsource(app.render_main_header)
+        self.assertIn("/?workspace=professional&amp;request=", renderer)
+        self.assertIn('target="_self"', renderer)
+        self.assertIn("#market-workspaces", renderer)
+
     def test_analysis_dates_are_rendered_inside_the_run_workspace(self) -> None:
         import inspect
 
