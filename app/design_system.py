@@ -218,9 +218,9 @@ def apply_design_system() -> None:
         }
         [data-testid="stColumn"]:has(.tool-dock-anchor) {
             justify-self: end;
-            width: 11.25rem !important;
-            max-width: 11.25rem !important;
-            min-width: 11.25rem !important;
+            width: 9rem !important;
+            max-width: 9rem !important;
+            min-width: 9rem !important;
         }
         [data-testid="stColumn"]:has(.tool-dock-anchor) > [data-testid="stVerticalBlock"] { min-height: 0 !important; gap: 0 !important; }
         [data-testid="stColumn"]:has(.tool-dock-anchor) > [data-testid="stVerticalBlock"] > [data-testid="stLayoutWrapper"] {
@@ -244,7 +244,7 @@ def apply_design_system() -> None:
         }
         [data-testid="stColumn"]:has(.tool-dock-anchor) [data-testid="stHorizontalBlock"] {
             display: grid !important;
-            grid-template-columns: minmax(5.6rem, 1.08fr) minmax(4.4rem, .92fr) !important;
+            grid-template-columns: minmax(5.25rem, 1fr) minmax(3rem, .56fr) !important;
             gap: .18rem !important;
             width: 100% !important;
             align-items: center !important;
@@ -256,15 +256,14 @@ def apply_design_system() -> None:
             overflow: visible !important;
         }
         [data-testid="stColumn"]:has(.tool-dock-anchor) [data-testid="stElementContainer"],
-        [data-testid="stColumn"]:has(.tool-dock-anchor) [data-testid="stPopover"],
-        [data-testid="stColumn"]:has(.tool-dock-anchor) div[data-baseweb="select"] {
+        [data-testid="stColumn"]:has(.tool-dock-anchor) [data-testid="stPopover"] {
             width: 100% !important;
             min-width: 0 !important;
             max-width: none !important;
         }
         [data-testid="stColumn"]:has(.tool-dock-anchor) [data-testid="stPopoverButton"],
         [data-testid="stColumn"]:has(.tool-dock-anchor) [data-testid="stPopover"] > button,
-        [data-testid="stColumn"]:has(.tool-dock-anchor) div[data-baseweb="select"] > div {
+        [data-testid="stColumn"]:has(.tool-dock-anchor) [data-testid="stHorizontalBlock"] button {
             width: 100% !important;
             min-width: 0 !important;
             min-height: 2.35rem !important;
@@ -278,19 +277,9 @@ def apply_design_system() -> None:
             font-size: .82rem !important;
             white-space: nowrap !important;
         }
-        [data-testid="stColumn"]:has(.tool-dock-anchor) div[data-baseweb="select"] > div {
+        [data-testid="stColumn"]:has(.tool-dock-anchor) [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]:nth-child(2) button {
             border-left: 1px solid var(--line) !important;
             border-radius: 0 11px 11px 0 !important;
-        }
-        [data-testid="stColumn"]:has(.tool-dock-anchor) div[data-baseweb="select"] > div > div:first-child {
-            min-width: 1.75rem !important;
-            padding-inline: .2rem !important;
-            overflow: visible !important;
-        }
-        [data-testid="stColumn"]:has(.tool-dock-anchor) div[data-baseweb="select"] > div > div:first-child > div:first-child {
-            min-width: 1.25rem !important;
-            padding-inline: 0 !important;
-            overflow: visible !important;
         }
         [data-testid="stColumn"]:has(.tool-dock-anchor) [data-testid="stMarkdownContainer"] p { white-space: nowrap; }
 
@@ -628,7 +617,7 @@ def apply_design_system() -> None:
 
         @media (max-width: 900px) {
             .block-container { padding: 1rem 1.3rem 5rem !important; }
-            [data-testid="stHorizontalBlock"]:has(.research-brand) { grid-template-columns: minmax(8.5rem, 1fr) 10.75rem !important; gap: .65rem !important; }
+            [data-testid="stHorizontalBlock"]:has(.research-brand) { grid-template-columns: minmax(8.5rem, 1fr) 9rem !important; gap: .65rem !important; }
             [data-testid="stHorizontalBlock"]:has(.research-brand) > [data-testid="stColumn"]:nth-child(2) {
                 grid-column: 1 / -1;
                 grid-row: 2;
@@ -636,8 +625,8 @@ def apply_design_system() -> None:
                 width: min(100%, 22rem) !important;
             }
             [data-testid="stHorizontalBlock"]:has(.research-brand) > [data-testid="stColumn"]:nth-child(3) { grid-column: 2; grid-row: 1; }
-            [data-testid="stColumn"]:has(.tool-dock-anchor) { width: 10.75rem !important; min-width: 10.75rem !important; max-width: 10.75rem !important; }
-            [data-testid="stColumn"]:has(.tool-dock-anchor) [data-testid="stHorizontalBlock"] { grid-template-columns: minmax(5.2rem, 1.05fr) minmax(4.25rem, .95fr) !important; }
+            [data-testid="stColumn"]:has(.tool-dock-anchor) { width: 9rem !important; min-width: 9rem !important; max-width: 9rem !important; }
+            [data-testid="stColumn"]:has(.tool-dock-anchor) [data-testid="stHorizontalBlock"] { grid-template-columns: minmax(5.2rem, 1fr) minmax(3rem, .56fr) !important; }
             .product-hero { min-height: 34rem; margin-top: .75rem; }
             .hero-content { width: min(42rem, 87%); padding-inline: .2rem; }
             .hero-content h1 { font-size: clamp(3rem, 10vw, 5.3rem) !important; }
@@ -645,15 +634,15 @@ def apply_design_system() -> None:
         }
         @media (max-width: 600px) {
             .block-container { padding: .8rem .85rem 4rem !important; }
-            [data-testid="stHorizontalBlock"]:has(.research-brand) { grid-template-columns: minmax(7.2rem, 1fr) 10.25rem !important; gap: .45rem !important; }
-            [data-testid="stColumn"]:has(.tool-dock-anchor) { width: 10.25rem !important; min-width: 10.25rem !important; max-width: 10.25rem !important; }
+            [data-testid="stHorizontalBlock"]:has(.research-brand) { grid-template-columns: minmax(7.2rem, 1fr) 8.75rem !important; gap: .45rem !important; }
+            [data-testid="stColumn"]:has(.tool-dock-anchor) { width: 8.75rem !important; min-width: 8.75rem !important; max-width: 8.75rem !important; }
             .research-brand { gap: .5rem; font-size: .96rem; }
             .research-brand-mark { width: 1.55rem; height: 1.55rem; flex-basis: 1.55rem; }
             [data-testid="stColumn"]:has(.tool-dock-anchor) > [data-testid="stVerticalBlock"] > [data-testid="stLayoutWrapper"] { min-height: 2.65rem !important; }
-            [data-testid="stColumn"]:has(.tool-dock-anchor) [data-testid="stHorizontalBlock"] { grid-template-columns: minmax(4.9rem, 1.04fr) minmax(4.05rem, .96fr) !important; }
+            [data-testid="stColumn"]:has(.tool-dock-anchor) [data-testid="stHorizontalBlock"] { grid-template-columns: minmax(5rem, 1fr) minmax(2.9rem, .55fr) !important; }
             [data-testid="stColumn"]:has(.tool-dock-anchor) [data-testid="stPopoverButton"],
             [data-testid="stColumn"]:has(.tool-dock-anchor) [data-testid="stPopover"] > button,
-            [data-testid="stColumn"]:has(.tool-dock-anchor) div[data-baseweb="select"] > div {
+            [data-testid="stColumn"]:has(.tool-dock-anchor) [data-testid="stHorizontalBlock"] button {
                 min-height: 2.2rem !important;
                 height: 2.2rem !important;
                 padding-inline: .48rem !important;
@@ -684,9 +673,9 @@ def apply_design_system() -> None:
         }
         @media (max-width: 390px) {
             .block-container { padding-inline: .7rem !important; }
-            [data-testid="stHorizontalBlock"]:has(.research-brand) { grid-template-columns: minmax(6.7rem, 1fr) 9.8rem !important; }
-            [data-testid="stColumn"]:has(.tool-dock-anchor) { width: 9.8rem !important; min-width: 9.8rem !important; max-width: 9.8rem !important; }
-            [data-testid="stColumn"]:has(.tool-dock-anchor) [data-testid="stHorizontalBlock"] { grid-template-columns: minmax(4.65rem, 1fr) minmax(3.9rem, .9fr) !important; }
+            [data-testid="stHorizontalBlock"]:has(.research-brand) { grid-template-columns: minmax(6.7rem, 1fr) 8.6rem !important; }
+            [data-testid="stColumn"]:has(.tool-dock-anchor) { width: 8.6rem !important; min-width: 8.6rem !important; max-width: 8.6rem !important; }
+            [data-testid="stColumn"]:has(.tool-dock-anchor) [data-testid="stHorizontalBlock"] { grid-template-columns: minmax(4.9rem, 1fr) minmax(2.85rem, .55fr) !important; }
             .research-brand { font-size: .88rem; }
             .hero-content h1 { font-size: clamp(2.55rem, 13.2vw, 3.45rem) !important; }
             .hero-sequence span:nth-of-type(2), .hero-sequence i:nth-of-type(2) { display: none; }

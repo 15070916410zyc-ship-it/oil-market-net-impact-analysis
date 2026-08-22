@@ -631,14 +631,30 @@ def localized_workflow_frame(frame: pd.DataFrame, language: LanguageCode | None 
 
 
 def render_language_switcher() -> None:
-    """Render the global Chinese/English website language control."""
-    st.selectbox(
-        "Language / 语言",
-        options=["zh", "en"],
-        format_func=lambda value: "中" if value == "zh" else "EN",
-        label_visibility="collapsed",
-        key=UI_LANGUAGE_STATE,
-    )
+    """Render a compact language popover that shares the API utility dock."""
+    active_language = current_language()
+
+    def select_language(language: LanguageCode) -> None:
+        st.session_state[UI_LANGUAGE_STATE] = language
+
+    with st.popover("中" if active_language == "zh" else "EN", use_container_width=False):
+        st.caption("界面语言 · Interface language")
+        st.button(
+            "中文",
+            key="select_ui_language_zh",
+            use_container_width=True,
+            disabled=active_language == "zh",
+            on_click=select_language,
+            args=("zh",),
+        )
+        st.button(
+            "English",
+            key="select_ui_language_en",
+            use_container_width=True,
+            disabled=active_language == "en",
+            on_click=select_language,
+            args=("en",),
+        )
 
 
 def configure_page() -> None:
