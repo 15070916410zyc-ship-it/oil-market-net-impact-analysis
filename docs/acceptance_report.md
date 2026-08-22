@@ -12,7 +12,7 @@ The decision and professional workspaces were exercised in a real Chromium brows
 2. Rebuilt the hero as a site-wide animated data terrain and removed the separate decorative illustration (`output/playwright/round2/round2-decision-1440-entire.png`).
 3. Checked 1440 px and 390 px layouts, fixed the API/language dock, and changed the professional tool selector to a balanced 2-by-2 mobile grid (`output/playwright/round3/decision-1440.png`, `output/playwright/round3/decision-390.png`, `output/playwright/round3/professional-390-fixed2.png`).
 4. Ran and inspected professional forecasting, crisis warning, and connected-data search with real output (`output/playwright/round4/pro-forecast-brent-20.png`, `output/playwright/round4/pro-crisis-complete.png`, `output/playwright/round4/data-search-crude-stocks-monthly.png`).
-5. Changed detailed procurement assumptions, checked all displayed values, and repeated desktop/mobile English acceptance (`output/playwright/round5/decision-cost-inputs.png`, `output/playwright/round5/decision-english-1440.png`, `output/playwright/round5/decision-english-390-clean.png`).
+5. Changed detailed procurement assumptions, checked all displayed values, repeated desktop/mobile English acceptance, then rebuilt the API/language utility area as one compact two-popover dock and rechecked it at 1440 px and 390 px (`output/playwright/round5/decision-cost-inputs.png`, `output/playwright/round5/decision-english-1440.png`, `output/playwright/round5/production-decision-verified.png`, `output/playwright/round5/production-mobile-390-verified.png`).
 
 ## Functional matrix
 
@@ -26,6 +26,7 @@ The decision and professional workspaces were exercised in a real Chromium brows
 | Research store | SQLite read/write/readback and PostgreSQL health/migration behavior | Covered by automated tests; local UI reported the SQLite store healthy |
 | Procurement model | Basis, FX, quality, freight, tax, initial margin, strategy mix | Inputs changed the cost, liquidity, and impact outputs without errors |
 | Responsive UI | 1440 and 390 px, Chinese and English | No horizontal overflow, control collision, clipped slider values, or console errors |
+| Language utility | Chinese to English live switch | Compact popover switch completed successfully; API and language triggers share one aligned dock |
 
 ## Defects found and corrected during acceptance
 
@@ -34,6 +35,7 @@ The decision and professional workspaces were exercised in a real Chromium brows
 - A cache could be current at the end but omit the requested historical start. Cache acceptance now checks both recency and requested-start coverage.
 - Staggered external-market calendars removed too much of the oil-price history in crisis warning. The price calendar is retained and optional transformed signals use past-only forward filling plus a neutral leading value.
 - Professional tabs wrapped unevenly on narrow screens. The mobile selector now uses a balanced 2-by-2 grid.
+- The language selector looked like a raised card overlapping the API control at some widths. It is now a same-height popover trigger inside one compact shared utility dock.
 
 ## External boundaries
 
