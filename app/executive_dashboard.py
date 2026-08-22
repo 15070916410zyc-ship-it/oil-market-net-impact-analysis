@@ -236,35 +236,40 @@ def _component_figure(result: Any, ui_text: UiText) -> go.Figure:
     return figure
 
 
-def _hedge_figure(scenarios: pd.DataFrame, ui_text: UiText) -> go.Figure:
+def _hedge_figure(scenarios: pd.DataFrame, ui_text: UiText, *, currency: str = "USD") -> go.Figure:
     labels = scenarios["ScenarioZH"] if ui_text("en", "zh") == "zh" else scenarios["Scenario"]
+    use_cny = currency.upper() == "CNY" and "NetCostCNY" in scenarios
+    physical_column = "PhysicalCostCNY" if use_cny else "PhysicalCost"
+    net_column = "NetCostCNY" if use_cny else "NetCost"
+    budget_column = "BudgetCostCNY" if use_cny else "BudgetCost"
+    money_prefix = "¥" if use_cny else "$"
     figure = go.Figure()
     figure.add_trace(
         go.Bar(
             x=labels,
-            y=scenarios["PhysicalCost"],
+            y=scenarios[physical_column],
             name=ui_text("Unhedged physical cost", "未套保采购成本"),
             marker_color="#5A6870",
-            hovertemplate="%{x}<br>$%{y:,.0f}<extra></extra>",
+            hovertemplate=f"%{{x}}<br>{money_prefix}%{{y:,.0f}}<extra></extra>",
         )
     )
     figure.add_trace(
         go.Bar(
             x=labels,
-            y=scenarios["NetCost"],
+            y=scenarios[net_column],
             name=ui_text("Net cost after hedge", "套保后净成本"),
             marker_color="#356B65",
-            hovertemplate="%{x}<br>$%{y:,.0f}<extra></extra>",
+            hovertemplate=f"%{{x}}<br>{money_prefix}%{{y:,.0f}}<extra></extra>",
         )
     )
     figure.add_trace(
         go.Scatter(
             x=labels,
-            y=scenarios["BudgetCost"],
+            y=scenarios[budget_column],
             mode="lines",
             name=ui_text("Budget", "预算"),
             line=dict(color="#354554", width=2, dash="dash"),
-            hovertemplate="%{x}<br>$%{y:,.0f}<extra></extra>",
+            hovertemplate=f"%{{x}}<br>{money_prefix}%{{y:,.0f}}<extra></extra>",
         )
     )
     figure.update_layout(
@@ -273,7 +278,7 @@ def _hedge_figure(scenarios: pd.DataFrame, ui_text: UiText) -> go.Figure:
         margin=dict(l=12, r=12, t=64, b=12),
         barmode="group",
         hovermode="x unified",
-        yaxis_title=ui_text("USD", "美元"),
+        yaxis_title=ui_text("CNY", "人民币") if use_cny else ui_text("USD", "美元"),
         legend=dict(orientation="h", y=1.03),
     )
     return figure
@@ -815,21 +820,164 @@ def render_decision_dashboard(ui_text: UiText, apply_theme: ThemeFunction) -> No
     st.markdown(ui_text("#### Procurement cost warning", "#### 采购成本预警测算"))
     exposure = st.columns(4)
     volume = exposure[0].number_input(ui_text("Purchase volume", "采购量（桶）"), min_value=1_000.0, value=300_000.0, step=10_000.0, key="story_volume")
-    budget = exposure[1].number_input(ui_text("Budget price", "预算单价"), min_value=1.0, value=float(metrics["LatestPrice"]), step=1.0, key="story_budget")
+    budget = exposure[1].number_input(
+        ui_text("Budget benchmark price", "预算基准价（美元/桶）"),
+        min_value=1.0,
+        value=float(metrics["LatestPrice"]),
+        step=1.0,
+        key="story_budget",
+        help=ui_text("The benchmark component of the physical purchase budget, before basis.", "实货采购预算中的基准价格部分，不含基差。"),
+    )
     ratio = exposure[2].slider(ui_text("Hedge coverage", "套保覆盖比例"), 0.0, 1.0, float(round(recommendation.hedge_ratio, 2)), 0.05, key="story_ratio")
     futures_share = exposure[3].slider(ui_text("Futures share", "期货占比"), 0.0, 1.0, float(round(recommendation.futures_share, 2)), 0.05, key="story_futures")
+
+    with st.expander(ui_text("Detailed contract and funding assumptions", "详细合同与资金条件"), expanded=True):
+        st.caption(ui_text(
+            "Basis and FX affect the physical settlement; margin principal is liquidity usage, while only its funding cost enters procurement cost.",
+            "基差和汇率影响实货结算；保证金本金属于资金占用，只有保证金资金成本计入采购净成本。",
+        ))
+        basis_inputs = st.columns(4)
+        budget_basis = basis_inputs[0].number_input(
+            ui_text("Budget basis (USD/bbl)", "预算基差（美元/桶）"),
+            value=0.0,
+            step=0.10,
+            key="story_budget_basis",
+            help=ui_text("Physical budget price minus its benchmark price.", "预算实货价格减去预算基准价。"),
+        )
+        purchase_basis = basis_inputs[1].number_input(
+            ui_text("Expected purchase basis (USD/bbl)", "预计采购基差（美元/桶）"),
+            value=0.0,
+            step=0.10,
+            key="story_purchase_basis",
+            help=ui_text("Expected physical purchase price minus the forecast benchmark price.", "预计实货采购价减去预测基准价。"),
+        )
+        budget_fx = basis_inputs[2].number_input(
+            ui_text("Budget FX (CNY/USD)", "预算汇率（人民币/美元）"),
+            min_value=0.01,
+            value=7.20,
+            step=0.01,
+            key="story_budget_fx",
+        )
+        settlement_fx = basis_inputs[3].number_input(
+            ui_text("Settlement FX (CNY/USD)", "结算汇率（人民币/美元）"),
+            min_value=0.01,
+            value=7.20,
+            step=0.01,
+            key="story_settlement_fx",
+        )
+
+        derivative_inputs = st.columns(4)
+        futures_entry = derivative_inputs[0].number_input(
+            ui_text("Futures entry price", "期货建仓价（美元/桶）"),
+            min_value=0.01,
+            value=float(metrics["LatestPrice"]),
+            step=0.10,
+            key="story_futures_entry",
+        )
+        contract_size = derivative_inputs[1].number_input(
+            ui_text("Contract size (barrels)", "每手合约规模（桶）"),
+            min_value=1.0,
+            value=1_000.0,
+            step=100.0,
+            key="story_contract_size",
+            help=ui_text("Futures volume is rounded to whole contracts.", "期货套保量会按整手合约取整。"),
+        )
+        option_strike = derivative_inputs[2].number_input(
+            ui_text("Call strike (USD/bbl)", "看涨期权执行价（美元/桶）"),
+            min_value=0.01,
+            value=float(metrics["LatestPrice"]),
+            step=0.10,
+            key="story_option_strike",
+        )
+        option_premium = derivative_inputs[3].number_input(
+            ui_text("Call premium (USD/bbl)", "看涨期权费（美元/桶）"),
+            min_value=0.0,
+            value=2.0,
+            step=0.10,
+            key="story_option_premium",
+        )
+
+        funding_inputs = st.columns(4)
+        margin_percent = funding_inputs[0].number_input(
+            ui_text("Initial margin (%)", "期货保证金比例（%）"),
+            min_value=0.0,
+            max_value=100.0,
+            value=10.0,
+            step=0.5,
+            key="story_margin_percent",
+        )
+        funding_percent = funding_inputs[1].number_input(
+            ui_text("Annual funding rate (%)", "年化资金成本（%）"),
+            min_value=0.0,
+            max_value=100.0,
+            value=4.0,
+            step=0.25,
+            key="story_funding_percent",
+        )
+        holding_days = funding_inputs[2].number_input(
+            ui_text("Hedge holding days", "套保持有天数"),
+            min_value=0,
+            value=max(1, int(horizon)),
+            step=1,
+            key="story_holding_days",
+        )
+        futures_fee = funding_inputs[3].number_input(
+            ui_text("Round-trip fee / contract", "期货每手双边费用（美元）"),
+            min_value=0.0,
+            value=10.0,
+            step=1.0,
+            key="story_futures_fee",
+        )
+
     scenarios = build_buyer_hedge_scenarios(
         result,
         exposure_volume=float(volume),
         budget_price=float(budget),
+        contract_size=float(contract_size),
         hedge_ratio=float(ratio),
         futures_share=float(futures_share),
-        option_premium=2.0,
+        option_strike=float(option_strike),
+        option_premium=float(option_premium),
+        budget_basis=float(budget_basis),
+        purchase_basis=float(purchase_basis),
+        budget_fx_rate=float(budget_fx),
+        settlement_fx_rate=float(settlement_fx),
+        futures_entry_price=float(futures_entry),
+        margin_rate=float(margin_percent) / 100.0,
+        annual_funding_rate=float(funding_percent) / 100.0,
+        holding_days=int(holding_days),
+        futures_fee_per_contract=float(futures_fee),
     )
-    hedge_chart = _hedge_figure(scenarios, ui_text)
+    hedge_chart = _hedge_figure(scenarios, ui_text, currency="CNY")
     apply_theme(hedge_chart)
     st.plotly_chart(hedge_chart, use_container_width=True, config=PLOT_CONFIG, key=f"story_hedge_{target}")
+    stress = scenarios.iloc[-1]
+    summary = st.columns(4)
+    summary[0].metric(ui_text("95% upper net cost", "95%上界净成本"), f"¥{float(stress['NetCostCNY']):,.0f}")
+    summary[1].metric(ui_text("Effective unit cost", "折算单桶成本"), f"¥{float(stress['EffectiveUnitCostCNY']):,.2f}")
+    summary[2].metric(ui_text("Variance vs budget", "相对预算偏差"), f"¥{float(stress['BudgetVarianceCNY']):+,.0f}")
+    summary[3].metric(ui_text("Initial margin required", "初始保证金占用"), f"¥{float(stress['InitialMarginCNY']):,.0f}")
+    impact = st.columns(4)
+    impact[0].metric(ui_text("Basis-change impact", "基差变化影响"), f"¥{float(stress['BasisImpactCNY']):+,.0f}")
+    impact[1].metric(ui_text("FX impact", "汇兑影响"), f"¥{float(stress['FXImpactCNY']):+,.0f}")
+    impact[2].metric(ui_text("Funding and fees", "资金成本与手续费"), f"¥{float(stress['FundingAndFeesCNY']):,.0f}")
+    impact[3].metric(ui_text("Rounded futures contracts", "取整后期货手数"), f"{int(stress['FuturesContracts']):,}")
+    with st.expander(ui_text("Scenario calculation details", "查看各情景计算明细")):
+        detail_columns = [
+            "ScenarioZH", "OilPrice", "PurchaseBasis", "PhysicalUnitPrice", "PhysicalCostCNY",
+            "FuturesPnL", "OptionPayoff", "OptionPremium", "InitialMarginCNY",
+            "FundingAndFeesCNY", "NetCostCNY", "BudgetVarianceCNY", "EffectiveUnitCostCNY",
+        ]
+        st.dataframe(scenarios[detail_columns], use_container_width=True, hide_index=True)
+    st.download_button(
+        ui_text("Download detailed cost scenarios", "下载详细成本情景"),
+        data=scenarios.to_csv(index=False).encode("utf-8-sig"),
+        file_name=f"{target.lower()}_detailed_procurement_scenarios.csv",
+        mime="text/csv",
+        use_container_width=True,
+        key="download_story_hedge_scenarios",
+    )
     st.warning(ui_text(
-        "Research output only. Investment suitability, physical-contract basis, FX, liquidity and margin must be checked before execution.",
-        "以上仅为研究建议。实际执行前仍需核对投资适当性，以及企业合同中的基差、汇率、流动性和保证金条件。",
+        "Research calculation only. Confirm contract specifications, tax, brokerage rules, liquidity, variation margin and accounting treatment before execution.",
+        "以上为研究测算。实际执行前仍需确认合约规格、税费与经纪规则、流动性、追加保证金安排及会计处理。",
     ))

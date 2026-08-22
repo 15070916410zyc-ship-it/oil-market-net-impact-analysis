@@ -813,6 +813,52 @@ class CloudWorkspaceBehaviorTests(unittest.TestCase):
         self.assertIn(expected_cache_key, app.API_VALIDATION_CACHE)
         self.assertTrue(all(api_key not in cache_key for cache_key in app.API_VALIDATION_CACHE))
 
+    def test_slider_thumb_values_have_room_for_decimal_numbers(self) -> None:
+        import inspect
+
+        from app import design_system
+
+        source = inspect.getsource(design_system.apply_design_system)
+        self.assertIn('[data-testid="stSliderThumbValue"]', source)
+        self.assertIn("min-width: 3.25rem !important", source)
+        self.assertIn("white-space: nowrap !important", source)
+        self.assertIn("font-variant-numeric: tabular-nums", source)
+
+    def test_procurement_story_accepts_detailed_contract_conditions(self) -> None:
+        import inspect
+
+        from app import executive_dashboard
+
+        source = inspect.getsource(executive_dashboard.render_decision_dashboard)
+        for input_key in (
+            "story_budget_basis",
+            "story_purchase_basis",
+            "story_budget_fx",
+            "story_settlement_fx",
+            "story_futures_entry",
+            "story_contract_size",
+            "story_option_strike",
+            "story_option_premium",
+            "story_margin_percent",
+            "story_funding_percent",
+            "story_holding_days",
+            "story_futures_fee",
+        ):
+            self.assertIn(input_key, source)
+        self.assertIn('currency="CNY"', source)
+        self.assertIn("BasisImpactCNY", source)
+        self.assertIn("FXImpactCNY", source)
+        self.assertIn("InitialMarginCNY", source)
+
+    def test_decision_dashboard_reloads_calculations_before_the_page(self) -> None:
+        import inspect
+
+        from app import streamlit_app as app
+
+        source = inspect.getsource(app.load_decision_dashboard_module)
+        self.assertLess(source.index('import_module("src.decision_support")'), source.index('import_module("app.executive_dashboard")'))
+        self.assertIn("importlib.reload(decision_support_module)", source)
+
 
 if __name__ == "__main__":
     unittest.main()

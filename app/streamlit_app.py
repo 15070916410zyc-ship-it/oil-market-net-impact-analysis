@@ -9102,6 +9102,14 @@ def render_professional_results_loader() -> None:
     render_paper_replication_tab()
 
 
+def load_decision_dashboard_module() -> Any:
+    """Reload decision calculations before the dashboard during hot updates."""
+    decision_support_module = importlib.import_module("src.decision_support")
+    importlib.reload(decision_support_module)
+    decision_module = importlib.import_module("app.executive_dashboard")
+    return importlib.reload(decision_module)
+
+
 def main() -> None:
     """Run the Streamlit application."""
     configure_page()
@@ -9116,8 +9124,7 @@ def main() -> None:
     st.session_state["primary_workspace_mode"] = active_workspace
     render_main_header(active_workspace)
     if active_workspace == "decision":
-        decision_module = importlib.import_module("app.executive_dashboard")
-        importlib.reload(decision_module)
+        decision_module = load_decision_dashboard_module()
         decision_module.render_decision_dashboard(ui_text, _apply_dark_plot_theme)
         return
 
@@ -9151,8 +9158,7 @@ def main() -> None:
     if active_workspace == "net_impact":
         latest_payload = st.session_state.get("price_forecast_last_result")
         if isinstance(latest_payload, dict) and latest_payload.get("result") is not None:
-            decision_module = importlib.import_module("app.executive_dashboard")
-            importlib.reload(decision_module)
+            decision_module = load_decision_dashboard_module()
             latest_result = latest_payload["result"]
             st.markdown(ui_text("### Latest market context", "### 最新市场背景"))
             context_figure = decision_module._main_forecast_figure(latest_result, "daily", ui_text)
@@ -9172,8 +9178,7 @@ def main() -> None:
     elif active_workspace == "warning":
         latest_regime = st.session_state.get("decision_regime_latest")
         if latest_regime is not None:
-            decision_module = importlib.import_module("app.executive_dashboard")
-            importlib.reload(decision_module)
+            decision_module = load_decision_dashboard_module()
             st.markdown(ui_text("### Latest risk context", "### 最新风险背景"))
             risk_context = decision_module._risk_figure(latest_regime, ui_text)
             _apply_dark_plot_theme(risk_context)

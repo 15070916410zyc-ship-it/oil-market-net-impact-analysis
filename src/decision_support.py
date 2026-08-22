@@ -141,14 +141,34 @@ def build_buyer_hedge_scenarios(
     futures_share: float | None = None,
     option_strike: float | None = None,
     option_premium: float = 0.0,
+    budget_basis: float = 0.0,
+    purchase_basis: float = 0.0,
+    budget_fx_rate: float = 1.0,
+    settlement_fx_rate: float = 1.0,
+    futures_entry_price: float | None = None,
+    margin_rate: float = 0.0,
+    annual_funding_rate: float = 0.0,
+    holding_days: int = 0,
+    futures_fee_per_contract: float = 0.0,
 ) -> pd.DataFrame:
-    """Calculate reconciled physical-cost and derivative-offset scenarios."""
+    """Calculate reconciled physical, derivative, basis, FX and funding scenarios.
+
+    Prices, basis and derivative cash flows are denominated in USD.  Local-cost
+    columns convert them at the supplied CNY-per-USD rates.  Initial margin is
+    reported as liquidity usage; only its funding cost enters net procurement
+    cost.
+    """
     if exposure_volume <= 0 or contract_size <= 0:
         raise ValueError("Exposure volume and contract size must be positive.")
+    if budget_fx_rate <= 0 or settlement_fx_rate <= 0:
+        raise ValueError("Budget and settlement FX rates must be positive.")
+    if holding_days < 0:
+        raise ValueError("Holding days cannot be negative.")
     recommendation = recommend_buyer_hedge(result)
     ratio = recommendation.hedge_ratio if hedge_ratio is None else float(np.clip(hedge_ratio, 0.0, 1.0))
     futures_fraction = recommendation.futures_share if futures_share is None else float(np.clip(futures_share, 0.0, 1.0))
     latest = float(result.metrics["LatestPrice"])
+    futures_entry = latest if futures_entry_price is None else float(futures_entry_price)
     strike = latest if option_strike is None else float(option_strike)
     lower80, upper80 = _final_interval(result.forecast, 80)
     lower95, upper95 = _final_interval(result.forecast, 95)
@@ -164,29 +184,62 @@ def build_buyer_hedge_scenarios(
     futures_units = hedged_units * futures_fraction
     option_units = hedged_units - futures_units
     contracts = int(round(hedged_units / contract_size))
+    futures_contracts = int(round(futures_units / contract_size))
+    effective_futures_units = futures_contracts * contract_size
+    initial_margin = abs(effective_futures_units * futures_entry) * max(float(margin_rate), 0.0)
+    margin_funding_cost = initial_margin * max(float(annual_funding_rate), 0.0) * int(holding_days) / 365.0
+    transaction_cost = futures_contracts * max(float(futures_fee_per_contract), 0.0)
+    budget_unit_price = float(budget_price) + float(budget_basis)
+    budget_cost = exposure_volume * budget_unit_price
     rows: list[dict[str, Any]] = []
     for scenario, scenario_zh, price in scenario_prices:
-        physical_cost = exposure_volume * price
-        futures_pnl = futures_units * (price - latest)
+        physical_unit_price = price + float(purchase_basis)
+        physical_cost = exposure_volume * physical_unit_price
+        futures_pnl = effective_futures_units * (price - futures_entry)
         option_payoff = option_units * max(price - strike, 0.0)
         premium_cost = option_units * max(float(option_premium), 0.0)
-        derivative_offset = futures_pnl + option_payoff - premium_cost
-        net_cost = physical_cost - futures_pnl - option_payoff + premium_cost
+        derivative_offset = futures_pnl + option_payoff - premium_cost - transaction_cost - margin_funding_cost
+        net_cost = physical_cost - futures_pnl - option_payoff + premium_cost + transaction_cost + margin_funding_cost
+        physical_cost_local = physical_cost * float(settlement_fx_rate)
+        net_cost_local = net_cost * float(settlement_fx_rate)
+        budget_cost_local = budget_cost * float(budget_fx_rate)
+        fx_impact_local = net_cost * (float(settlement_fx_rate) - float(budget_fx_rate))
         rows.append(
             {
                 "Scenario": scenario,
                 "ScenarioZH": scenario_zh,
                 "OilPrice": price,
+                "PurchaseBasis": float(purchase_basis),
+                "PhysicalUnitPrice": physical_unit_price,
                 "PhysicalCost": physical_cost,
                 "FuturesPnL": futures_pnl,
                 "OptionPayoff": option_payoff,
                 "OptionPremium": premium_cost,
+                "TransactionCost": transaction_cost,
+                "InitialMargin": initial_margin,
+                "MarginFundingCost": margin_funding_cost,
                 "DerivativeOffset": derivative_offset,
                 "NetCost": net_cost,
-                "BudgetCost": exposure_volume * budget_price,
-                "BudgetVariance": net_cost - exposure_volume * budget_price,
+                "BudgetCost": budget_cost,
+                "BudgetVariance": net_cost - budget_cost,
+                "BudgetFXRate": float(budget_fx_rate),
+                "SettlementFXRate": float(settlement_fx_rate),
+                "PhysicalCostCNY": physical_cost_local,
+                "NetCostCNY": net_cost_local,
+                "BudgetCostCNY": budget_cost_local,
+                "BudgetVarianceCNY": net_cost_local - budget_cost_local,
+                "FXImpactCNY": fx_impact_local,
+                "BasisImpactCNY": exposure_volume
+                * (float(purchase_basis) - float(budget_basis))
+                * float(settlement_fx_rate),
+                "InitialMarginCNY": initial_margin * float(budget_fx_rate),
+                "FundingAndFeesCNY": (margin_funding_cost + transaction_cost)
+                * float(settlement_fx_rate),
+                "EffectiveUnitCostCNY": net_cost_local / exposure_volume,
                 "HedgeRatio": ratio,
                 "Contracts": contracts,
+                "FuturesContracts": futures_contracts,
+                "EffectiveFuturesUnits": effective_futures_units,
             }
         )
     return pd.DataFrame(rows)

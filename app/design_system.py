@@ -360,6 +360,27 @@ def apply_design_system() -> None:
             font-variant-numeric: tabular-nums;
             letter-spacing: -0.03em;
         }
+        [data-testid="stSlider"] [data-testid="stSliderThumbValue"] {
+            width: fit-content !important;
+            min-width: 3.25rem !important;
+            max-width: none !important;
+            overflow: visible !important;
+            white-space: nowrap !important;
+        }
+        [data-testid="stSlider"] [data-testid="stSliderThumbValue"] > div,
+        [data-testid="stSlider"] [data-testid="stSliderThumbValue"] p,
+        [data-testid="stSlider"] [data-testid="stSliderThumbValue"] span {
+            display: block !important;
+            width: max-content !important;
+            min-width: max-content !important;
+            max-width: none !important;
+            margin: 0 !important;
+            white-space: nowrap !important;
+            word-break: keep-all !important;
+            overflow-wrap: normal !important;
+            line-height: 1.2 !important;
+            font-variant-numeric: tabular-nums;
+        }
         [data-testid="stDataFrame"], [data-testid="stTable"], [data-testid="stPlotlyChart"] {
             overflow: hidden;
             border: 1px solid var(--line) !important;
