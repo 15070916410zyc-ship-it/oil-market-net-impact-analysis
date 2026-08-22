@@ -195,47 +195,6 @@ def apply_design_system() -> None:
             from { transform: rotate(36deg) scale(.94); border-radius: 58% 42% 62% 38% / 65% 46% 54% 35%; }
             to { transform: rotate(54deg) scale(1.06); border-radius: 42% 58% 39% 61% / 48% 62% 38% 52%; }
         }
-        .workspace-mode-switch {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            width: 100%;
-            min-height: 2.52rem;
-            padding: .18rem;
-            border: 1px solid var(--line);
-            border-radius: 15px;
-            background: rgba(253,254,251,.68);
-            box-shadow: 0 8px 24px rgba(39,67,60,.05), inset 0 1px 0 rgba(255,255,255,.86);
-            backdrop-filter: blur(20px) saturate(125%);
-        }
-        .workspace-mode-switch a {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            min-width: 0;
-            padding: .46rem .66rem;
-            border-radius: 11px;
-            color: var(--ink-soft) !important;
-            font-size: .76rem;
-            font-weight: 620;
-            line-height: 1;
-            white-space: nowrap;
-            transition: color 180ms ease, background 180ms ease, box-shadow 180ms ease, transform 180ms ease;
-        }
-        .workspace-mode-switch a:hover {
-            color: var(--ink) !important;
-            background: rgba(255,255,255,.56);
-        }
-        .workspace-mode-switch a:active { transform: scale(.98); }
-        .workspace-mode-switch a:focus-visible {
-            outline: 2px solid var(--accent);
-            outline-offset: 2px;
-        }
-        .workspace-mode-switch a.is-active {
-            color: #f8faf7 !important;
-            background: var(--accent);
-            box-shadow: 0 5px 14px rgba(47,116,106,.18);
-        }
-
         .hero-copy {
             min-height: calc(100vh - 7rem);
             display: flex;
@@ -294,7 +253,7 @@ def apply_design_system() -> None:
             color: var(--accent-strong);
             background: rgba(223,238,233,.72);
         }
-        .hero-mode-status i, .professional-start-status i {
+        .hero-mode-status i {
             width: .48rem;
             height: .48rem;
             border-radius: 50%;
@@ -332,71 +291,6 @@ def apply_design_system() -> None:
             color: var(--ink-soft) !important;
             font-size: 1rem !important;
             line-height: 1.8 !important;
-        }
-        .professional-start {
-            margin: 1.4rem 0 5rem;
-            padding: clamp(2rem, 4vw, 4.5rem);
-            border: 1px solid rgba(195,208,202,.78);
-            border-radius: clamp(1.5rem, 3vw, 3.2rem) clamp(2.4rem, 5vw, 5.6rem) clamp(2rem, 4vw, 4.2rem) clamp(1.2rem, 2vw, 2rem);
-            background:
-                radial-gradient(circle at 78% 18%, rgba(112,151,163,.13), transparent 18rem),
-                radial-gradient(circle at 12% 88%, rgba(99,165,148,.14), transparent 20rem),
-                rgba(253,254,251,.72);
-            box-shadow: 0 24px 70px rgba(39,67,60,.07), inset 0 1px 0 rgba(255,255,255,.9);
-            backdrop-filter: blur(18px) saturate(120%);
-        }
-        .professional-start-status {
-            display: inline-flex;
-            align-items: center;
-            gap: .7rem;
-            color: var(--accent-strong);
-            font-size: .76rem;
-            font-weight: 700;
-            letter-spacing: .09em;
-        }
-        .professional-start h3 {
-            max-width: 16ch;
-            margin: 1.4rem 0 .8rem !important;
-            color: var(--ink) !important;
-            font-size: clamp(2rem, 4vw, 4.4rem) !important;
-            font-weight: 640 !important;
-            letter-spacing: -.045em !important;
-            line-height: 1.04 !important;
-            text-wrap: balance;
-        }
-        .professional-start > p {
-            max-width: 48rem;
-            margin: 0 !important;
-            color: var(--ink-soft) !important;
-            font-size: 1rem !important;
-            line-height: 1.8 !important;
-        }
-        .professional-flow {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 1px;
-            margin-top: 3rem;
-            overflow: hidden;
-            border: 1px solid var(--line);
-            border-radius: 1.25rem;
-            background: var(--line);
-        }
-        .professional-flow span {
-            display: flex;
-            flex-direction: column;
-            gap: .65rem;
-            min-height: 6.4rem;
-            padding: 1.15rem;
-            color: var(--ink);
-            background: rgba(253,254,251,.82);
-            font-size: .9rem;
-            font-weight: 620;
-        }
-        .professional-flow b {
-            color: var(--accent);
-            font-family: var(--font-mono);
-            font-size: .72rem;
-            letter-spacing: .08em;
         }
         .deferred-results-note {
             margin: 1.8rem 0 .75rem;
@@ -654,7 +548,7 @@ def apply_design_system() -> None:
         .data-empty-state span { color: var(--ink-soft); }
         [data-testid="stHorizontalBlock"]:has(.research-brand) {
             display: grid !important;
-            grid-template-columns: minmax(12rem, 1fr) minmax(14rem, 17rem) 8.8rem !important;
+            grid-template-columns: minmax(12rem, 1fr) 9.8rem !important;
             gap: 1rem !important;
             align-items: center !important;
         }
@@ -663,11 +557,12 @@ def apply_design_system() -> None:
             min-width: 0 !important;
         }
         [data-testid="stHorizontalBlock"]:has(.research-brand) > [data-testid="stColumn"]:last-child {
-            width: 8.8rem !important;
+            width: 9.8rem !important;
             justify-self: end;
         }
         [data-testid="stColumn"]:has(.tool-dock-anchor) {
-            width: 8.8rem !important;
+            width: 9.8rem !important;
+            max-width: 9.8rem !important;
             height: fit-content !important;
             min-height: 0 !important;
             align-self: center !important;
@@ -693,6 +588,7 @@ def apply_design_system() -> None:
             background: rgba(253,254,251,.70);
             box-shadow: 0 8px 24px rgba(39,67,60,.055), inset 0 1px 0 rgba(255,255,255,.86);
             backdrop-filter: blur(20px) saturate(125%);
+            overflow: hidden !important;
         }
         [data-testid="stColumn"]:has(.tool-dock-anchor) > [data-testid="stVerticalBlock"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] {
             width: 100% !important;
@@ -700,19 +596,31 @@ def apply_design_system() -> None:
         }
         [data-testid="stColumn"]:has(.tool-dock-anchor) [data-testid="stHorizontalBlock"] {
             display: grid !important;
-            grid-template-columns: 1fr .78fr !important;
+            grid-template-columns: minmax(0, 1.08fr) minmax(0, .92fr) !important;
             gap: 0 !important;
             align-items: center !important;
         }
         [data-testid="stColumn"]:has(.tool-dock-anchor) [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {
             width: auto !important;
+            max-width: 100% !important;
             min-width: 0 !important;
             padding: 0 !important;
+            overflow: hidden !important;
+        }
+        [data-testid="stColumn"]:has(.tool-dock-anchor) [data-testid="stElementContainer"],
+        [data-testid="stColumn"]:has(.tool-dock-anchor) [data-testid="stPopover"],
+        [data-testid="stColumn"]:has(.tool-dock-anchor) div[data-baseweb="select"] {
+            width: 100% !important;
+            max-width: 100% !important;
+            min-width: 0 !important;
         }
         .tool-dock-anchor { display: none; }
         [data-testid="stElementContainer"]:has(.tool-dock-anchor) { display: none !important; }
         [data-testid="stColumn"]:has(.tool-dock-anchor) [data-testid="stPopoverButton"],
         [data-testid="stColumn"]:has(.tool-dock-anchor) div[data-baseweb="select"] > div {
+            width: 100% !important;
+            max-width: 100% !important;
+            min-width: 0 !important;
             min-height: 2.08rem !important;
             height: 2.08rem !important;
             padding-inline: .48rem !important;
@@ -745,7 +653,7 @@ def apply_design_system() -> None:
             .block-container { padding: 1rem 1.25rem 4rem !important; }
             [data-testid="stHorizontalBlock"]:has(.research-brand) {
                 display: grid !important;
-                grid-template-columns: minmax(7.8rem, 1fr) 8.35rem !important;
+                grid-template-columns: minmax(7.8rem, 1fr) 9.35rem !important;
                 gap: 0.55rem !important;
                 align-items: center !important;
             }
@@ -753,19 +661,14 @@ def apply_design_system() -> None:
                 width: auto !important;
                 min-width: 0 !important;
             }
-            [data-testid="stHorizontalBlock"]:has(.research-brand) > [data-testid="stColumn"]:nth-child(2) {
-                grid-column: 1 / -1;
-                grid-row: 2;
-                width: min(100%, 20rem) !important;
-                justify-self: start;
-            }
             [data-testid="stHorizontalBlock"]:has(.research-brand) > [data-testid="stColumn"]:last-child {
                 grid-column: 2;
                 grid-row: 1;
             }
             [data-testid="stHorizontalBlock"]:has(.research-brand) > [data-testid="stColumn"]:last-child,
             [data-testid="stColumn"]:has(.tool-dock-anchor) {
-                width: 8.35rem !important;
+                width: 9.35rem !important;
+                max-width: 9.35rem !important;
             }
             [data-testid="stColumn"]:has(.tool-dock-anchor) [data-testid="stPopoverButton"] {
                 min-height: 2.12rem !important;
@@ -783,7 +686,6 @@ def apply_design_system() -> None:
             .research-brand-mark { width: 1.7rem; height: 1.7rem; }
             .hero-copy { min-height: 72vh; padding: 5rem 0 5.5rem; align-items: flex-start; }
             .hero-copy h1 { max-width: 12ch; font-size: clamp(2.8rem, 12vw, 4.4rem) !important; }
-            .professional-flow { grid-template-columns: repeat(2, 1fr); }
             .stTabs [data-baseweb="tab-list"] { gap: 1rem !important; overflow-x: auto; }
             .stTabs [data-baseweb="tab"] { white-space: nowrap; }
         }

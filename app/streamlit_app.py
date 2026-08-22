@@ -3141,27 +3141,16 @@ def apply_custom_css() -> None:
 def render_main_header(active_workspace: str = "decision") -> None:
     """Render the editorial navigation over a site-wide art field."""
     navigation_request = os.urandom(8).hex()
-    decision_active = active_workspace != "professional"
     professional_active = active_workspace == "professional"
     st.markdown(
         f'<a class="skip-link" href="#main-content">{ui_text("Skip to main content", "跳到主要内容")}</a>',
         unsafe_allow_html=True,
     )
-    brand_col, mode_col, tools_col = st.columns([0.67, 0.21, 0.12], gap="small")
+    brand_col, tools_col = st.columns([0.86, 0.14], gap="small")
     with brand_col:
         st.markdown(
             f'<div class="research-brand"><span class="research-brand-mark"><i></i></span>'
             f'<span>{ui_text("Oil Research Desk", "原油研究台")}</span></div>',
-            unsafe_allow_html=True,
-        )
-    with mode_col:
-        st.markdown(
-            f"""
-            <nav class="workspace-mode-switch" aria-label="{ui_text('Workspace mode', '工作模式')}">
-              <a class="{'is-active' if decision_active else ''}" href="/?workspace=decision&amp;request={navigation_request}#market-workspaces" target="_self">{ui_text('Decision', '决策模式')}</a>
-              <a class="{'is-active' if professional_active else ''}" href="/?workspace=professional&amp;request={navigation_request}#market-workspaces" target="_self">{ui_text('Professional', '专业模式')}</a>
-            </nav>
-            """,
             unsafe_allow_html=True,
         )
     with tools_col:
@@ -9072,28 +9061,8 @@ def sync_primary_workspace_from_query(navigation: list[str]) -> None:
     st.session_state[state_key] = request_signature
     st.session_state["primary_workspace_mode"] = workspace
     if workspace == "professional":
-        st.session_state["professional_workspace_mode"] = "overview"
+        st.session_state["professional_workspace_mode"] = "net_impact"
         st.session_state["professional_results_expanded"] = False
-
-
-def render_professional_overview() -> None:
-    """Render a lightweight landing state before any research tool is opened."""
-    st.markdown(
-        f"""
-        <section class="professional-start view-reveal">
-          <div class="professional-start-status"><i></i>{ui_text("Professional mode is ready", "专业模式已就绪")}</div>
-          <h3>{ui_text("Choose one tool. Load only what you need.", "先选工具，再加载需要的内容")}</h3>
-          <p>{ui_text("Entering professional mode no longer opens every historical result. The full research workflow and its confirmation gates remain unchanged inside each tool.", "进入专业模式时不再一次性打开全部历史结果；每项工具中的完整研究流程和确认步骤仍然保留。")}</p>
-          <div class="professional-flow" aria-label="{ui_text('Professional workflow', '专业研究流程')}">
-            <span><b>01</b>{ui_text("Net impact", "净影响")}</span>
-            <span><b>02</b>{ui_text("Price forecast", "价格预测")}</span>
-            <span><b>03</b>{ui_text("Risk warning", "风险预警")}</span>
-            <span><b>04</b>{ui_text("Connected data", "连接数据")}</span>
-          </div>
-        </section>
-        """,
-        unsafe_allow_html=True,
-    )
 
 
 def render_professional_results_loader() -> None:
@@ -9163,7 +9132,6 @@ def main() -> None:
         unsafe_allow_html=True,
     )
     professional_labels = {
-        "overview": ui_text("Professional home", "专业首页"),
         "net_impact": ui_text("Net-impact analysis", "净影响分析"),
         "forecast": ui_text("Price forecast", "价格预测"),
         "warning": ui_text("Crisis warning", "危机预警"),
@@ -9171,7 +9139,7 @@ def main() -> None:
     }
     stored_professional_tool = st.session_state.get("professional_workspace_mode")
     if stored_professional_tool not in professional_labels:
-        st.session_state["professional_workspace_mode"] = "overview"
+        st.session_state["professional_workspace_mode"] = "net_impact"
     active_workspace = st.segmented_control(
         ui_text("Professional workspace", "专业工具"),
         list(professional_labels),
@@ -9179,10 +9147,8 @@ def main() -> None:
         label_visibility="collapsed",
         key="professional_workspace_mode",
     )
-    active_workspace = active_workspace or "overview"
-    if active_workspace == "overview":
-        render_professional_overview()
-    elif active_workspace == "net_impact":
+    active_workspace = active_workspace or "net_impact"
+    if active_workspace == "net_impact":
         latest_payload = st.session_state.get("price_forecast_last_result")
         if isinstance(latest_payload, dict) and latest_payload.get("result") is not None:
             decision_module = importlib.import_module("app.executive_dashboard")

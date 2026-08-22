@@ -199,7 +199,7 @@ class CloudWorkspaceBehaviorTests(unittest.TestCase):
         ):
             app.sync_primary_workspace_from_query(navigation)
             self.assertEqual(session_state["primary_workspace_mode"], "professional")
-            self.assertEqual(session_state["professional_workspace_mode"], "overview")
+            self.assertEqual(session_state["professional_workspace_mode"], "net_impact")
             self.assertFalse(session_state["professional_results_expanded"])
 
             session_state["primary_workspace_mode"] = "decision"
@@ -224,19 +224,20 @@ class CloudWorkspaceBehaviorTests(unittest.TestCase):
         self.assertIn("/?workspace=professional&amp;request=", renderer)
         self.assertIn('target="_self"', renderer)
         self.assertIn("#market-workspaces", renderer)
-        self.assertIn("workspace-mode-switch", renderer)
+        self.assertNotIn("workspace-mode-switch", renderer)
         self.assertIn("professional_active", renderer)
         self.assertNotIn('key="primary_workspace_mode"', main_source)
 
-    def test_professional_workspace_opens_on_a_lightweight_home(self) -> None:
+    def test_professional_workspace_opens_directly_on_net_impact(self) -> None:
         import inspect
 
         from app import streamlit_app as app
 
         main_source = inspect.getsource(app.main)
-        self.assertIn('"overview": ui_text("Professional home", "专业首页")', main_source)
+        self.assertNotIn('"overview": ui_text("Professional home", "专业首页")', main_source)
         self.assertIn("st.segmented_control", main_source)
-        self.assertIn("render_professional_overview()", main_source)
+        self.assertNotIn("render_professional_overview()", main_source)
+        self.assertIn('active_workspace = active_workspace or "net_impact"', main_source)
         self.assertIn("render_professional_results_loader()", main_source)
         self.assertNotIn("st.radio(\n        ui_text(\"Professional workspace\"", main_source)
 
