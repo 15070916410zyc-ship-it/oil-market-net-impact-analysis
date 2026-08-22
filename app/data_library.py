@@ -45,13 +45,41 @@ def _store() -> ResearchStore:
 
 
 def _search_result_label(item: dict[str, Any]) -> str:
+    saved_prefix = "Saved · " if item.get("stored_variable_id") else ""
     parts = [
-        str(item.get("source", "")),
+        saved_prefix + str(item.get("source", "")),
         str(item.get("title", item.get("series_id", ""))),
         str(item.get("series_id", "")),
         str(item.get("frequency", "")),
     ]
     return "  |  ".join(part for part in parts if part)
+
+
+def _registry_entry_for_source(
+    entry: dict[str, Any],
+    selected_source: dict[str, Any],
+) -> dict[str, Any]:
+    """Return a registry entry whose identity matches the source shown in search."""
+    selected = dict(selected_source)
+    selected_key = (
+        str(selected.get("type", "")).lower(),
+        str(selected.get("id", "")),
+        str(selected.get("route", "")),
+    )
+    remaining = []
+    for source in entry.get("sources") or []:
+        if not isinstance(source, dict):
+            continue
+        source_key = (
+            str(source.get("type", "")).lower(),
+            str(source.get("id", "")),
+            str(source.get("route", "")),
+        )
+        if source_key != selected_key:
+            remaining.append(dict(source))
+    aligned = dict(entry)
+    aligned["sources"] = [selected, *remaining]
+    return aligned
 
 
 def _catalog_query(query: str) -> str:
@@ -136,7 +164,7 @@ def _indexed_catalog_results(query: str, limit: int = 30) -> list[dict[str, Any]
                     "title": str(entry.get("display_name") or entry.get("description") or entry.get("name")),
                     "frequency": str(entry.get("frequency") or ""),
                     "economic_category": str(entry.get("economic_category") or "other_indicators"),
-                    "registry_entry": entry,
+                    "registry_entry": _registry_entry_for_source(entry, official),
                 },
             )
         )
@@ -156,7 +184,7 @@ def _search_everywhere(query: str, limit: int = 30) -> tuple[list[dict[str, Any]
     try:
         results.extend(search_fred_series(catalog_query, limit=limit))
     except Exception as exc:  # noqa: BLE001 - EIA can still return matches.
-        errors.append(f"FRED: {exc}")
+        errors.append(f"FRED · {type(exc).__name__}")
 
     # EIA routes are independent official catalogs. Search them concurrently so
     # "all sources" does not turn into a long serial wait on the first query.
@@ -173,13 +201,13 @@ def _search_everywhere(query: str, limit: int = 30) -> tuple[list[dict[str, Any]
                     discovered = future.result()
                     routes.extend(str(item.get("route", "")) for item in discovered)
                 except Exception as exc:  # noqa: BLE001 - fixed routes remain available.
-                    errors.append(f"EIA目录发现: {exc}")
+                    errors.append(f"EIA directory · {type(exc).__name__}")
                 continue
             route = route_futures[future]
             try:
                 results.extend(future.result())
             except Exception as exc:  # noqa: BLE001 - one branch must not fail all search.
-                errors.append(f"EIA {route}: {exc}")
+                errors.append(f"EIA {route} · {type(exc).__name__}")
 
     fixed_routes = set(EIA_DATASET_ROUTES)
     discovered_routes = list(dict.fromkeys(route for route in routes if route and route not in fixed_routes))
@@ -194,8 +222,177 @@ def _search_everywhere(query: str, limit: int = 30) -> tuple[list[dict[str, Any]
                 try:
                     results.extend(future.result())
                 except Exception as exc:  # noqa: BLE001 - one branch must not fail all search.
-                    errors.append(f"EIA {route}: {exc}")
+                    errors.append(f"EIA {route} · {type(exc).__name__}")
     return deduplicate_catalog_results(results), errors
+
+
+def _stored_item_registry_entry(item: dict[str, Any]) -> dict[str, Any]:
+    """Rebuild a selectable registry entry from one persisted variable row."""
+    metadata = dict(item.get("metadata")) if isinstance(item.get("metadata"), dict) else {}
+    provider = str(item.get("provider") or "custom").lower()
+    selected_source = {
+        "type": provider,
+        "id": str(item.get("series_id") or item.get("name") or ""),
+        "route": str(item.get("route") or ""),
+    }
+    if metadata:
+        entry = _registry_entry_for_source(metadata, selected_source)
+    else:
+        entry = {
+            "name": str(item.get("name") or item.get("series_id") or ""),
+            "display_name": str(item.get("title") or item.get("name") or ""),
+            "description": str(item.get("description") or ""),
+            "auto_download": False,
+            "is_proxy": False,
+            "frequency": str(item.get("frequency") or ""),
+            "daily_alignment": "Stored observations retain their published dates.",
+            "economic_category": str(item.get("economic_category") or "other_indicators"),
+            "sources": [selected_source],
+            "cache_file": "",
+            "note": "Loaded from the research variable library.",
+        }
+    entry["research_store_variable_id"] = str(item.get("id") or "")
+    return entry
+
+
+def _stored_catalog_results(
+    store: ResearchStore,
+    query: str,
+    limit: int = 30,
+) -> list[dict[str, Any]]:
+    """Search saved variables without treating them as a live-data provider."""
+    normalized = str(query or "").strip().lower().replace("-", " ")
+    translated = _catalog_query(query).lower().replace("-", " ")
+    token_groups = [
+        [token for token in candidate.split() if token]
+        for candidate in dict.fromkeys([normalized, translated])
+        if candidate
+    ]
+    if not token_groups:
+        return []
+    matches: list[tuple[int, dict[str, Any]]] = []
+    for item in store.list_variables():
+        entry = _stored_item_registry_entry(item)
+        searchable = " ".join(
+            str(value)
+            for value in (
+                item.get("provider"),
+                item.get("series_id"),
+                item.get("name"),
+                item.get("title"),
+                item.get("description"),
+                entry.get("display_name"),
+                entry.get("economic_category"),
+            )
+        ).lower().replace("-", " ")
+        score = max(
+            sum(token in searchable for token in tokens)
+            for tokens in token_groups
+        )
+        if score == 0:
+            continue
+        provider = str(item.get("provider") or "Saved").upper()
+        if provider.startswith("EIA"):
+            provider = "EIA"
+        matches.append(
+            (
+                score,
+                {
+                    "source": provider,
+                    "series_id": str(item.get("series_id") or ""),
+                    "title": str(item.get("title") or item.get("name") or ""),
+                    "frequency": str(item.get("frequency") or ""),
+                    "route": str(item.get("route") or ""),
+                    "economic_category": str(item.get("economic_category") or "other_indicators"),
+                    "stored_variable_id": str(item.get("id") or ""),
+                    "registry_entry": entry,
+                },
+            )
+        )
+    matches.sort(key=lambda pair: (-pair[0], str(pair[1].get("title", ""))))
+    return [item for _, item in matches[: max(1, int(limit))]]
+
+
+def _catalog_identity(item: dict[str, Any]) -> tuple[str, str, str]:
+    provider = str(item.get("source") or "").upper()
+    if provider.startswith("EIA"):
+        provider = "EIA"
+    return (
+        provider,
+        str(item.get("series_id") or ""),
+        str(item.get("route") or ""),
+    )
+
+
+def _merge_search_results(
+    stored: list[dict[str, Any]],
+    official: list[dict[str, Any]],
+    limit: int = 60,
+) -> list[dict[str, Any]]:
+    """Prefer a saved copy when the same provider series appears twice."""
+    merged: list[dict[str, Any]] = []
+    seen: set[tuple[str, str, str]] = set()
+    for item in [*stored, *official]:
+        identity = _catalog_identity(item)
+        if identity in seen:
+            continue
+        seen.add(identity)
+        merged.append(item)
+        if len(merged) >= max(1, int(limit)):
+            break
+    return merged
+
+
+def _date_range_error(start_date: Any, end_date: Any, ui_text: UiText) -> str | None:
+    """Return a localized validation error before filtering or exporting data."""
+    start = pd.to_datetime(start_date, errors="coerce")
+    end = pd.to_datetime(end_date, errors="coerce")
+    if pd.isna(start) or pd.isna(end):
+        return ui_text(
+            "Choose valid start and end dates.",
+            "请选择有效的开始时间和结束时间。",
+        )
+    if start > end:
+        return ui_text(
+            "The start date cannot be later than the end date.",
+            "开始时间不能晚于结束时间，请重新选择。",
+        )
+    return None
+
+
+def _load_selected_stored_inputs(
+    store: ResearchStore,
+    entries: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], pd.DataFrame]:
+    """Attach persisted observations to request-local analysis registry entries."""
+    variable_ids = [
+        str(entry.get("research_store_variable_id"))
+        for entry in entries
+        if entry.get("research_store_variable_id")
+    ]
+    if not variable_ids:
+        return [dict(entry) for entry in entries], pd.DataFrame(
+            {"Date": pd.Series(dtype="datetime64[ns]")}
+        )
+    stored_registry, data = store.load_analysis_data(variable_ids=variable_ids)
+    stored_by_id = {
+        str(entry.get("research_store_variable_id")): entry
+        for entry in stored_registry
+        if entry.get("research_store_variable_id")
+    }
+    active: list[dict[str, Any]] = []
+    for selected in entries:
+        variable_id = str(selected.get("research_store_variable_id") or "")
+        loaded = stored_by_id.get(variable_id)
+        if loaded is None:
+            active.append(dict(selected))
+            continue
+        entry = dict(loaded)
+        variable = str(entry.get("name") or "")
+        if variable and variable in data:
+            entry["_stored_observations"] = data[["Date", variable]].copy()
+        active.append(entry)
+    return active, data
 
 
 def _preview_selected_entry(
@@ -204,7 +401,23 @@ def _preview_selected_entry(
     start_date: pd.Timestamp,
     end_date: pd.Timestamp,
     force_refresh: bool,
+    store: ResearchStore | None = None,
 ) -> tuple[pd.DataFrame, dict[str, Any]]:
+    variable_id = str(entry.get("research_store_variable_id") or "")
+    if variable_id:
+        if store is None:
+            raise ValueError("A research store is required to read a saved series.")
+        data = store.read_observations(
+            variable_id,
+            start_date=start_date,
+            end_date=end_date,
+            value_column=str(entry.get("name") or "Value"),
+        )
+        return data, {
+            "ActualSource": f"research_store:{variable_id}",
+            "Status": "LoadedResearchStore",
+            "Note": "Loaded saved observations from the research variable library.",
+        }
     from src.variable_pool import _fetch_registry_variable
 
     return _fetch_registry_variable(
@@ -267,12 +480,16 @@ def _excel_bytes(data: pd.DataFrame, variable: str) -> bytes:
 
 
 def _stored_registry_entries(store: ResearchStore) -> list[dict[str, Any]]:
-    entries: list[dict[str, Any]] = []
-    for item in store.list_variables():
-        metadata = item.get("metadata")
-        if isinstance(metadata, dict) and metadata.get("name"):
-            entries.append(metadata)
-    return entries
+    """Return saved variables with their observations attached for analysis."""
+    entries, data = store.load_analysis_data()
+    prepared: list[dict[str, Any]] = []
+    for item in entries:
+        entry = dict(item)
+        variable = str(entry.get("name") or "")
+        if variable and variable in data:
+            entry["_stored_observations"] = data[["Date", variable]].copy()
+        prepared.append(entry)
+    return prepared
 
 
 def _authority_figure(audit_table: pd.DataFrame, ui_text: UiText) -> go.Figure:
@@ -323,12 +540,12 @@ def render_data_library(ui_text: UiText, apply_theme: ThemeFunction) -> None:
         """,
         unsafe_allow_html=True,
     )
-    st.caption(
-        ui_text("Storage: ", "变量库：")
-        + status.backend
-        + "  |  "
-        + (ui_text("shared", "共享") if status.shared else ui_text("local fallback", "本地后备"))
-    )
+    if status.healthy:
+        st.caption(status.message)
+    else:
+        # A configured PostgreSQL connection that fails validation is not a
+        # SQLite fallback.  Surface the verified status and keep writes off.
+        st.error(status.message)
 
     latest_payload = st.session_state.get("price_forecast_last_result")
     if isinstance(latest_payload, dict) and latest_payload.get("result") is not None:
@@ -376,7 +593,14 @@ def render_data_library(ui_text: UiText, apply_theme: ThemeFunction) -> None:
         )
     if search:
         with st.status(ui_text("Searching official catalogs…", "正在搜索全部官方目录…"), expanded=False) as progress:
-            results, errors = _search_everywhere(query.strip())
+            official_results, errors = _search_everywhere(query.strip())
+            stored_results: list[dict[str, Any]] = []
+            if status.healthy:
+                try:
+                    stored_results = _stored_catalog_results(store, query.strip())
+                except Exception as exc:  # noqa: BLE001 - official matches remain usable.
+                    errors.append(f"Research library · {type(exc).__name__}")
+            results = _merge_search_results(stored_results, official_results)
             st.session_state["data_library_search_results"] = results
             st.session_state["data_library_search_errors"] = errors
             progress.update(
@@ -385,6 +609,14 @@ def render_data_library(ui_text: UiText, apply_theme: ThemeFunction) -> None:
             )
 
     results = list(st.session_state.get("data_library_search_results", []))
+    search_errors = list(st.session_state.get("data_library_search_errors", []))
+    if search_errors:
+        st.warning(ui_text(
+            "Some connected catalogs did not respond. Available verified matches are still shown.",
+            "部分已连接目录暂时未响应，页面仍会展示其余已核实的匹配结果。",
+        ))
+        with st.expander(ui_text("Unavailable catalog branches", "暂时未响应的目录"), expanded=False):
+            st.markdown("\n".join(f"- {label}" for label in search_errors))
     if not results:
         st.markdown(
             f"""
@@ -416,6 +648,7 @@ def render_data_library(ui_text: UiText, apply_theme: ThemeFunction) -> None:
                         start_date=start,
                         end_date=end,
                         force_refresh=False,
+                        store=store,
                     )
                 preview = {
                     "signature": preview_signature,
@@ -456,10 +689,15 @@ def render_data_library(ui_text: UiText, apply_theme: ThemeFunction) -> None:
                     horizontal=True,
                     key=f"data_frequency_{preview_signature}",
                 )
-                filtered = data[
-                    (pd.to_datetime(data["Date"]).dt.date >= start_date)
-                    & (pd.to_datetime(data["Date"]).dt.date <= end_date)
-                ].copy()
+                range_error = _date_range_error(start_date, end_date, ui_text)
+                if range_error:
+                    st.error(range_error)
+                    filtered = data.iloc[0:0].copy()
+                else:
+                    filtered = data[
+                        (pd.to_datetime(data["Date"]).dt.date >= start_date)
+                        & (pd.to_datetime(data["Date"]).dt.date <= end_date)
+                    ].copy()
                 metrics = st.columns(3)
                 metrics[0].metric(ui_text("Latest date", "最新日期"), latest.isoformat())
                 metrics[1].metric(ui_text("Observations", "观测数"), f"{filtered[entry['name']].notna().sum():,}")
@@ -484,6 +722,7 @@ def render_data_library(ui_text: UiText, apply_theme: ThemeFunction) -> None:
                         ui_text("Add to database", "加入变量库"),
                         type="primary",
                         use_container_width=True,
+                        disabled=bool(range_error) or not status.healthy,
                         key=f"data_add_{preview_signature}",
                     ):
                         try:
@@ -491,7 +730,10 @@ def render_data_library(ui_text: UiText, apply_theme: ThemeFunction) -> None:
                             count = store.upsert_observations(stored["id"], data, entry["name"])
                             current_entries = list(st.session_state.get("quick_api_catalog_registry_entries", []))
                             current_entries = [item for item in current_entries if item.get("name") != entry["name"]]
-                            current_entries.append(entry)
+                            stored_entry = dict(entry)
+                            stored_entry["research_store_variable_id"] = str(stored["id"])
+                            stored_entry["_stored_observations"] = data[["Date", entry["name"]]].copy()
+                            current_entries.append(stored_entry)
                             st.session_state["quick_api_catalog_registry_entries"] = current_entries
                             st.success(ui_text(
                                 f"Added to the research library with {count:,} observations.",
@@ -505,16 +747,18 @@ def render_data_library(ui_text: UiText, apply_theme: ThemeFunction) -> None:
                     file_name=f"{entry['name']}_{start_date}_{end_date}.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     use_container_width=True,
+                    disabled=bool(range_error) or filtered.empty,
                     key=f"download_data_excel_{preview_signature}",
                 )
             else:
                 st.warning(ui_text("This series returned no usable values.", "该序列没有返回可用数据。"))
 
-    try:
-        stored_entries = _stored_registry_entries(store)
-    except Exception as exc:  # noqa: BLE001
-        stored_entries = []
-        st.warning(ui_text("The shared variable library is temporarily unavailable: ", "共享变量库暂时不可用：") + str(exc))
+    stored_entries: list[dict[str, Any]] = []
+    if status.healthy:
+        try:
+            stored_entries = _stored_registry_entries(store)
+        except Exception as exc:  # noqa: BLE001
+            st.warning(ui_text("The research variable library is temporarily unavailable: ", "研究变量库暂时无法读取：") + str(exc))
     session_entries = list(st.session_state.get("quick_api_catalog_registry_entries", []))
     available_entries = {
         entry["name"]: entry
@@ -530,7 +774,12 @@ def render_data_library(ui_text: UiText, apply_theme: ThemeFunction) -> None:
             format_func=lambda name: str(available_entries[name].get("display_name") or name),
             key="data_library_active_variables",
         )
-        st.session_state["quick_api_catalog_registry_entries"] = [available_entries[name] for name in selected_names]
+        selected_entries = [available_entries[name] for name in selected_names]
+        try:
+            selected_entries, _ = _load_selected_stored_inputs(store, selected_entries)
+        except Exception as exc:  # noqa: BLE001 - non-database entries remain usable.
+            st.warning(ui_text("Saved observations could not be attached: ", "已保存的观测值暂时无法接入分析：") + str(exc))
+        st.session_state["quick_api_catalog_registry_entries"] = selected_entries
 
     with st.expander(ui_text("Professional source audit", "专业模式：数据来源核对"), expanded=False):
         registry = load_variable_registry(extra_entries=list(available_entries.values()))

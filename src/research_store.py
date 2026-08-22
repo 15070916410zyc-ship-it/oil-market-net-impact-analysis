@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 import json
 import os
 from pathlib import Path
@@ -22,6 +22,13 @@ import pandas as pd
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_SQLITE_PATH = PROJECT_ROOT / "data" / "processed" / "research_store.sqlite3"
 SNAPSHOT_TTL_HOURS = 6
+POSTGRES_CONNECT_TIMEOUT_SECONDS = 5
+REQUIRED_TABLES = (
+    "research_variables",
+    "series_observations",
+    "analysis_snapshots",
+)
+POSTGRES_REQUIRED_TABLES = (*REQUIRED_TABLES, "series_observations_default")
 
 
 def _json_default(value: Any) -> Any:
@@ -55,6 +62,19 @@ class StoreStatus:
     shared: bool
     configured: bool
     message: str
+    connected: bool = False
+    schema_ready: bool = False
+    error_code: str | None = None
+    missing_tables: tuple[str, ...] = ()
+
+    @property
+    def healthy(self) -> bool:
+        """Whether the selected backend is connected and ready for queries."""
+        return self.connected and self.schema_ready
+
+
+class ResearchStoreSchemaError(RuntimeError):
+    """Raised when the externally managed PostgreSQL schema is incomplete."""
 
 
 class ResearchStore:
@@ -72,19 +92,8 @@ class ResearchStore:
 
     @property
     def status(self) -> StoreStatus:
-        if self.backend == "postgresql":
-            return StoreStatus(
-                backend="PostgreSQL",
-                shared=True,
-                configured=True,
-                message="共享变量库已连接。",
-            )
-        return StoreStatus(
-            backend="SQLite",
-            shared=False,
-            configured=False,
-            message="当前使用本地变量库；配置 DATABASE_URL 后会自动切换为共享 PostgreSQL。",
-        )
+        """Return a verified status instead of inferring health from a URL."""
+        return self.healthcheck()
 
     @contextmanager
     def _connection(self) -> Iterator[Any]:
@@ -93,7 +102,10 @@ class ResearchStore:
                 import psycopg
             except ImportError as exc:  # pragma: no cover - depends on deployment extras.
                 raise RuntimeError("PostgreSQL storage requires psycopg.") from exc
-            with psycopg.connect(self.database_url) as connection:
+            with psycopg.connect(
+                self.database_url,
+                connect_timeout=POSTGRES_CONNECT_TIMEOUT_SECONDS,
+            ) as connection:
                 yield connection
             return
         self.sqlite_path.parent.mkdir(parents=True, exist_ok=True)
@@ -105,15 +117,111 @@ class ResearchStore:
         finally:
             connection.close()
 
+    def _missing_required_tables(self, connection: Any) -> tuple[str, ...]:
+        """Return required tables that are not queryable on the current schema path."""
+        if self.backend == "postgresql":
+            table_checks = ", ".join("to_regclass(%s)" for _ in POSTGRES_REQUIRED_TABLES)
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    f"SELECT {table_checks}",
+                    POSTGRES_REQUIRED_TABLES,
+                )
+                row = cursor.fetchone()
+            values = tuple(row or ())
+            return tuple(
+                table
+                for index, table in enumerate(POSTGRES_REQUIRED_TABLES)
+                if index >= len(values) or values[index] is None
+            )
+
+        rows = connection.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'"
+        ).fetchall()
+        present = {str(row[0]) for row in rows}
+        return tuple(table for table in REQUIRED_TABLES if table not in present)
+
+    @staticmethod
+    def _schema_error(missing_tables: tuple[str, ...]) -> ResearchStoreSchemaError:
+        missing = ", ".join(missing_tables)
+        return ResearchStoreSchemaError(
+            "PostgreSQL research-store schema is incomplete "
+            f"(missing: {missing}). Apply "
+            "migrations/202608220001_research_store_pg18.sql once through the "
+            "deployment migration process, then restart the application."
+        )
+
+    def healthcheck(self) -> StoreStatus:
+        """Verify connectivity and required tables without exposing credentials.
+
+        PostgreSQL schemas are externally migrated, so this method only performs
+        bounded connection and catalog checks. SQLite remains self-initialising.
+        """
+        backend_name = "PostgreSQL" if self.backend == "postgresql" else "SQLite"
+        configured = bool(self.database_url) if self.backend == "postgresql" else False
+        try:
+            if self.backend == "sqlite":
+                self.initialise()
+            with self._connection() as connection:
+                missing_tables = self._missing_required_tables(connection)
+        except Exception as exc:  # noqa: BLE001 - status must remain structured.
+            error_code = (
+                "driver_missing"
+                if isinstance(exc, RuntimeError) and "requires psycopg" in str(exc)
+                else "connection_failed"
+            )
+            return StoreStatus(
+                backend=backend_name,
+                shared=False,
+                configured=configured,
+                connected=False,
+                schema_ready=False,
+                message=(
+                    "共享变量库已配置，但连接验证未通过。"
+                    if self.backend == "postgresql"
+                    else "本地变量库暂时无法访问。"
+                ),
+                error_code=error_code,
+            )
+
+        if missing_tables:
+            return StoreStatus(
+                backend=backend_name,
+                shared=False,
+                configured=configured,
+                connected=True,
+                schema_ready=False,
+                message="数据库已连接，但研究变量库的迁移尚未完整应用。",
+                error_code="schema_missing",
+                missing_tables=missing_tables,
+            )
+
+        if self.backend == "postgresql":
+            self._initialised = True
+            return StoreStatus(
+                backend=backend_name,
+                shared=True,
+                configured=True,
+                connected=True,
+                schema_ready=True,
+                message="共享变量库连接与结构检查通过。",
+            )
+        return StoreStatus(
+            backend=backend_name,
+            shared=False,
+            configured=False,
+            connected=True,
+            schema_ready=True,
+            message="本地变量库可用；配置 DATABASE_URL 后可切换为共享 PostgreSQL。",
+        )
+
     def initialise(self) -> None:
         if self._initialised:
             return
         if self.backend == "postgresql":
-            migration_path = PROJECT_ROOT / "migrations" / "202608220001_research_store_pg18.sql"
-            sql = migration_path.read_text(encoding="utf-8")
             with self._connection() as connection:
-                with connection.cursor() as cursor:
-                    cursor.execute(sql)
+                missing_tables = self._missing_required_tables(connection)
+            if missing_tables:
+                raise self._schema_error(missing_tables)
         else:
             with self._connection() as connection:
                 connection.executescript(
@@ -160,6 +268,164 @@ class ResearchStore:
                     """
                 )
         self._initialised = True
+
+    @staticmethod
+    def _date_bound(value: str | date | datetime | pd.Timestamp | None, label: str) -> str | None:
+        if value is None:
+            return None
+        parsed = pd.to_datetime(value, errors="coerce")
+        if pd.isna(parsed):
+            raise ValueError(f"{label} must be a valid date.")
+        return pd.Timestamp(parsed).date().isoformat()
+
+    def read_observations(
+        self,
+        variable_id: str,
+        start_date: str | date | datetime | pd.Timestamp | None = None,
+        end_date: str | date | datetime | pd.Timestamp | None = None,
+        *,
+        value_column: str | None = None,
+    ) -> pd.DataFrame:
+        """Read one saved series as ``Date`` plus its analysis column.
+
+        Date bounds are inclusive. By default the stored registry name is used
+        as the value column; callers can request a stable generic name such as
+        ``Value`` through ``value_column``.
+        """
+        self.initialise()
+        start = self._date_bound(start_date, "start_date")
+        end = self._date_bound(end_date, "end_date")
+        if start is not None and end is not None and start > end:
+            raise ValueError("start_date must not be after end_date.")
+
+        with self._connection() as connection:
+            if self.backend == "postgresql":
+                with connection.cursor() as cursor:
+                    cursor.execute(
+                        "SELECT name FROM research_variables "
+                        "WHERE id=%s::uuid AND deleted_at IS NULL",
+                        (variable_id,),
+                    )
+                    variable = cursor.fetchone()
+                    if variable is None:
+                        raise KeyError(f"Unknown research variable id: {variable_id}")
+                    clauses = ["variable_id=%s::uuid"]
+                    parameters: list[Any] = [variable_id]
+                    if start is not None:
+                        clauses.append("observed_at >= %s")
+                        parameters.append(start)
+                    if end is not None:
+                        clauses.append("observed_at <= %s")
+                        parameters.append(end)
+                    cursor.execute(
+                        "SELECT observed_at, value FROM series_observations WHERE "
+                        + " AND ".join(clauses)
+                        + " ORDER BY observed_at",
+                        tuple(parameters),
+                    )
+                    rows = cursor.fetchall()
+            else:
+                variable = connection.execute(
+                    "SELECT name FROM research_variables WHERE id=? AND deleted_at IS NULL",
+                    (int(variable_id),),
+                ).fetchone()
+                if variable is None:
+                    raise KeyError(f"Unknown research variable id: {variable_id}")
+                clauses = ["variable_id=?"]
+                parameters = [int(variable_id)]
+                if start is not None:
+                    clauses.append("observed_at >= ?")
+                    parameters.append(start)
+                if end is not None:
+                    clauses.append("observed_at <= ?")
+                    parameters.append(end)
+                rows = connection.execute(
+                    "SELECT observed_at, value FROM series_observations WHERE "
+                    + " AND ".join(clauses)
+                    + " ORDER BY observed_at",
+                    parameters,
+                ).fetchall()
+
+        column = str(value_column or variable[0] or "Value").strip() or "Value"
+        if column == "Date":
+            column = "Value"
+        return pd.DataFrame(
+            {
+                "Date": pd.to_datetime([row[0] for row in rows]),
+                column: pd.to_numeric([row[1] for row in rows], errors="coerce"),
+            }
+        )
+
+    def load_analysis_data(
+        self,
+        variable_ids: list[str] | tuple[str, ...] | None = None,
+        start_date: str | date | datetime | pd.Timestamp | None = None,
+        end_date: str | date | datetime | pd.Timestamp | None = None,
+    ) -> tuple[list[dict[str, Any]], pd.DataFrame]:
+        """Combine saved registry entries and observations for analysis tools."""
+        selected = {str(value) for value in variable_ids} if variable_ids is not None else None
+        registry: list[dict[str, Any]] = []
+        data: pd.DataFrame | None = None
+        used_names: set[str] = set()
+
+        for item in self.list_variables():
+            if selected is not None and item["id"] not in selected:
+                continue
+            entry = dict(item["metadata"]) if isinstance(item.get("metadata"), dict) else {}
+            base_name = str(entry.get("name") or item["name"] or item["series_id"] or "Value")
+            column = base_name
+            suffix = 2
+            while column in used_names or column == "Date":
+                column = f"{base_name}_{suffix}"
+                suffix += 1
+            used_names.add(column)
+            entry.update(
+                {
+                    "name": column,
+                    "display_name": str(entry.get("display_name") or item["title"] or column),
+                    "description": str(entry.get("description") or item["description"] or ""),
+                    "frequency": str(entry.get("frequency") or item["frequency"] or ""),
+                    "units": str(entry.get("units") or item["units"] or ""),
+                    "economic_category": str(
+                        entry.get("economic_category")
+                        or item["economic_category"]
+                        or "other_indicators"
+                    ),
+                    "research_store_variable_id": item["id"],
+                }
+            )
+            entry.setdefault(
+                "sources",
+                [
+                    {
+                        "type": str(item["provider"]).lower(),
+                        "id": item["series_id"],
+                        "route": item["route"],
+                    }
+                ],
+            )
+            registry.append(entry)
+            observations = self.read_observations(
+                item["id"],
+                start_date=start_date,
+                end_date=end_date,
+                value_column=column,
+            )
+            data = (
+                observations
+                if data is None
+                else data.merge(observations, on="Date", how="outer")
+            )
+
+        if data is None:
+            data = pd.DataFrame({"Date": pd.Series(dtype="datetime64[ns]")})
+        else:
+            data = (
+                data.sort_values("Date")
+                .drop_duplicates("Date", keep="last")
+                .reset_index(drop=True)
+            )
+        return registry, data
 
     def upsert_variable(self, entry: dict[str, Any]) -> dict[str, Any]:
         self.initialise()

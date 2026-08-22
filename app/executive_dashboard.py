@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict
 import re
 from typing import Any, Callable
@@ -15,6 +16,7 @@ from src.data_governance import aggregate_time_series
 from src.decision_support import (
     build_buyer_hedge_scenarios,
     build_investment_decision,
+    compare_buyer_hedge_strategies,
     recommend_buyer_hedge,
 )
 from src.research_store import ResearchStore
@@ -31,6 +33,19 @@ PLOT_CONFIG = {
 }
 
 
+def _quantize_slider_default(
+    value: float,
+    *,
+    step: float = 0.05,
+    minimum: float = 0.0,
+    maximum: float = 1.0,
+) -> float:
+    """Clamp a computed default to a valid Streamlit slider tick."""
+    clipped = min(max(float(value), minimum), maximum)
+    ticks = int(np.floor((clipped - minimum) / step + 0.5))
+    return float(round(minimum + ticks * step, 10))
+
+
 def _story_database_url() -> str:
     try:
         return str(st.secrets.get("DATABASE_URL", "") or "").strip()
@@ -38,21 +53,8 @@ def _story_database_url() -> str:
         return ""
 
 
-def _high_volatility_probability() -> float:
-    payload = st.session_state.get("warning_last_result")
-    if not isinstance(payload, dict):
-        return 0.0
-    regime = payload.get("regime_forecast")
-    if regime is None:
-        return 0.0
-    value = getattr(regime, "probability_5d", 0.0)
-    value = float(value)
-    return value / 100.0 if value > 1.0 else value
-
-
-def _run_forecast(target: str, horizon: int, history_months: int) -> Any:
+def _load_price_series(target: str, history_months: int, *, force_refresh: bool) -> pd.DataFrame:
     from src.data_fetcher import RAW_CACHE_FILES, SERIES_SOURCES, fetch_series_with_fallback
-    from src.price_forecast import run_oil_price_forecast
 
     end = pd.Timestamp.today().normalize()
     start = (end - pd.DateOffset(months=int(history_months))).normalize()
@@ -62,36 +64,11 @@ def _run_forecast(target: str, horizon: int, history_months: int) -> Any:
         start.strftime("%Y-%m-%d"),
         end.strftime("%Y-%m-%d"),
         RAW_CACHE_FILES[target],
-        force_refresh=True,
+        force_refresh=force_refresh,
     )
     if data.empty or target not in data or data[target].notna().sum() < 180:
         raise ValueError(f"No sufficiently current {target} series is available.")
-    result = run_oil_price_forecast(
-        data,
-        price_column=target,
-        horizon=int(horizon),
-        max_history=max(180, int(history_months) * 23),
-    )
-    st.session_state["price_forecast_last_result"] = {
-        "target": target,
-        "horizon": int(horizon),
-        "history_months": int(history_months),
-        "result": result,
-    }
-    return result
-
-
-def _forecast_result(target: str, horizon: int, history_months: int) -> Any | None:
-    payload = st.session_state.get("price_forecast_last_result")
-    if not isinstance(payload, dict):
-        return None
-    if (
-        payload.get("target") != target
-        or int(payload.get("horizon", -1)) != int(horizon)
-        or int(payload.get("history_months", -1)) != int(history_months)
-    ):
-        return None
-    return payload.get("result")
+    return data
 
 
 def _anchored_forecast_view(history_view: pd.DataFrame, forecast_view: pd.DataFrame) -> pd.DataFrame:
@@ -114,11 +91,16 @@ def _main_forecast_figure(result: Any, frequency: str, ui_text: UiText) -> go.Fi
     history = result.history.rename(columns={"Actual": "Price"})
     forecast = result.forecast.copy()
     history_view = aggregate_time_series(history, frequency, methods={"Price": "last"})
+    if str(frequency).lower() == "monthly" and not history_view.empty:
+        # A partial current month must end on the actual as-of date, rather than
+        # appearing to contain observations from a future month-end.
+        history_view.loc[history_view.index[-1], "Date"] = pd.to_datetime(history["Date"]).max()
     forecast_view = aggregate_time_series(
         forecast,
         frequency,
         methods={column: "last" for column in forecast.columns if column != "Date"},
     )
+    forecast_view = forecast_view.drop_duplicates(subset=["Date"], keep="last").sort_values("Date")
     forecast_view = _anchored_forecast_view(history_view, forecast_view)
     figure = go.Figure()
     figure.add_trace(
@@ -128,6 +110,7 @@ def _main_forecast_figure(result: Any, frequency: str, ui_text: UiText) -> go.Fi
             mode="lines",
             name=ui_text("Observed", "实际价格"),
             line=dict(color="#354554", width=2.2),
+            connectgaps=True,
             hovertemplate="%{x|%Y-%m-%d}<br>$%{y:,.2f}<extra></extra>",
         )
     )
@@ -180,19 +163,26 @@ def _main_forecast_figure(result: Any, frequency: str, ui_text: UiText) -> go.Fi
                 x=forecast_view["Date"],
                 y=forecast_view["PointForecast"],
                 mode="lines+markers",
-            name=ui_text("Multi-rhythm forecast", "多层波动合成预测"),
+                name=ui_text("Multi-rhythm forecast", "多层波动合成预测"),
                 line=dict(color="#356B65", width=3),
                 marker=dict(size=5, color="#6F9189"),
+                connectgaps=True,
                 hovertemplate="%{x|%Y-%m-%d}<br>$%{y:,.2f}<extra></extra>",
             )
         )
+        figure.add_vline(
+            x=pd.to_datetime(history_view["Date"]).max(),
+            line_color="rgba(53, 69, 84, 0.34)",
+            line_width=1,
+            line_dash="dot",
+        )
     figure.update_layout(
-        title=dict(text=ui_text("Market path & decision range", "市场路径与决策区间"), x=0),
+        title=dict(text=ui_text("Observed path and forecast ranges", "实际走势与预测区间"), x=0),
         height=590,
         margin=dict(l=12, r=12, t=72, b=12),
         hovermode="x unified",
         dragmode="pan",
-        legend=dict(orientation="h", y=1.04, x=0),
+        legend=dict(orientation="h", y=1.04, x=0, traceorder="normal"),
         yaxis_title=ui_text("USD / barrel", "美元/桶"),
         uirevision=f"executive-{frequency}-{result.metrics.get('AsOfDate')}",
     )
@@ -206,32 +196,6 @@ def _main_forecast_figure(result: Any, frequency: str, ui_text: UiText) -> go.Fi
                 dict(step="all", label=ui_text("All", "全部")),
             ]
         ),
-    )
-    return figure
-
-
-def _component_figure(result: Any, ui_text: UiText) -> go.Figure:
-    components = result.components.copy()
-    final_date = components["Date"].max()
-    final = components.loc[components["Date"] == final_date].copy()
-    final["Channel"] = final["ChannelZH"] if ui_text("en", "zh") == "zh" else final["ChannelEN"]
-    colors = ["#356B65" if value >= 0 else "#88939A" for value in final["Forecast"]]
-    figure = go.Figure(
-        go.Bar(
-            x=final["Forecast"],
-            y=final["Channel"],
-            orientation="h",
-            marker_color=colors,
-            customdata=final[["IMF"]].to_numpy(),
-            hovertemplate="%{y}<br>%{customdata[0]}: %{x:+.3f}<extra></extra>",
-        )
-    )
-    figure.update_layout(
-        title=dict(text=ui_text("Five-channel contribution at horizon end", "预测期末五类通道贡献"), x=0),
-        height=390,
-        margin=dict(l=12, r=12, t=64, b=12),
-        xaxis_title=ui_text("Price contribution", "价格贡献"),
-        yaxis_title=None,
     )
     return figure
 
@@ -284,168 +248,126 @@ def _hedge_figure(scenarios: pd.DataFrame, ui_text: UiText, *, currency: str = "
     return figure
 
 
-def _render_legacy_decision_dashboard(ui_text: UiText, apply_theme: ThemeFunction) -> None:
-    """Render the investor/enterprise result layer without exposing model plumbing."""
-    st.markdown(
-        f'<p class="section-kicker">{ui_text("MARKET OUTLOOK", "市场判断")}</p>',
-        unsafe_allow_html=True,
-    )
-    st.markdown(
-        f"""
-        <section class="decision-hero">
-          <div>
-            <span>{ui_text("ONE METHOD, TWO USE CASES", "同一套方法，两种用法")}</span>
-            <h2>{ui_text("Today's market outlook", "今天的市场判断")}</h2>
-            <p>{ui_text("Read the direction and range first, then decide whether action is needed. The five-component forecast, validation and risk checks remain unchanged.", "先看方向和区间，再决定是否需要行动。五个 IMF 分量预测、样本外检验和风险判断都保留原样。")}</p>
-          </div>
-        </section>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    target_col, horizon_col, sample_col, frequency_col, action_col = st.columns([1, 1, 1, 1, 1.3])
-    target = target_col.selectbox(ui_text("Benchmark", "基准品种"), ["Brent", "WTI"], key="executive_target")
-    horizon = horizon_col.selectbox(
-        ui_text("Decision horizon", "决策期限"),
-        [5, 10, 20, 60],
-        index=2,
-        format_func=lambda value: ui_text(f"{value} business days", f"{value}个交易日"),
-        key="executive_horizon",
-    )
-    history_months = sample_col.selectbox(
-        ui_text("Research sample", "研究样本"),
-        [24, 36, 60, 84],
-        index=2,
-        format_func=lambda value: ui_text(f"{value} months", f"{value}个月"),
-        key="executive_history_months",
-    )
-    frequency = frequency_col.radio(
-        ui_text("Chart frequency", "图表频率"),
-        ["daily", "monthly"],
-        format_func=lambda value: ui_text("Daily", "日度") if value == "daily" else ui_text("Monthly", "月度"),
-        horizontal=True,
-        key="executive_frequency",
-    )
-    with action_col:
-        st.write("")
-        run = st.button(
-            ui_text("Refresh outlook", "重新计算"),
-            type="primary",
-            use_container_width=True,
-            key="executive_run_forecast",
+def _strategy_comparison_figure(comparison: pd.DataFrame, ui_text: UiText) -> go.Figure:
+    """Compare effective unit cost across policies on the same five scenarios."""
+    figure = go.Figure()
+    colors = ("#63727B", "#24796D", "#6EAFC6", "#E8B45B", "#8A78A8")
+    is_zh = ui_text("en", "zh") == "zh"
+    for color, (_, frame) in zip(colors, comparison.groupby("Strategy", sort=False)):
+        label = str(frame["StrategyZH"].iloc[0] if is_zh else frame["Strategy"].iloc[0])
+        scenario_labels = frame["ScenarioZH"] if is_zh else frame["Scenario"]
+        figure.add_trace(
+            go.Scatter(
+                x=scenario_labels,
+                y=frame["EffectiveUnitCostCNY"],
+                mode="lines+markers",
+                name=label,
+                line=dict(color=color, width=2.4),
+                marker=dict(size=7),
+                customdata=frame[["BudgetVarianceCNY", "LiquidityRequirementCNY"]].to_numpy(),
+                hovertemplate=(
+                    "%{x}<br>"
+                    + ui_text("Unit cost", "折算单桶成本")
+                    + ": ¥%{y:,.2f}<br>"
+                    + ui_text("Variance vs budget", "相对预算偏差")
+                    + ": ¥%{customdata[0]:+,.0f}<br>"
+                    + ui_text("Liquidity required", "资金占用")
+                    + ": ¥%{customdata[1]:,.0f}<extra></extra>"
+                ),
+            )
         )
-    result = _forecast_result(target, int(horizon), int(history_months))
-    if run:
-        with st.status(ui_text("Refreshing data and running the existing model…", "正在更新数据并运行现有模型……"), expanded=True) as status:
-            try:
-                result = _run_forecast(target, int(horizon), int(history_months))
-                status.update(label=ui_text("Decision view ready", "决策视图已生成"), state="complete", expanded=False)
-            except Exception as exc:  # noqa: BLE001
-                status.update(label=ui_text("Decision view failed", "决策视图生成失败"), state="error")
-                st.error(str(exc))
-                result = None
-    if result is None:
-        st.info(ui_text(
-            "Choose a benchmark and build the decision view. Existing forecast results are reused when the settings match.",
-            "选择品种和观察周期后，即可查看最新判断。相同设置会直接使用已有结果。",
-        ))
-        return
-
-    metrics = result.metrics
-    high_volatility = _high_volatility_probability()
-    decision = build_investment_decision(result, high_volatility_probability=high_volatility)
-    recommendation = recommend_buyer_hedge(result, high_volatility_probability=high_volatility)
-    final = result.forecast.iloc[-1]
-    metric_columns = st.columns(5)
-    metric_columns[0].metric(ui_text("Latest price", "最新价格"), f"${float(metrics['LatestPrice']):,.2f}")
-    metric_columns[1].metric(ui_text("Horizon change", "预测期涨跌"), f"{float(metrics['ProjectedChangePercent']):+.1f}%")
-    metric_columns[2].metric(ui_text("80% terminal range", "80%期末区间"), f"{float(final['Lower80']):.1f}-{float(final['Upper80']):.1f} USD/bbl")
-    metric_columns[3].metric(ui_text("Directional accuracy", "方向准确率"), f"{float(metrics['DirectionalAccuracyPercent']):.1f}%")
-    metric_columns[4].metric(ui_text("5-day high-volatility", "未来5日高波动概率"), f"{high_volatility * 100:.1f}%" if high_volatility else ui_text("Not run", "尚未计算"))
-
-    mode = st.radio(
-        ui_text("How will you use this view?", "你准备怎么用这份判断？"),
-        ["investment", "enterprise"],
-        format_func=lambda value: ui_text("Investment view", "投资判断") if value == "investment" else ui_text("Procurement hedge", "采购套保"),
-        horizontal=True,
-        key="executive_user_mode",
+    figure.update_layout(
+        title=dict(text=ui_text("Cost paths across five hedge policies", "五种套保策略的成本路径"), x=0),
+        height=470,
+        margin=dict(l=18, r=18, t=72, b=18),
+        hovermode="x unified",
+        yaxis_title=ui_text("Effective cost (CNY / barrel)", "折算成本（人民币/桶）"),
+        xaxis_title=None,
+        legend=dict(orientation="h", y=1.03),
     )
-    main_col, conclusion_col = st.columns([2.15, 0.85])
-    with main_col:
-        figure = _main_forecast_figure(result, frequency, ui_text)
-        apply_theme(figure)
-        st.plotly_chart(figure, use_container_width=True, config=PLOT_CONFIG, key=f"executive_main_{target}_{frequency}")
-    with conclusion_col:
-        if mode == "investment":
-            label = decision.label_zh if ui_text("en", "zh") == "zh" else decision.label
-            confidence = decision.confidence_zh if ui_text("en", "zh") == "zh" else decision.confidence
-            gate_reason = decision.gate_reason_zh if ui_text("en", "zh") == "zh" else decision.gate_reason
-            st.markdown(f"### {label}")
-            st.metric(ui_text("Research position band", "建议仓位"), f"{decision.position_low:.0%}-{decision.position_high:.0%}")
-            st.metric(ui_text("Signal confidence", "信号把握"), confidence)
-            st.metric(ui_text("Invalidation boundary", "判断失效价"), f"${decision.invalidation_price:,.2f}")
-            st.caption(gate_reason)
-            st.warning(ui_text(
-                "Research signal only. It does not account for an individual's leverage, margin or suitability.",
-                "仅为研究信号，未考虑个人杠杆、保证金承受能力与适当性。",
-            ))
-        else:
-            st.markdown(f"### {ui_text('Procurement hedge view', '采购套保建议')}")
-            st.metric(ui_text("Suggested coverage band", "建议覆盖比例"), f"{max(0.0, recommendation.hedge_ratio - 0.08):.0%}-{min(1.0, recommendation.hedge_ratio + 0.08):.0%}")
-            st.metric(ui_text("Futures layer", "期货层"), f"{recommendation.futures_share:.0%}")
-            st.metric(ui_text("Options layer", "期权层"), f"{recommendation.options_share:.0%}")
-            st.caption(recommendation.rationale_zh if ui_text("en", "zh") == "zh" else recommendation.rationale)
-            st.warning(ui_text(
-                "The policy range must be approved by finance and risk teams before execution.",
-                "实际执行比例须由企业财务与风险部门审批。",
-            ))
+    return figure
 
-    if mode == "investment":
-        channel_figure = _component_figure(result, ui_text)
-        apply_theme(channel_figure)
-        st.plotly_chart(channel_figure, use_container_width=True, config=PLOT_CONFIG, key=f"executive_components_{target}")
-        direction = ui_text("upward", "偏强") if float(metrics["ProjectedChangePercent"]) >= 0 else ui_text("downward", "偏弱")
-        st.markdown(ui_text(
-            f"**What changed:** the {target} path is {direction} over {horizon} business days.  \n**Why it matters:** the five IMF components are converted into channel contributions above.  \n**Decision boundary:** use the empirical interval and validation gate, not the point forecast alone.",
-            f"**市场判断：** {target}未来{horizon}个交易日的预测路径{direction}。  \n**主要依据：** 上图把五个 IMF 分量转换为对应的经济通道贡献。  \n**使用边界：** 必须同时参考经验预测区间和样本外验证结果，不能只看点预测。",
-        ))
-    else:
-        st.markdown(f"#### {ui_text('Enterprise exposure inputs', '企业风险敞口输入')}")
-        input_columns = st.columns(5)
-        volume = input_columns[0].number_input(ui_text("Purchase volume (barrels)", "采购量（桶）"), min_value=1_000.0, value=300_000.0, step=10_000.0, key="hedge_volume")
-        budget = input_columns[1].number_input(ui_text("Budget price", "预算单价"), min_value=1.0, value=float(metrics["LatestPrice"]), step=1.0, key="hedge_budget")
-        ratio = input_columns[2].slider(ui_text("Hedge coverage", "套保覆盖比例"), 0.0, 1.0, float(round(recommendation.hedge_ratio, 2)), 0.05, key="hedge_ratio")
-        futures_share = input_columns[3].slider(ui_text("Futures share", "期货占比"), 0.0, 1.0, float(round(recommendation.futures_share, 2)), 0.05, key="hedge_futures_share")
-        premium = input_columns[4].number_input(ui_text("Call premium / barrel", "看涨期权费/桶"), min_value=0.0, value=2.0, step=0.25, key="hedge_option_premium")
-        scenarios = build_buyer_hedge_scenarios(
-            result,
-            exposure_volume=float(volume),
-            budget_price=float(budget),
-            hedge_ratio=float(ratio),
-            futures_share=float(futures_share),
-            option_premium=float(premium),
+
+def _liquidity_stress_figure(comparison: pd.DataFrame, ui_text: UiText) -> go.Figure:
+    """Show each policy's worst modeled cash requirement and triggering scenario."""
+    peak_indices = comparison.groupby("Strategy", sort=False)["LiquidityRequirementCNY"].idxmax()
+    peak = comparison.loc[peak_indices].copy().sort_values("LiquidityRequirementCNY")
+    is_zh = ui_text("en", "zh") == "zh"
+    labels = peak["StrategyZH"] if is_zh else peak["Strategy"]
+    scenarios = peak["ScenarioZH"] if is_zh else peak["Scenario"]
+    figure = go.Figure(
+        go.Bar(
+            x=peak["LiquidityRequirementCNY"],
+            y=labels,
+            orientation="h",
+            marker_color="#6EAFC6",
+            customdata=np.column_stack([scenarios, peak["LiquidityToBudgetRatio"]]),
+            hovertemplate=(
+                "%{y}<br>¥%{x:,.0f}<br>"
+                + ui_text("Stress scenario", "压力情景")
+                + ": %{customdata[0]}<br>"
+                + ui_text("Share of budget", "占预算比例")
+                + ": %{customdata[1]:.1%}<extra></extra>"
+            ),
         )
-        hedge_figure = _hedge_figure(scenarios, ui_text)
-        apply_theme(hedge_figure)
-        st.plotly_chart(hedge_figure, use_container_width=True, config=PLOT_CONFIG, key=f"executive_hedge_{target}")
-        stress = scenarios.iloc[-1]
-        st.markdown(ui_text(
-            f"**Exposure:** {volume:,.0f} barrels with a ${budget:,.2f} budget price.  \n**Stress result:** at the 95% upper path, hedging changes net procurement cost to ${float(stress['NetCost']):,.0f}.  \n**Execution boundary:** contract rounding, basis, FX, liquidity and margin must be confirmed against the enterprise's physical contract.",
-            f"**风险敞口：** 采购{volume:,.0f}桶，预算单价${budget:,.2f}。  \n**压力结果：** 在95%上界情景下，套保后净采购成本为${float(stress['NetCost']):,.0f}。  \n**执行边界：** 合约取整、基差、汇率、流动性和保证金必须结合企业实货合同确认。",
-        ))
-        csv_data = scenarios.to_csv(index=False).encode("utf-8-sig")
-        st.download_button(
-            ui_text("Download hedge scenarios", "下载套保情景"),
-            data=csv_data,
-            file_name=f"{target.lower()}_hedge_scenarios.csv",
-            mime="text/csv",
-            use_container_width=True,
-            key="download_hedge_scenarios",
+    )
+    figure.update_layout(
+        title=dict(text=ui_text("Peak modeled liquidity need", "各策略峰值资金占用"), x=0),
+        height=470,
+        margin=dict(l=18, r=18, t=72, b=18),
+        xaxis_title=ui_text("CNY", "人民币"),
+        yaxis_title=None,
+    )
+    return figure
+
+
+def _cost_waterfall_figure(stress: pd.Series, ui_text: UiText) -> go.Figure:
+    """Reconcile the selected plan's upper-stress physical and hedge cash flows."""
+    settlement_fx = float(stress["SettlementFXRate"])
+    labels = [
+        ui_text("Physical purchase", "实货采购"),
+        ui_text("Futures offset", "期货对冲"),
+        ui_text("Option payoff", "期权赔付"),
+        ui_text("Option premium", "期权费"),
+        ui_text("Funding and fees", "资金成本与费用"),
+        ui_text("Net procurement cost", "净采购成本"),
+    ]
+    values = [
+        float(stress["PhysicalCostCNY"]),
+        -float(stress["FuturesPnL"]) * settlement_fx,
+        -float(stress["OptionPayoff"]) * settlement_fx,
+        float(stress["OptionPremium"]) * settlement_fx,
+        float(stress["FundingAndFeesCNY"]),
+        float(stress["NetCostCNY"]),
+    ]
+    figure = go.Figure(
+        go.Waterfall(
+            x=labels,
+            y=values,
+            measure=["absolute", "relative", "relative", "relative", "relative", "total"],
+            connector=dict(line=dict(color="rgba(53,69,84,0.26)")),
+            increasing=dict(marker=dict(color="#E8B45B")),
+            decreasing=dict(marker=dict(color="#24796D")),
+            totals=dict(marker=dict(color="#354554")),
+            hovertemplate="%{x}<br>¥%{y:+,.0f}<extra></extra>",
         )
+    )
+    figure.add_hline(
+        y=float(stress["BudgetCostCNY"]),
+        line_color="#8A78A8",
+        line_dash="dot",
+        line_width=1.5,
+    )
+    figure.update_layout(
+        title=dict(text=ui_text("95% upper-stress cost bridge", "95% 上界压力情景成本拆解"), x=0),
+        height=470,
+        margin=dict(l=18, r=18, t=72, b=18),
+        yaxis_title=ui_text("CNY", "人民币"),
+        showlegend=False,
+    )
+    return figure
 
 
-# The original dashboard above remains as a compatibility reference for saved
-# Streamlit states. This result-first renderer intentionally overrides it.
 FACTOR_LABELS_ZH = {
     "OVX": "原油波动率",
     "VIX": "美股风险情绪",
@@ -457,6 +379,17 @@ FACTOR_LABELS_ZH = {
     "CrudeStocks": "美国原油库存",
     "GPRD": "地缘政治风险",
 }
+DECISION_FACTOR_NAMES = (
+    "OVX",
+    "VIX",
+    "DollarIndex",
+    "TNote10Y",
+    "Gold",
+    "Copper",
+    "NaturalGas",
+    "CrudeStocks",
+    "GPRD",
+)
 
 
 def _factor_associations(frame: pd.DataFrame, target: str) -> pd.DataFrame:
@@ -501,81 +434,221 @@ def _factor_associations(frame: pd.DataFrame, target: str) -> pd.DataFrame:
     ).head(7)
 
 
-def _load_decision_data(
+def _model_ready_factors(
+    factor_names: tuple[str, ...],
+    start: pd.Timestamp,
+    end: pd.Timestamp,
+) -> pd.DataFrame:
+    """Load built-in factor columns once, so the first view is not network-bound."""
+    try:
+        from src.variable_pool import MODEL_READY_PATH
+
+        frame = pd.read_excel(MODEL_READY_PATH)
+    except Exception:  # noqa: BLE001 - online/cache sources remain available.
+        return pd.DataFrame(columns=["Date", *factor_names])
+    if "Date" not in frame:
+        return pd.DataFrame(columns=["Date", *factor_names])
+    frame["Date"] = pd.to_datetime(frame["Date"], errors="coerce")
+    frame = frame.loc[frame["Date"].between(start, end)].copy()
+    available = [name for name in factor_names if name in frame and frame[name].notna().any()]
+    return frame[["Date", *available]].dropna(subset=["Date"])
+
+
+def _built_in_factor_status(name: str, series: pd.DataFrame) -> dict[str, Any]:
+    values = pd.to_numeric(series[name], errors="coerce")
+    valid = series.loc[values.notna(), "Date"]
+    return {
+        "Variable": name,
+        "AutoDownload": False,
+        "ActualSource": "model_ready_data.xlsx",
+        "Status": "LoadedBuiltIn",
+        "LatestDate": valid.max() if not valid.empty else pd.NaT,
+        "MissingCount": int(values.isna().sum()),
+        "Coverage": float(values.notna().mean()) if len(values) else 0.0,
+        "Note": "Loaded the verified built-in research series without waiting for a network request.",
+    }
+
+
+def _fresh_cached_factor_status(name: str, series: pd.DataFrame, cache_file: str) -> dict[str, Any]:
+    values = pd.to_numeric(series[name], errors="coerce")
+    valid = series.loc[values.notna(), "Date"]
+    return {
+        "Variable": name,
+        "AutoDownload": True,
+        "ActualSource": f"cache:{cache_file}",
+        "Status": "LoadedFreshCache",
+        "LatestDate": valid.max() if not valid.empty else pd.NaT,
+        "MissingCount": int(values.isna().sum()),
+        "Coverage": float(values.notna().mean()) if len(values) else 0.0,
+        "Note": "Loaded a fresh local series while the decision view opened; manual refresh still checks the online source.",
+    }
+
+
+def _load_decision_context(
+    price: pd.DataFrame,
     target: str,
     history_months: int,
     *,
     force_refresh: bool,
-) -> tuple[pd.DataFrame, pd.DataFrame, list[dict[str, Any]]]:
-    from src.data_fetcher import RAW_CACHE_FILES, SERIES_SOURCES, fetch_series_with_fallback
-    from src.variable_pool import _fetch_registry_variable, load_variable_registry
+) -> dict[str, Any]:
+    """Load factor context and the risk state concurrently after the price view."""
+    from src.crisis_regime import run_markov_crisis_forecast
+    from src.variable_pool import (
+        _fetch_registry_variable,
+        _load_variable_cache,
+        load_variable_registry,
+    )
 
     end = pd.Timestamp.today().normalize()
     start = (end - pd.DateOffset(months=int(history_months))).normalize()
-    price = fetch_series_with_fallback(
-        target,
-        SERIES_SOURCES[target],
-        start.strftime("%Y-%m-%d"),
-        end.strftime("%Y-%m-%d"),
-        RAW_CACHE_FILES[target],
-        force_refresh=force_refresh,
-    )
-    factor_names = [
-        "OVX", "VIX", "DollarIndex", "TNote10Y", "Gold",
-        "Copper", "NaturalGas", "CrudeStocks", "GPRD",
-    ]
     registry = {entry["name"]: entry for entry in load_variable_registry()}
     merged = price[["Date", target]].copy()
-    statuses: list[dict[str, Any]] = []
-    for name in factor_names:
+    statuses_by_name: dict[str, dict[str, Any]] = {}
+    built_in = _model_ready_factors(DECISION_FACTOR_NAMES, start, end)
+    remote_names: list[str] = []
+    for name in DECISION_FACTOR_NAMES:
         entry = registry.get(name)
         if not entry:
             continue
-        series, status = _fetch_registry_variable(
-            entry,
-            start_date=start.strftime("%Y-%m-%d"),
-            end_date=end.strftime("%Y-%m-%d"),
-            force_refresh=force_refresh,
+        cached = pd.DataFrame()
+        cache_file = str(entry.get("cache_file", "") or "").strip()
+        if cache_file and not force_refresh:
+            cached = _load_variable_cache(
+                cache_file,
+                name,
+                start.strftime("%Y-%m-%d"),
+                end.strftime("%Y-%m-%d"),
+            )
+        cached_latest = (
+            pd.to_datetime(cached["Date"], errors="coerce").max()
+            if not cached.empty and "Date" in cached and name in cached
+            else pd.NaT
         )
-        statuses.append(status)
-        if not series.empty and name in series:
-            merged = merged.merge(series[["Date", name]], on="Date", how="outer")
+        cache_is_fresh = (
+            pd.notna(cached_latest)
+            and (end - pd.Timestamp(cached_latest).normalize()).days <= 14
+            and cached[name].notna().sum() >= 80
+        )
+        built_in_latest = (
+            pd.to_datetime(built_in.loc[built_in[name].notna(), "Date"], errors="coerce").max()
+            if name in built_in and built_in[name].notna().any()
+            else pd.NaT
+        )
+        built_in_is_fresh = (
+            pd.notna(built_in_latest)
+            and (end - pd.Timestamp(built_in_latest).normalize()).days <= 7
+            and built_in[name].notna().sum() >= 80
+        )
+        if cache_is_fresh:
+            local_series = cached[["Date", name]].copy()
+            merged = merged.merge(local_series, on="Date", how="outer")
+            statuses_by_name[name] = _fresh_cached_factor_status(
+                name,
+                local_series,
+                cache_file,
+            )
+        elif built_in_is_fresh and not force_refresh:
+            local_series = built_in[["Date", name]].copy()
+            merged = merged.merge(local_series, on="Date", how="outer")
+            statuses_by_name[name] = _built_in_factor_status(name, local_series)
+        elif not bool(entry.get("auto_download", False)) and name in built_in:
+            local_series = built_in[["Date", name]].copy()
+            merged = merged.merge(local_series, on="Date", how="outer")
+            statuses_by_name[name] = _built_in_factor_status(name, local_series)
+        else:
+            remote_names.append(name)
+
+    regime = None
+    max_workers = min(6, max(1, len(remote_names) + 1))
+    with ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="decision-context") as executor:
+        regime_future = executor.submit(
+            run_markov_crisis_forecast,
+            price,
+            price_column=target,
+            horizon=5,
+        )
+        factor_futures = {
+            executor.submit(
+                _fetch_registry_variable,
+                registry[name],
+                start_date=start.strftime("%Y-%m-%d"),
+                end_date=end.strftime("%Y-%m-%d"),
+                force_refresh=force_refresh,
+            ): name
+            for name in remote_names
+        }
+        for future in as_completed(factor_futures):
+            name = factor_futures[future]
+            try:
+                series, status = future.result()
+            except Exception as exc:  # noqa: BLE001 - one factor cannot hide the decision view.
+                series = pd.DataFrame(columns=["Date", name])
+                status = {
+                    "Variable": name,
+                    "ActualSource": "unavailable",
+                    "Status": "Failed",
+                    "Note": str(exc),
+                }
+            statuses_by_name[name] = status
+            if not series.empty and name in series:
+                merged = merged.merge(series[["Date", name]], on="Date", how="outer")
+        try:
+            regime = regime_future.result()
+        except Exception:  # noqa: BLE001 - the price forecast remains useful by itself.
+            regime = None
+
     merged = merged.sort_values("Date")
-    return price, merged, statuses
+    statuses = [
+        statuses_by_name[name]
+        for name in DECISION_FACTOR_NAMES
+        if name in statuses_by_name
+    ]
+    return {
+        "regime": regime,
+        "factors": _factor_associations(merged, target),
+        "source_status": statuses,
+    }
 
 
-@st.cache_data(ttl=6 * 60 * 60, show_spinner=False)
-def _cached_decision_bundle(
+@st.cache_data(ttl=6 * 60 * 60, max_entries=24, show_spinner=False)
+def _cached_price_bundle(
     target: str,
     horizon: int,
     history_months: int,
-    refresh_token: int,
+    data_revision: int,
+    _force_refresh: bool = False,
 ) -> dict[str, Any]:
-    from src.crisis_regime import run_markov_crisis_forecast
     from src.price_forecast import run_oil_price_forecast
 
-    force_refresh = refresh_token > 0
-    price, factors_frame, statuses = _load_decision_data(
-        target,
-        history_months,
-        force_refresh=force_refresh,
-    )
+    del data_revision  # The revision is intentionally part of the cache key.
+    price = _load_price_series(target, history_months, force_refresh=_force_refresh)
     result = run_oil_price_forecast(
         price,
         price_column=target,
         horizon=int(horizon),
         max_history=max(500, int(history_months) * 23),
     )
-    try:
-        regime = run_markov_crisis_forecast(price, price_column=target, horizon=5)
-    except Exception:  # noqa: BLE001 - forecast remains useful without a converged regime fit.
-        regime = None
     return {
         "result": result,
-        "regime": regime,
-        "factors": _factor_associations(factors_frame, target),
-        "source_status": statuses,
+        "price": price,
     }
+
+
+@st.cache_data(ttl=6 * 60 * 60, max_entries=12, show_spinner=False)
+def _cached_decision_context(
+    target: str,
+    history_months: int,
+    data_revision: int,
+    _price: pd.DataFrame,
+    _force_refresh: bool = False,
+) -> dict[str, Any]:
+    del data_revision  # The revision is intentionally part of the cache key.
+    return _load_decision_context(
+        _price,
+        target,
+        history_months,
+        force_refresh=_force_refresh,
+    )
 
 
 def _factor_figure(factors: pd.DataFrame, ui_text: UiText) -> go.Figure:
@@ -629,10 +702,10 @@ def _imf_story_figure(result: Any, ui_text: UiText) -> go.Figure:
         )
     )
     figure.update_layout(
-        title=dict(text=ui_text("Which oil-price rhythms dominate the forecast", "油价自身哪几层波动更重要"), x=0),
+        title=dict(text=ui_text("How the five rhythms compose the terminal forecast", "五层节奏如何构成期末预测"), x=0),
         height=470,
         margin=dict(l=18, r=18, t=72, b=18),
-        yaxis_title=ui_text("Share of the final forecast move (%)", "预测期末波动贡献占比（%）"),
+        yaxis_title=ui_text("Absolute composition share (%)", "模型绝对构成占比（%）"),
         xaxis_title=None,
     )
     return figure
@@ -704,50 +777,47 @@ def render_decision_dashboard(ui_text: UiText, apply_theme: ThemeFunction) -> No
     )
     with controls[4]:
         st.write("")
-        refresh = st.button(ui_text("Refresh latest data", "更新最新数据"), type="primary", use_container_width=True)
+        refresh = st.button(
+            ui_text("Refresh latest data", "更新最新数据"),
+            type="primary",
+            use_container_width=True,
+            key="story_refresh_latest",
+        )
     if refresh:
-        st.session_state["story_refresh_token"] = int(st.session_state.get("story_refresh_token", 0)) + 1
-    refresh_token = int(st.session_state.get("story_refresh_token", 0))
+        st.session_state["story_data_revision"] = int(
+            st.session_state.get("story_data_revision", 0)
+        ) + 1
+    data_revision = int(st.session_state.get("story_data_revision", 0))
+    # Retire the old sticky token: one manual refresh must not force every later
+    # slider, language or cost-input rerun back onto the network.
+    st.session_state.pop("story_refresh_token", None)
 
+    price_loading = st.empty()
+    price_loading.info(ui_text(
+        "Opening the latest successful price view…",
+        "正在打开最近一次成功的价格视图…",
+    ))
     try:
-        with st.spinner(ui_text("Preparing the latest decision view…", "正在准备最新决策视图…")):
-            bundle = _cached_decision_bundle(target, int(horizon), int(history_months), refresh_token)
+        price_bundle = _cached_price_bundle(
+            target,
+            int(horizon),
+            int(history_months),
+            data_revision,
+            _force_refresh=bool(refresh),
+        )
     except Exception as exc:  # noqa: BLE001
+        price_loading.empty()
         st.error(ui_text("The latest decision view could not be prepared: ", "最新决策视图生成失败：") + str(exc))
         return
+    price_loading.empty()
 
-    result = bundle["result"]
-    regime = bundle.get("regime")
-    factors = bundle.get("factors", pd.DataFrame())
+    result = price_bundle["result"]
+    price = price_bundle["price"]
     st.session_state["price_forecast_last_result"] = {
         "target": target, "horizon": int(horizon), "history_months": int(history_months), "result": result,
     }
-    st.session_state["decision_regime_latest"] = regime
-    st.session_state["decision_factors_latest"] = factors
     metrics = result.metrics
-    risk_5d = float(regime.probability_5d) if regime is not None else 0.0
-    decision = build_investment_decision(result, high_volatility_probability=risk_5d)
-    recommendation = recommend_buyer_hedge(result, high_volatility_probability=risk_5d)
     final = result.forecast.iloc[-1]
-
-    snapshot_signature = f"{target}|{horizon}|{history_months}|{metrics['AsOfDate']}"
-    if st.session_state.get("story_saved_snapshot") != snapshot_signature:
-        try:
-            ResearchStore(database_url=_story_database_url() or None).save_snapshot(
-                "oil_decision",
-                target,
-                str(metrics["AsOfDate"]),
-                {
-                    "parameters": {"horizon": int(horizon), "history_months": int(history_months)},
-                    "metrics": dict(metrics),
-                    "high_volatility_probability_5d": risk_5d,
-                    "investment_decision": asdict(decision),
-                    "hedge_recommendation": asdict(recommendation),
-                },
-            )
-            st.session_state["story_saved_snapshot"] = snapshot_signature
-        except Exception:  # noqa: BLE001 - persistence cannot hide a successful analysis.
-            pass
 
     st.markdown(ui_text("### Latest price path", "### 最新油价路径"))
     headline_metrics = st.columns(5)
@@ -755,15 +825,70 @@ def render_decision_dashboard(ui_text: UiText, apply_theme: ThemeFunction) -> No
     headline_metrics[1].metric(ui_text("Latest price", "最新价格"), f"${float(metrics['LatestPrice']):,.2f}")
     headline_metrics[2].metric(ui_text("Expected change", "预测期变化"), f"{float(metrics['ProjectedChangePercent']):+.1f}%")
     headline_metrics[3].metric(ui_text("80% range", "80% 期末区间"), f"{float(final['Lower80']):.1f}-{float(final['Upper80']):.1f}")
-    headline_metrics[4].metric(ui_text("5-day volatility risk", "未来 5 日高波动风险"), f"{risk_5d:.1%}" if regime else ui_text("Unavailable", "暂不可用"))
+    headline_metrics[4].metric(
+        ui_text("Holdout direction", "样本外方向命中"),
+        f"{float(metrics['DirectionalAccuracyPercent']):.1f}%",
+    )
     main_figure = _main_forecast_figure(result, frequency, ui_text)
     apply_theme(main_figure)
     st.plotly_chart(main_figure, use_container_width=True, config=PLOT_CONFIG, key=f"story_main_{target}_{frequency}")
-
-    st.markdown(ui_text("### What has been moving oil recently", "### 最近哪些因素在影响油价"))
     st.caption(ui_text(
-        "The estimates show recent statistical links, not proven causality. Positive bars moved with oil; negative bars moved against it.",
-        "这里展示的是近期统计关联，不代表已经证明因果。正值表示与油价同向，负值表示反向。",
+        "The 50% range is the central path, 80% is the planning range, and 95% is the stress range. The bands are calibrated on an earlier block of data and checked on a later, untouched block.",
+        "50% 区间用于观察核心路径，80% 区间用于常规计划，95% 区间用于压力准备。区间先用较早一段数据校准，再用之后未参与校准的数据检验。",
+    ))
+
+    st.markdown(ui_text("#### How the forecast held up out of sample", "#### 这套预测在样本外表现如何"))
+    validation = st.columns(5)
+    for column, level in zip(validation[:3], (50, 80, 95)):
+        column.metric(
+            ui_text(f"{level}% range coverage", f"{level}% 区间覆盖"),
+            f"{float(metrics[f'ValidationCoverage{level}Percent']):.1f}%",
+        )
+    validation[3].metric(
+        ui_text("Directional accuracy", "方向命中率"),
+        f"{float(metrics['DirectionalAccuracyPercent']):.1f}%",
+    )
+    validation[4].metric(
+        ui_text("MAE vs last-price baseline", "相对持平基线的 MAE 改善"),
+        f"{float(metrics['ValidationSkillPercent']):+.1f}%",
+    )
+    st.caption(ui_text(
+        f"Independent evaluation: {metrics['ValidationStartDate']} to {metrics['ValidationEndDate']} ({int(metrics['ValidationObservations'])} observations). A negative baseline improvement means the simple last-price benchmark did better over that window.",
+        f"独立评估期：{metrics['ValidationStartDate']} 至 {metrics['ValidationEndDate']}，共 {int(metrics['ValidationObservations'])} 个观测。若相对基线改善为负，表示这段时间内简单的“价格持平”基线表现更好。",
+    ))
+
+    context_loading = st.empty()
+    context_loading.info(ui_text(
+        "The price view is ready. Linking market factors and the risk state…",
+        "价格视图已就绪，正在补充市场关联与风险状态…",
+    ))
+    try:
+        context = _cached_decision_context(
+            target,
+            int(history_months),
+            data_revision,
+            _price=price,
+            _force_refresh=bool(refresh),
+        )
+    except Exception as exc:  # noqa: BLE001 - retain the already-rendered price result.
+        context = {"regime": None, "factors": pd.DataFrame(), "source_status": []}
+        st.warning(ui_text(
+            "The price forecast is available, but some market context could not be updated: ",
+            "价格预测可正常使用，但部分市场背景暂未更新：",
+        ) + str(exc))
+    context_loading.empty()
+    regime = context.get("regime")
+    factors = context.get("factors", pd.DataFrame())
+    st.session_state["decision_regime_latest"] = regime
+    st.session_state["decision_factors_latest"] = factors
+    risk_5d = float(regime.probability_5d) if regime is not None else 0.0
+    decision = build_investment_decision(result, high_volatility_probability=risk_5d)
+    recommendation = recommend_buyer_hedge(result, high_volatility_probability=risk_5d)
+
+    st.markdown(ui_text("### What has moved alongside oil recently", "### 最近哪些变化与油价同行"))
+    st.caption(ui_text(
+        "These are recent statistical associations, not proven causes. Positive bars moved with oil over the same period; negative bars moved in the opposite direction.",
+        "这里展示的是近期统计关联，不等同于因果关系。正值表示同期与油价同向，负值表示同期反向。",
     ))
     if isinstance(factors, pd.DataFrame) and not factors.empty:
         factor_chart = _factor_figure(factors, ui_text)
@@ -777,10 +902,10 @@ def render_decision_dashboard(ui_text: UiText, apply_theme: ThemeFunction) -> No
     else:
         st.info(ui_text("Factor data are being refreshed. The price forecast remains available.", "外部因素数据正在更新，油价预测仍可正常使用。"))
 
-    st.markdown(ui_text("### Which parts of oil's own movement matter", "### 油价自身哪几层波动更重要"))
+    st.markdown(ui_text("### How five oil-price rhythms shape the path", "### 五层油价节奏怎样构成预测路径"))
     st.caption(ui_text(
-        "The model separates oil into five rhythms, from short market noise to slower demand and financial cycles.",
-        "系统把油价拆成五层节奏，从短期交易波动到更慢的供需与金融周期。",
+        "The five-IMF method separates short trading noise from progressively slower inventory, demand and financial rhythms. The shares below describe model composition, not causal attribution.",
+        "五 IMF 方法把短期交易噪声与更慢的库存、需求和金融节奏分开。下图展示的是模型构成，不是因果归因。",
     ))
     imf_chart = _imf_story_figure(result, ui_text)
     apply_theme(imf_chart)
@@ -798,6 +923,11 @@ def render_decision_dashboard(ui_text: UiText, apply_theme: ThemeFunction) -> No
         st.caption(ui_text(
             "This is the probability of entering an oil-price high-volatility state, not the probability or date of a geopolitical crisis.",
             "这里预测的是油价进入高波动状态的概率，不是某场地缘危机发生的概率或日期。",
+        ))
+    else:
+        st.info(ui_text(
+            "The high-volatility state could not be estimated this time. The price ranges and sample-out checks above remain available.",
+            "本次未能稳定估计高波动状态；上方价格区间与样本外检验仍可正常使用。",
         ))
 
     st.markdown(ui_text("### Decision summary", "### 现在怎么做"))
@@ -828,8 +958,22 @@ def render_decision_dashboard(ui_text: UiText, apply_theme: ThemeFunction) -> No
         key="story_budget",
         help=ui_text("The benchmark component of the physical purchase budget, before basis.", "实货采购预算中的基准价格部分，不含基差。"),
     )
-    ratio = exposure[2].slider(ui_text("Hedge coverage", "套保覆盖比例"), 0.0, 1.0, float(round(recommendation.hedge_ratio, 2)), 0.05, key="story_ratio")
-    futures_share = exposure[3].slider(ui_text("Futures share", "期货占比"), 0.0, 1.0, float(round(recommendation.futures_share, 2)), 0.05, key="story_futures")
+    ratio = exposure[2].slider(
+        ui_text("Hedge coverage", "套保覆盖比例"),
+        0.0,
+        1.0,
+        _quantize_slider_default(recommendation.hedge_ratio),
+        0.05,
+        key="story_ratio",
+    )
+    futures_share = exposure[3].slider(
+        ui_text("Futures share", "期货占比"),
+        0.0,
+        1.0,
+        _quantize_slider_default(recommendation.futures_share),
+        0.05,
+        key="story_futures",
+    )
 
     with st.expander(ui_text("Detailed contract and funding assumptions", "详细合同与资金条件"), expanded=True):
         st.caption(ui_text(
@@ -866,7 +1010,68 @@ def render_decision_dashboard(ui_text: UiText, apply_theme: ThemeFunction) -> No
             key="story_settlement_fx",
         )
 
-        derivative_inputs = st.columns(4)
+        st.caption(ui_text(
+            "Physical-contract additions per barrel: a quality discount can be negative; freight, tax and other costs cannot.",
+            "以下均按每桶填写：品质折价可为负数，运费、税费和其他成本不能为负。",
+        ))
+        physical_cost_inputs = st.columns(4)
+        quality_differential = physical_cost_inputs[0].number_input(
+            ui_text("Quality differential", "品质升贴水（美元/桶）"),
+            value=0.0,
+            step=0.10,
+            key="story_quality_differential",
+        )
+        freight = physical_cost_inputs[1].number_input(
+            ui_text("Freight", "运费（美元/桶）"),
+            min_value=0.0,
+            value=0.0,
+            step=0.10,
+            key="story_freight",
+        )
+        taxes = physical_cost_inputs[2].number_input(
+            ui_text("Taxes and duties", "税费（美元/桶）"),
+            min_value=0.0,
+            value=0.0,
+            step=0.10,
+            key="story_taxes",
+        )
+        other_unit_cost = physical_cost_inputs[3].number_input(
+            ui_text("Other unit cost", "其他单位成本（美元/桶）"),
+            min_value=0.0,
+            value=0.0,
+            step=0.10,
+            key="story_other_unit_cost",
+        )
+        budget_cost_inputs = st.columns(4)
+        budget_quality_differential = budget_cost_inputs[0].number_input(
+            ui_text("Budget quality differential", "预算品质升贴水（美元/桶）"),
+            value=0.0,
+            step=0.10,
+            key="story_budget_quality_differential",
+        )
+        budget_freight = budget_cost_inputs[1].number_input(
+            ui_text("Budget freight", "预算运费（美元/桶）"),
+            min_value=0.0,
+            value=0.0,
+            step=0.10,
+            key="story_budget_freight",
+        )
+        budget_taxes = budget_cost_inputs[2].number_input(
+            ui_text("Budget taxes and duties", "预算税费（美元/桶）"),
+            min_value=0.0,
+            value=0.0,
+            step=0.10,
+            key="story_budget_taxes",
+        )
+        budget_other_unit_cost = budget_cost_inputs[3].number_input(
+            ui_text("Budget other unit cost", "预算其他单位成本（美元/桶）"),
+            min_value=0.0,
+            value=0.0,
+            step=0.10,
+            key="story_budget_other_unit_cost",
+        )
+
+        derivative_inputs = st.columns(2)
         futures_entry = derivative_inputs[0].number_input(
             ui_text("Futures entry price", "期货建仓价（美元/桶）"),
             min_value=0.01,
@@ -882,22 +1087,49 @@ def render_decision_dashboard(ui_text: UiText, apply_theme: ThemeFunction) -> No
             key="story_contract_size",
             help=ui_text("Futures volume is rounded to whole contracts.", "期货套保量会按整手合约取整。"),
         )
-        option_strike = derivative_inputs[2].number_input(
+        option_inputs = st.columns(5)
+        option_style = option_inputs[0].selectbox(
+            ui_text("Option structure", "期权结构"),
+            ["call", "collar", "none"],
+            format_func=lambda value: {
+                "call": ui_text("Protective call", "买入看涨期权"),
+                "collar": ui_text("Buyer collar", "买方领口策略"),
+                "none": ui_text("No option", "不使用期权"),
+            }[value],
+            key="story_option_style",
+        )
+        option_strike = option_inputs[1].number_input(
             ui_text("Call strike (USD/bbl)", "看涨期权执行价（美元/桶）"),
             min_value=0.01,
             value=float(metrics["LatestPrice"]),
             step=0.10,
             key="story_option_strike",
         )
-        option_premium = derivative_inputs[3].number_input(
+        option_premium = option_inputs[2].number_input(
             ui_text("Call premium (USD/bbl)", "看涨期权费（美元/桶）"),
             min_value=0.0,
             value=2.0,
             step=0.10,
             key="story_option_premium",
         )
+        collar_floor = option_inputs[3].number_input(
+            ui_text("Collar floor (USD/bbl)", "领口下限（美元/桶）"),
+            min_value=0.01,
+            value=float(metrics["LatestPrice"]) * 0.90,
+            step=0.10,
+            disabled=option_style != "collar",
+            key="story_collar_floor",
+        )
+        collar_put_premium = option_inputs[4].number_input(
+            ui_text("Written-put premium", "卖出看跌期权费（美元/桶）"),
+            min_value=0.0,
+            value=0.0,
+            step=0.10,
+            disabled=option_style != "collar",
+            key="story_collar_put_premium",
+        )
 
-        funding_inputs = st.columns(4)
+        funding_inputs = st.columns(5)
         margin_percent = funding_inputs[0].number_input(
             ui_text("Initial margin (%)", "期货保证金比例（%）"),
             min_value=0.0,
@@ -921,7 +1153,14 @@ def render_decision_dashboard(ui_text: UiText, apply_theme: ThemeFunction) -> No
             step=1,
             key="story_holding_days",
         )
-        futures_fee = funding_inputs[3].number_input(
+        variation_margin_days = funding_inputs[3].number_input(
+            ui_text("Variation-margin funding days", "变动保证金融资天数"),
+            min_value=0,
+            value=max(1, int(horizon)),
+            step=1,
+            key="story_variation_margin_days",
+        )
+        futures_fee = funding_inputs[4].number_input(
             ui_text("Round-trip fee / contract", "期货每手双边费用（美元）"),
             min_value=0.0,
             value=10.0,
@@ -929,6 +1168,17 @@ def render_decision_dashboard(ui_text: UiText, apply_theme: ThemeFunction) -> No
             key="story_futures_fee",
         )
 
+    effective_collar_floor = (
+        min(float(collar_floor), float(option_strike))
+        if option_style == "collar"
+        else None
+    )
+    if option_style == "collar" and float(collar_floor) > float(option_strike):
+        st.warning(ui_text(
+            "The collar floor cannot exceed the call strike. This run uses the call strike as the floor; lower the floor to create a meaningful collar.",
+            "领口下限不能高于看涨期权执行价。本次测算暂按执行价作为下限；请调低下限，才能形成有效领口区间。",
+        ))
+    selected_option_premium = float(option_premium) if option_style != "none" else 0.0
     scenarios = build_buyer_hedge_scenarios(
         result,
         exposure_volume=float(volume),
@@ -937,7 +1187,10 @@ def render_decision_dashboard(ui_text: UiText, apply_theme: ThemeFunction) -> No
         hedge_ratio=float(ratio),
         futures_share=float(futures_share),
         option_strike=float(option_strike),
-        option_premium=float(option_premium),
+        option_premium=selected_option_premium,
+        option_style=str(option_style),
+        collar_floor=effective_collar_floor,
+        collar_put_premium=float(collar_put_premium) if option_style == "collar" else 0.0,
         budget_basis=float(budget_basis),
         purchase_basis=float(purchase_basis),
         budget_fx_rate=float(budget_fx),
@@ -946,12 +1199,93 @@ def render_decision_dashboard(ui_text: UiText, apply_theme: ThemeFunction) -> No
         margin_rate=float(margin_percent) / 100.0,
         annual_funding_rate=float(funding_percent) / 100.0,
         holding_days=int(holding_days),
+        variation_margin_days=int(variation_margin_days),
         futures_fee_per_contract=float(futures_fee),
+        quality_differential_per_unit=float(quality_differential),
+        freight_per_unit=float(freight),
+        taxes_per_unit=float(taxes),
+        other_unit_cost=float(other_unit_cost),
+        budget_quality_differential_per_unit=float(budget_quality_differential),
+        budget_freight_per_unit=float(budget_freight),
+        budget_taxes_per_unit=float(budget_taxes),
+        budget_other_unit_cost=float(budget_other_unit_cost),
     )
-    hedge_chart = _hedge_figure(scenarios, ui_text, currency="CNY")
-    apply_theme(hedge_chart)
-    st.plotly_chart(hedge_chart, use_container_width=True, config=PLOT_CONFIG, key=f"story_hedge_{target}")
+    comparison = compare_buyer_hedge_strategies(
+        result,
+        exposure_volume=float(volume),
+        budget_price=float(budget),
+        hedge_ratio=float(ratio),
+        futures_share=float(futures_share),
+        option_strike=float(option_strike),
+        option_premium=float(option_premium),
+        collar_floor=effective_collar_floor,
+        collar_put_premium=float(collar_put_premium) if option_style == "collar" else 0.0,
+        contract_size=float(contract_size),
+        budget_basis=float(budget_basis),
+        purchase_basis=float(purchase_basis),
+        budget_fx_rate=float(budget_fx),
+        settlement_fx_rate=float(settlement_fx),
+        futures_entry_price=float(futures_entry),
+        margin_rate=float(margin_percent) / 100.0,
+        annual_funding_rate=float(funding_percent) / 100.0,
+        holding_days=int(holding_days),
+        variation_margin_days=int(variation_margin_days),
+        futures_fee_per_contract=float(futures_fee),
+        quality_differential_per_unit=float(quality_differential),
+        freight_per_unit=float(freight),
+        taxes_per_unit=float(taxes),
+        other_unit_cost=float(other_unit_cost),
+        budget_quality_differential_per_unit=float(budget_quality_differential),
+        budget_freight_per_unit=float(budget_freight),
+        budget_taxes_per_unit=float(budget_taxes),
+        budget_other_unit_cost=float(budget_other_unit_cost),
+    )
+    st.markdown(ui_text("##### Compare policies before choosing one", "##### 先比较策略，再决定怎么做"))
+    st.caption(ui_text(
+        "Every policy uses the same oil-price, basis, FX and physical-cost scenarios. Lower cost is not automatically better: the liquidity chart shows the cash buffer each policy may require.",
+        "所有策略使用同一组油价、基差、汇率和实货成本情景。成本更低不等于一定更合适，右侧资金占用图用于检查企业能否承受执行过程中的现金压力。",
+    ))
+    strategy_column, liquidity_column = st.columns([1.65, 1.0])
+    with strategy_column:
+        strategy_chart = _strategy_comparison_figure(comparison, ui_text)
+        apply_theme(strategy_chart)
+        st.plotly_chart(
+            strategy_chart,
+            use_container_width=True,
+            config=PLOT_CONFIG,
+            key=f"story_strategy_compare_{target}",
+        )
+    with liquidity_column:
+        liquidity_chart = _liquidity_stress_figure(comparison, ui_text)
+        apply_theme(liquidity_chart)
+        st.plotly_chart(
+            liquidity_chart,
+            use_container_width=True,
+            config=PLOT_CONFIG,
+            key=f"story_liquidity_compare_{target}",
+        )
+
     stress = scenarios.iloc[-1]
+    st.markdown(ui_text("##### Inspect the selected mix", "##### 查看当前组合的成本拆解"))
+    selected_path_column, waterfall_column = st.columns([1.25, 1.0])
+    with selected_path_column:
+        hedge_chart = _hedge_figure(scenarios, ui_text, currency="CNY")
+        apply_theme(hedge_chart)
+        st.plotly_chart(
+            hedge_chart,
+            use_container_width=True,
+            config=PLOT_CONFIG,
+            key=f"story_hedge_{target}",
+        )
+    with waterfall_column:
+        waterfall = _cost_waterfall_figure(stress, ui_text)
+        apply_theme(waterfall)
+        st.plotly_chart(
+            waterfall,
+            use_container_width=True,
+            config=PLOT_CONFIG,
+            key=f"story_cost_waterfall_{target}",
+        )
     summary = st.columns(4)
     summary[0].metric(ui_text("95% upper net cost", "95%上界净成本"), f"¥{float(stress['NetCostCNY']):,.0f}")
     summary[1].metric(ui_text("Effective unit cost", "折算单桶成本"), f"¥{float(stress['EffectiveUnitCostCNY']):,.2f}")
@@ -962,13 +1296,29 @@ def render_decision_dashboard(ui_text: UiText, apply_theme: ThemeFunction) -> No
     impact[1].metric(ui_text("FX impact", "汇兑影响"), f"¥{float(stress['FXImpactCNY']):+,.0f}")
     impact[2].metric(ui_text("Funding and fees", "资金成本与手续费"), f"¥{float(stress['FundingAndFeesCNY']):,.0f}")
     impact[3].metric(ui_text("Rounded futures contracts", "取整后期货手数"), f"{int(stress['FuturesContracts']):,}")
+    physical_impact = st.columns(5)
+    physical_impact[0].metric(ui_text("Quality impact", "品质变化影响"), f"¥{float(stress['QualityImpactCNY']):+,.0f}")
+    physical_impact[1].metric(ui_text("Freight impact", "运费变化影响"), f"¥{float(stress['FreightImpactCNY']):+,.0f}")
+    physical_impact[2].metric(ui_text("Tax impact", "税费变化影响"), f"¥{float(stress['TaxesImpactCNY']):+,.0f}")
+    physical_impact[3].metric(ui_text("Other-cost impact", "其他成本影响"), f"¥{float(stress['OtherCostImpactCNY']):+,.0f}")
+    physical_impact[4].metric(ui_text("Variation margin posted", "变动保证金峰值占用"), f"¥{float(stress['VariationMarginPostedCNY']):,.0f}")
     with st.expander(ui_text("Scenario calculation details", "查看各情景计算明细")):
         detail_columns = [
-            "ScenarioZH", "OilPrice", "PurchaseBasis", "PhysicalUnitPrice", "PhysicalCostCNY",
-            "FuturesPnL", "OptionPayoff", "OptionPremium", "InitialMarginCNY",
+            "ScenarioZH", "OilPrice", "PurchaseBasis", "QualityDifferentialPerUnit",
+            "FreightPerUnit", "TaxesPerUnit", "OtherUnitCost", "PhysicalUnitPrice",
+            "PhysicalCostCNY", "FuturesPnL", "OptionPayoff", "OptionPremium",
+            "InitialMarginCNY", "VariationMarginPostedCNY", "LiquidityRequirementCNY",
             "FundingAndFeesCNY", "NetCostCNY", "BudgetVarianceCNY", "EffectiveUnitCostCNY",
         ]
         st.dataframe(scenarios[detail_columns], use_container_width=True, hide_index=True)
+        st.download_button(
+            ui_text("Download strategy comparison", "下载策略对比明细"),
+            data=comparison.to_csv(index=False).encode("utf-8-sig"),
+            file_name=f"{target.lower()}_hedge_strategy_comparison.csv",
+            mime="text/csv",
+            use_container_width=True,
+            key="download_story_strategy_comparison",
+        )
     st.download_button(
         ui_text("Download detailed cost scenarios", "下载详细成本情景"),
         data=scenarios.to_csv(index=False).encode("utf-8-sig"),
@@ -981,3 +1331,24 @@ def render_decision_dashboard(ui_text: UiText, apply_theme: ThemeFunction) -> No
         "Research calculation only. Confirm contract specifications, tax, brokerage rules, liquidity, variation margin and accounting treatment before execution.",
         "以上为研究测算。实际执行前仍需确认合约规格、税费与经纪规则、流动性、追加保证金安排及会计处理。",
     ))
+
+    # Persistence is deliberately last: a slow or unavailable remote database
+    # must never postpone the charts and controls the user came to see.
+    snapshot_signature = f"{target}|{horizon}|{history_months}|{metrics['AsOfDate']}"
+    if st.session_state.get("story_saved_snapshot") != snapshot_signature:
+        try:
+            ResearchStore(database_url=_story_database_url() or None).save_snapshot(
+                "oil_decision",
+                target,
+                str(metrics["AsOfDate"]),
+                {
+                    "parameters": {"horizon": int(horizon), "history_months": int(history_months)},
+                    "metrics": dict(metrics),
+                    "high_volatility_probability_5d": risk_5d,
+                    "investment_decision": asdict(decision),
+                    "hedge_recommendation": asdict(recommendation),
+                },
+            )
+            st.session_state["story_saved_snapshot"] = snapshot_signature
+        except Exception:  # noqa: BLE001 - persistence cannot hide a successful analysis.
+            pass

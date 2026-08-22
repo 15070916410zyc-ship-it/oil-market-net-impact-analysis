@@ -253,6 +253,32 @@ def _is_fresh_enough(
     return True, f"{value_column} data ends at {latest_date:%Y-%m-%d}."
 
 
+def _covers_requested_start(
+    data: pd.DataFrame,
+    value_column: str,
+    start_date: str | pd.Timestamp,
+    max_start_lag_days: int = 31,
+) -> tuple[bool, str]:
+    """Check that a cache contains the beginning of the requested history."""
+    if not _has_valid_values(data, value_column):
+        return False, f"{value_column} has no valid values."
+    valid_dates = pd.to_datetime(
+        data.loc[data[value_column].notna(), "Date"], errors="coerce"
+    ).dropna()
+    if valid_dates.empty:
+        return False, f"{value_column} has no valid dates."
+    earliest_date = valid_dates.min()
+    requested_start = pd.to_datetime(start_date)
+    lag_days = int((earliest_date - requested_start).days)
+    if lag_days > max_start_lag_days:
+        return (
+            False,
+            f"{value_column} cache starts at {earliest_date:%Y-%m-%d}, "
+            f"which does not cover requested start {requested_start:%Y-%m-%d}.",
+        )
+    return True, f"{value_column} cache starts at {earliest_date:%Y-%m-%d}."
+
+
 def _freshness_lag_days_for_variable(name: str) -> int:
     """Return source freshness tolerance in calendar days."""
     if name == "WTI":
@@ -1312,9 +1338,32 @@ def fetch_series_with_fallback(
     end_date: str,
     cache_file: str | Path,
     force_refresh: bool = False,
+    cache_first: bool = False,
 ) -> pd.DataFrame:
     'Market data download and preparation helper.'
     _ensure_data_directories()
+    if cache_first and not force_refresh:
+        cached_data = _load_cache_file(cache_file, name, start_date, end_date)
+        if _has_valid_values(cached_data, name):
+            is_fresh, freshness_note = _is_fresh_enough(
+                cached_data,
+                name,
+                end_date,
+                max_lag_days=_freshness_lag_days_for_variable(name),
+            )
+            covers_start, coverage_note = _covers_requested_start(
+                cached_data, name, start_date
+            )
+            if is_fresh and covers_start:
+                LAST_SOURCE_USED[name] = f"cache:{Path(cache_file).name}"
+                LAST_SOURCE_NOTES[name] = (
+                    "Loaded the most recent verified cache before contacting online sources. "
+                    + freshness_note
+                    + " "
+                    + coverage_note
+                )
+                return cached_data
+
     errors: list[str] = []
     ordered_sources = _prioritise_api_sources(sources)
 
@@ -1708,7 +1757,10 @@ def build_market_dataset(
                     end_date,
                     max_lag_days=_freshness_lag_days_for_variable(name),
                 )
-                if is_fresh:
+                covers_start, coverage_note = _covers_requested_start(
+                    cached_data, name, start_date
+                )
+                if is_fresh and covers_start:
                     data = cached_data
                     LAST_SOURCE_USED[name] = f"cache:{RAW_CACHE_FILES[name].name}"
                     LAST_SOURCE_NOTES[name] = (
@@ -1716,8 +1768,8 @@ def build_market_dataset(
                     )
                 else:
                     warnings.warn(
-                        f"{name} cache_first=True but cache is stale; online sources will be tried. "
-                        f"Details: {freshness_note}"
+                        f"{name} cache_first=True but cache is stale or incomplete; online sources will be tried. "
+                        f"Details: {freshness_note} {coverage_note}"
                     )
 
         if data is None:
@@ -1852,4 +1904,24 @@ def save_raw_data(data: pd.DataFrame, output_path: str | Path, **kwargs: Any) ->
     'Market data download and preparation helper.'
     path = Path(output_path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    data.to_csv(path, index=False, **kwargs)
+    output = data.copy()
+    if path.exists() and path.suffix.lower() == ".csv" and "Date" in output.columns:
+        try:
+            existing = pd.read_csv(path)
+            if "Date" in existing.columns:
+                output = pd.concat([existing, output], ignore_index=True, sort=False)
+                output["Date"] = pd.to_datetime(output["Date"], errors="coerce")
+                output = (
+                    output.dropna(subset=["Date"])
+                    .sort_values("Date")
+                    .drop_duplicates(subset=["Date"], keep="last")
+                    .reset_index(drop=True)
+                )
+                output["Date"] = output["Date"].dt.strftime("%Y-%m-%d")
+        except Exception as exc:  # noqa: BLE001 - a damaged cache must not block a fresh save.
+            warnings.warn(
+                f"Could not merge existing raw cache {path}; replacing it with the new data. "
+                f"Reason: {_safe_exception_text(exc)}"
+            )
+            output = data.copy()
+    output.to_csv(path, index=False, **kwargs)

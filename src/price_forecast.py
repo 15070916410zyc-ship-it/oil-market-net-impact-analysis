@@ -36,7 +36,7 @@ class PriceForecastResult:
     history: pd.DataFrame
     forecast: pd.DataFrame
     components: pd.DataFrame
-    metrics: dict[str, float | str]
+    metrics: dict[str, float | int | str]
     model_summary: pd.DataFrame
 
 
@@ -132,6 +132,18 @@ def _forecast_from_signal(
     return reconstructed, component_predictions, frequencies
 
 
+def _split_conformal_radius(errors: np.ndarray, level: int) -> float:
+    """Return a finite-sample absolute-error radius from calibration data only."""
+    absolute_errors = np.sort(np.abs(np.asarray(errors, dtype=float)))
+    absolute_errors = absolute_errors[np.isfinite(absolute_errors)]
+    if absolute_errors.size == 0:
+        raise ValueError("Prediction-interval calibration requires at least one finite error.")
+    coverage = float(level) / 100.0
+    rank = int(np.ceil((absolute_errors.size + 1) * coverage))
+    index = min(max(rank, 1), absolute_errors.size) - 1
+    return max(float(absolute_errors[index]), 0.50)
+
+
 def run_oil_price_forecast(
     data: pd.DataFrame,
     *,
@@ -152,30 +164,47 @@ def run_oil_price_forecast(
         raise ValueError("Forecast horizon must be between 1 and 120 business days.")
     cleaned = _clean_price_data(data, price_column).tail(max_history).reset_index(drop=True)
     values = cleaned[price_column].to_numpy(dtype=float)
-    holdout = min(max(20, horizon), 60, len(values) // 5)
+    # One chronological holdout is forecast from a genuinely earlier origin.
+    # Its first half calibrates the empirical ranges; the second half evaluates
+    # them without feeding those evaluation outcomes back into the ranges.
+    holdout = min(max(40, int(horizon) * 2), 120, len(values) // 3)
+    calibration_observations = holdout // 2
     train_values = values[:-holdout]
     validation_forecast, _, _ = _forecast_from_signal(train_values, holdout, lags)
     validation_actual = values[-holdout:]
-    validation_errors = validation_actual - validation_forecast
+    calibration_errors = (
+        validation_actual[:calibration_observations]
+        - validation_forecast[:calibration_observations]
+    )
+    evaluation_actual = validation_actual[calibration_observations:]
+    evaluation_forecast = validation_forecast[calibration_observations:]
 
     point_forecast, component_forecasts, frequencies = _forecast_from_signal(values, horizon, lags)
-    absolute_errors = np.abs(validation_errors)
     widening = np.sqrt(1.0 + np.arange(horizon) / max(holdout - 1, 1))
+    validation_widening = np.sqrt(
+        1.0 + np.arange(holdout) / max(calibration_observations - 1, 1)
+    )
     future_dates = pd.bdate_range(cleaned["Date"].iloc[-1] + pd.offsets.BDay(1), periods=horizon)
     forecast_data: dict[str, object] = {
         "Date": future_dates,
         "PointForecast": point_forecast,
     }
+    interval_radii: dict[int, float] = {}
+    validation_coverages: dict[int, float] = {}
     for level in PREDICTION_INTERVAL_LEVELS:
-        coverage = level / 100.0
-        quantile = min(1.0, np.ceil((len(absolute_errors) + 1) * coverage) / len(absolute_errors))
-        try:
-            empirical_radius = float(np.quantile(absolute_errors, quantile, method="higher"))
-        except TypeError:  # NumPy < 1.22 compatibility.
-            empirical_radius = float(np.quantile(absolute_errors, quantile, interpolation="higher"))
-        radius = max(empirical_radius, 0.50) * widening
+        empirical_radius = _split_conformal_radius(calibration_errors, level)
+        interval_radii[level] = empirical_radius
+        radius = empirical_radius * widening
         forecast_data[f"Lower{level}"] = point_forecast - radius
         forecast_data[f"Upper{level}"] = point_forecast + radius
+        evaluation_radius = (
+            empirical_radius * validation_widening[calibration_observations:]
+        )
+        covered = (
+            (evaluation_actual >= evaluation_forecast - evaluation_radius)
+            & (evaluation_actual <= evaluation_forecast + evaluation_radius)
+        )
+        validation_coverages[level] = float(np.mean(covered) * 100.0)
     forecast = pd.DataFrame(forecast_data)
 
     component_rows: list[dict[str, object]] = []
@@ -204,22 +233,49 @@ def run_oil_price_forecast(
                 }
             )
 
-    prior_actual = np.r_[train_values[-1], validation_actual[:-1]]
-    prior_forecast = np.r_[train_values[-1], validation_forecast[:-1]]
-    actual_direction = np.sign(validation_actual - prior_actual)
-    forecast_direction = np.sign(validation_forecast - prior_forecast)
-    metrics: dict[str, float | str] = {
+    prior_actual = np.r_[
+        validation_actual[calibration_observations - 1],
+        evaluation_actual[:-1],
+    ]
+    prior_forecast = np.r_[
+        validation_forecast[calibration_observations - 1],
+        evaluation_forecast[:-1],
+    ]
+    actual_direction = np.sign(evaluation_actual - prior_actual)
+    forecast_direction = np.sign(evaluation_forecast - prior_forecast)
+    validation_mae = float(mean_absolute_error(evaluation_actual, evaluation_forecast))
+    naive_forecast = np.full_like(
+        evaluation_actual,
+        validation_actual[calibration_observations - 1],
+        dtype=float,
+    )
+    naive_mae = float(mean_absolute_error(evaluation_actual, naive_forecast))
+    skill_percent = (
+        float((1.0 - validation_mae / naive_mae) * 100.0)
+        if naive_mae > 1e-12
+        else 0.0
+    )
+    metrics: dict[str, float | int | str] = {
         "Target": price_column,
         "AsOfDate": cleaned["Date"].iloc[-1].strftime("%Y-%m-%d"),
         "ForecastHorizon": int(horizon),
         "LatestPrice": float(values[-1]),
         "ForecastEndPrice": float(point_forecast[-1]),
         "ProjectedChangePercent": float((point_forecast[-1] / values[-1] - 1.0) * 100.0),
-        "ValidationMAE": float(mean_absolute_error(validation_actual, validation_forecast)),
-        "ValidationRMSE": float(mean_squared_error(validation_actual, validation_forecast) ** 0.5),
+        "ValidationMAE": validation_mae,
+        "ValidationRMSE": float(mean_squared_error(evaluation_actual, evaluation_forecast) ** 0.5),
         "DirectionalAccuracyPercent": float(np.mean(actual_direction == forecast_direction) * 100.0),
-        "ValidationObservations": float(holdout),
+        "ValidationNaiveMAE": naive_mae,
+        "ValidationSkillPercent": skill_percent,
+        "CalibrationObservations": int(calibration_observations),
+        "ValidationObservations": int(len(evaluation_actual)),
+        "ValidationStartDate": cleaned["Date"].iloc[-len(evaluation_actual)].strftime("%Y-%m-%d"),
+        "ValidationEndDate": cleaned["Date"].iloc[-1].strftime("%Y-%m-%d"),
+        "PredictionIntervalMethod": "chronological split calibration and evaluation",
     }
+    for level in PREDICTION_INTERVAL_LEVELS:
+        metrics[f"ValidationCoverage{level}Percent"] = validation_coverages[level]
+        metrics[f"CalibrationRadius{level}"] = interval_radii[level]
     history = cleaned.tail(240).rename(columns={price_column: "Actual"})
     return PriceForecastResult(
         history=history,

@@ -475,7 +475,7 @@ def _normalise_registry_entry(entry: dict[str, Any]) -> dict[str, Any]:
         normalised_source["type"] = str(source.get("type", "")).strip()
         normalised_source["id"] = str(source.get("id", "")).strip()
         normalised_sources.append(normalised_source)
-    return {
+    normalised = {
         "name": name,
         "display_name": str(entry.get("display_name", "") or "").strip(),
         "description": str(entry.get("description", "")).strip(),
@@ -489,6 +489,17 @@ def _normalise_registry_entry(entry: dict[str, Any]) -> dict[str, Any]:
         "economic_category": str(entry.get("economic_category", "") or "").strip(),
         "daily_fill_forward": bool(entry.get("daily_fill_forward", False)),
     }
+    # Database-backed observations are attached only to the request-local
+    # registry entry.  They are deliberately kept out of YAML and database
+    # metadata so credentials and mutable runtime state never become part of a
+    # published source definition.
+    research_store_variable_id = str(entry.get("research_store_variable_id", "") or "").strip()
+    if research_store_variable_id:
+        normalised["research_store_variable_id"] = research_store_variable_id
+    stored_observations = entry.get("_stored_observations")
+    if isinstance(stored_observations, pd.DataFrame):
+        normalised["_stored_observations"] = stored_observations.copy()
+    return normalised
 
 
 def _load_uploaded_registry_entries() -> list[dict[str, Any]]:
@@ -612,6 +623,82 @@ def _normalise_date_series(values: pd.Series | list[Any]) -> pd.Series:
 def _series_has_values(data: pd.DataFrame, variable: str) -> bool:
     """Return True when a variable has at least one non-missing value."""
     return variable in data.columns and pd.to_numeric(data[variable], errors="coerce").notna().any()
+
+
+def _slice_registered_series(
+    data: pd.DataFrame,
+    variable: str,
+    start_date: str | pd.Timestamp,
+    end_date: str | pd.Timestamp,
+) -> pd.DataFrame:
+    """Return one registered series inside an inclusive, validated date range."""
+    start_timestamp = pd.to_datetime(start_date, errors="coerce")
+    end_timestamp = pd.to_datetime(end_date, errors="coerce")
+    if pd.isna(start_timestamp) or pd.isna(end_timestamp):
+        raise ValueError("The analysis start and end dates must be valid dates.")
+    start_timestamp = pd.Timestamp(start_timestamp).normalize()
+    end_timestamp = pd.Timestamp(end_timestamp).normalize()
+    if start_timestamp > end_timestamp:
+        raise ValueError("The analysis start date must not be after the end date.")
+    if not isinstance(data, pd.DataFrame) or "Date" not in data or variable not in data:
+        return pd.DataFrame(columns=["Date", variable])
+    prepared = data[["Date", variable]].copy()
+    prepared["Date"] = _normalise_date_series(prepared["Date"])
+    prepared[variable] = pd.to_numeric(prepared[variable], errors="coerce")
+    return (
+        prepared[
+            prepared["Date"].between(start_timestamp, end_timestamp, inclusive="both")
+        ]
+        .dropna(subset=["Date", variable])
+        .sort_values("Date")
+        .drop_duplicates("Date", keep="last")
+        .reset_index(drop=True)
+    )
+
+
+def _registered_observations_from_entry(
+    entry: dict[str, Any],
+    start_date: str | pd.Timestamp,
+    end_date: str | pd.Timestamp,
+) -> pd.DataFrame:
+    """Read request-local observations previously loaded from ResearchStore."""
+    observations = entry.get("_stored_observations")
+    if not isinstance(observations, pd.DataFrame):
+        return pd.DataFrame(columns=["Date", str(entry.get("name") or "Value")])
+    return _slice_registered_series(
+        observations,
+        str(entry.get("name") or "Value"),
+        start_date,
+        end_date,
+    )
+
+
+def _existing_model_ready_series(
+    entry: dict[str, Any],
+    start_date: str | pd.Timestamp,
+    end_date: str | pd.Timestamp,
+) -> pd.DataFrame:
+    """Read a declared existing model-ready column without triggering a download."""
+    variable = str(entry.get("name") or "").strip()
+    existing_source = next(
+        (
+            source
+            for source in entry.get("sources", [])
+            if source.get("type") == "existing_model_ready_column"
+        ),
+        None,
+    )
+    if not variable or not existing_source:
+        return pd.DataFrame(columns=["Date", variable])
+    source_column = str(existing_source.get("id") or variable).strip()
+    try:
+        model_ready = _read_model_ready_data(MODEL_READY_PATH)
+    except (FileNotFoundError, ValueError, OSError):
+        return pd.DataFrame(columns=["Date", variable])
+    if source_column not in model_ready:
+        return pd.DataFrame(columns=["Date", variable])
+    selected = model_ready[["Date", source_column]].rename(columns={source_column: variable})
+    return _slice_registered_series(selected, variable, start_date, end_date)
 
 
 def _variable_stats(data: pd.DataFrame, variable: str, selected_end_date: str | pd.Timestamp) -> dict[str, Any]:
@@ -1272,6 +1359,44 @@ def _fetch_registry_variable(
         "Coverage": None,
         "Note": entry.get("note", ""),
     }
+
+    stored = _registered_observations_from_entry(entry, start_date, end_date)
+    if _series_has_values(stored, variable):
+        stats = _variable_stats(stored, variable, end_date)
+        status_row.update(
+            {
+                "ActualSource": (
+                    "research_store:"
+                    + str(entry.get("research_store_variable_id") or "saved_series")
+                ),
+                "Status": "LoadedResearchStore",
+                "LatestDate": stats["LatestDate"],
+                "MissingCount": stats["MissingCount"],
+                "Coverage": stats["Coverage"],
+                "Note": "Loaded the selected observations from the research variable library.",
+            }
+        )
+        return stored, status_row
+
+    # ``auto_download`` controls network access, not whether a column already
+    # present in the model-ready workbook may be used.  This distinction keeps
+    # existing Gold/GPRD and similar curated series available without claiming
+    # that they were refreshed online.
+    model_ready = _existing_model_ready_series(entry, start_date, end_date)
+    if _series_has_values(model_ready, variable):
+        stats = _variable_stats(model_ready, variable, end_date)
+        status_row.update(
+            {
+                "ActualSource": "model_ready_data.xlsx",
+                "Status": "ExistingModelReady",
+                "LatestDate": stats["LatestDate"],
+                "MissingCount": stats["MissingCount"],
+                "Coverage": stats["Coverage"],
+                "Note": "Loaded the declared existing model-ready column; no network refresh was performed.",
+            }
+        )
+        return model_ready, status_row
+
     if not entry.get("auto_download", False):
         return pd.DataFrame(columns=["Date", variable]), status_row
 
@@ -1573,6 +1698,32 @@ def build_expanded_variable_pool(
             )
             if prefer_existing and existing_is_usable and not force_refresh:
                 continue
+
+        stored_observations = _registered_observations_from_entry(entry, start_date, end_date)
+        if _series_has_values(stored_observations, variable):
+            stored_data, stored_status = _fetch_registry_variable(
+                entry,
+                start_date,
+                end_date,
+                force_refresh=False,
+            )
+            expanded = _merge_variable(
+                expanded,
+                stored_data,
+                variable,
+                prefer_existing=prefer_existing,
+            )
+            if _series_has_values(expanded, variable):
+                stats = _variable_stats(expanded, variable, end_date)
+                stored_status.update(
+                    {
+                        "LatestDate": stats["LatestDate"],
+                        "MissingCount": stats["MissingCount"],
+                        "Coverage": stats["Coverage"],
+                    }
+                )
+            status_rows.append(stored_status)
+            continue
 
         has_local_upload_source = any(
             source.get("type") == "local_upload" for source in entry.get("sources", [])

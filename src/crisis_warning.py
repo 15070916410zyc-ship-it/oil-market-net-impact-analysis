@@ -148,7 +148,7 @@ def prepare_warning_features(
             target[position] = 1
     frame["target_h5"] = target
 
-    feature_columns = [
+    oil_feature_columns = [
         "oil_r1",
         "oil_r5",
         "oil_r20",
@@ -161,15 +161,31 @@ def prepare_warning_features(
         "skew20",
         "kurt60",
         "variance_ratio",
-        *market_features,
     ]
+    feature_columns = [*oil_feature_columns, *market_features]
     frame = frame.replace([np.inf, -np.inf], np.nan)
     usable_features = [
         column
         for column in feature_columns
         if column in frame.columns and frame[column].notna().sum() >= max(150, int(len(frame) * 0.35))
     ]
-    model_frame = frame.dropna(subset=usable_features + ["target_h5"]).copy()
+    required_oil_features = [
+        column for column in oil_feature_columns if column in usable_features
+    ]
+    optional_market_features = [
+        column for column in usable_features if column not in required_oil_features
+    ]
+    model_frame = frame.dropna(
+        subset=required_oil_features + ["target_h5"]
+    ).copy()
+    if optional_market_features:
+        # Market series have different calendars and publication lags. Forward
+        # filling uses only information already available at each date; any
+        # leading gap is encoded as a neutral transformed signal instead of
+        # deleting otherwise valid oil-price observations.
+        model_frame[optional_market_features] = (
+            model_frame[optional_market_features].ffill(limit=5).fillna(0.0)
+        )
     event_names = {1: "Upward spike", 2: "Downward crash", 3: "Volatility dislocation"}
     event_catalog = frame.loc[frame["event_onset"].eq(1), ["event_type", price_column, "oil_r20", "rv20"]].copy()
     event_catalog.insert(0, "Date", event_catalog.index)

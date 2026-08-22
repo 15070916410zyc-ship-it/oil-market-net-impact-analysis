@@ -112,6 +112,111 @@ class CloudWorkspaceBehaviorTests(unittest.TestCase):
                 "cache:gprd_auto_download",
             )
 
+    def test_single_series_cache_first_avoids_slow_online_fallbacks(self) -> None:
+        from src import data_fetcher
+
+        cached = pd.DataFrame(
+            {
+                "Date": pd.to_datetime(["2024-01-02", "2024-01-03"]),
+                "WTI": [71.0, 72.0],
+            }
+        )
+        with (
+            patch.object(data_fetcher, "_load_cache_file", return_value=cached),
+            patch.object(data_fetcher, "fetch_eia_series") as online_eia,
+        ):
+            result = data_fetcher.fetch_series_with_fallback(
+                "WTI",
+                [{"type": "eia", "id": "RCLC1"}],
+                "2024-01-02",
+                "2024-01-03",
+                "unused.csv",
+                cache_first=True,
+            )
+
+        online_eia.assert_not_called()
+        self.assertEqual(result["WTI"].tolist(), [71.0, 72.0])
+        self.assertEqual(data_fetcher.LAST_SOURCE_USED["WTI"], "cache:unused.csv")
+
+    def test_cache_first_rejects_a_recent_but_truncated_history(self) -> None:
+        from src import data_fetcher
+
+        truncated = pd.DataFrame(
+            {
+                "Date": pd.to_datetime(["2024-01-02", "2024-01-03"]),
+                "WTI": [71.0, 72.0],
+            }
+        )
+        complete = pd.DataFrame(
+            {
+                "Date": pd.to_datetime(["2020-01-02", "2024-01-03"]),
+                "WTI": [61.0, 72.0],
+            }
+        )
+        with (
+            patch.object(data_fetcher, "_load_cache_file", return_value=truncated),
+            patch.object(data_fetcher, "fetch_eia_series", return_value=complete) as online_eia,
+            patch.object(data_fetcher, "save_raw_data"),
+        ):
+            result = data_fetcher.fetch_series_with_fallback(
+                "WTI",
+                [{"type": "eia", "id": "RCLC1"}],
+                "2020-01-02",
+                "2024-01-03",
+                "unused.csv",
+                cache_first=True,
+            )
+
+        online_eia.assert_called_once()
+        self.assertEqual(result["WTI"].tolist(), [61.0, 72.0])
+
+    def test_raw_cache_save_merges_short_refresh_without_losing_history(self) -> None:
+        from src.data_fetcher import save_raw_data
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "WTI.csv"
+            pd.DataFrame(
+                {
+                    "Date": ["2020-01-02", "2024-01-02"],
+                    "WTI": [61.0, 71.0],
+                }
+            ).to_csv(path, index=False)
+            save_raw_data(
+                pd.DataFrame(
+                    {
+                        "Date": pd.to_datetime(["2024-01-02", "2024-01-03"]),
+                        "WTI": [72.0, 73.0],
+                    }
+                ),
+                path,
+            )
+            merged = pd.read_csv(path)
+
+        self.assertEqual(merged["Date"].tolist(), ["2020-01-02", "2024-01-02", "2024-01-03"])
+        self.assertEqual(merged["WTI"].tolist(), [61.0, 72.0, 73.0])
+
+    def test_warning_features_keep_price_calendar_with_staggered_markets(self) -> None:
+        from src.crisis_warning import prepare_warning_features
+
+        dates = pd.bdate_range("2015-01-02", periods=1200)
+        rng = __import__("numpy").random.default_rng(23)
+        prices = 65.0 * __import__("numpy").exp(
+            __import__("numpy").cumsum(rng.normal(0.0001, 0.012, len(dates)))
+        )
+        data = pd.DataFrame({"Date": dates, "Brent": prices})
+        data["WTI"] = pd.Series(prices * 0.97).where(
+            pd.Series(range(len(dates))).between(0, 780)
+        )
+        data["OVX"] = pd.Series(30 + rng.normal(0, 2, len(dates))).where(
+            pd.Series(range(len(dates))).between(380, 1199)
+        )
+
+        frame, features, _ = prepare_warning_features(data)
+
+        self.assertGreater(len(frame), 900)
+        self.assertGreaterEqual(len(features), 12)
+        self.assertFalse(frame[features].isna().any().any())
+
     def test_cloud_refresh_reuses_valid_cache_without_disabling_stale_refresh(self) -> None:
         import inspect
 
@@ -125,7 +230,7 @@ class CloudWorkspaceBehaviorTests(unittest.TestCase):
         with patch.object(app, "is_cloud_runtime", return_value=False):
             self.assertEqual(
                 app.market_refresh_strategy(),
-                {"cache_first": False, "force_refresh": True, "download_workers": 1},
+                {"cache_first": True, "force_refresh": False, "download_workers": 1},
             )
 
         setup_source = inspect.getsource(app.run_paper_replication_setup_workflow)
@@ -164,10 +269,6 @@ class CloudWorkspaceBehaviorTests(unittest.TestCase):
     def test_analysis_results_are_inline_not_a_top_level_tab(self) -> None:
         from app import streamlit_app as app
 
-        self.assertEqual(
-            app.main_navigation_labels(),
-            ["决策模式", "专业模式"],
-        )
         with (
             patch.object(app.st, "markdown"),
             patch.object(app.st, "radio", return_value="professional"),
@@ -188,58 +289,85 @@ class CloudWorkspaceBehaviorTests(unittest.TestCase):
         results.assert_called_once()
         self.assertEqual(returned["analysis_mode"], "professional")
 
-    def test_hero_workspace_links_change_workspace_once(self) -> None:
+    def test_workspace_deep_link_initializes_widget_state_once(self) -> None:
         from app import streamlit_app as app
 
-        navigation = ["决策模式", "专业模式"]
         session_state: dict[str, str] = {}
         with (
-            patch.object(app.st, "query_params", {"workspace": "professional", "request": "first"}),
+            patch.object(app.st, "query_params", {"workspace": "professional"}),
             patch.object(app.st, "session_state", session_state),
         ):
-            app.sync_primary_workspace_from_query(navigation)
+            app.sync_primary_workspace_from_query()
             self.assertEqual(session_state["primary_workspace_mode"], "professional")
             self.assertEqual(session_state["professional_workspace_mode"], "net_impact")
             self.assertFalse(session_state["professional_results_expanded"])
 
-            session_state["primary_workspace_mode"] = "decision"
-            app.sync_primary_workspace_from_query(navigation)
-            self.assertEqual(session_state["primary_workspace_mode"], "decision")
-
         with (
-            patch.object(app.st, "query_params", {"workspace": "professional", "request": "second"}),
+            patch.object(app.st, "query_params", {"workspace": "decision"}),
             patch.object(app.st, "session_state", session_state),
         ):
-            app.sync_primary_workspace_from_query(navigation)
+            app.sync_primary_workspace_from_query()
         self.assertEqual(session_state["primary_workspace_mode"], "professional")
 
-    def test_hero_links_replace_the_duplicate_workspace_radio(self) -> None:
+        decision_state: dict[str, str] = {}
+        with (
+            patch.object(app.st, "query_params", {"workspace": ["decision"]}),
+            patch.object(app.st, "session_state", decision_state),
+        ):
+            app.sync_primary_workspace_from_query()
+        self.assertEqual(decision_state, {"primary_workspace_mode": "decision"})
+
+    def test_header_uses_one_segmented_control_for_the_product_mode(self) -> None:
         import inspect
 
         from app import streamlit_app as app
 
+        outer_columns = [nullcontext(), nullcontext(), nullcontext()]
+        tool_columns = [nullcontext(), nullcontext()]
+        with (
+            patch.object(app.st, "columns", side_effect=[outer_columns, tool_columns]),
+            patch.object(app.st, "markdown"),
+            patch.object(app.st, "segmented_control", return_value="professional") as mode_control,
+            patch.object(app, "render_top_tool_menu"),
+            patch.object(app, "render_language_switcher"),
+            patch.object(app, "render_workspace_status_messages"),
+        ):
+            selected = app.render_main_header("decision")
+
+        self.assertEqual(selected, "professional")
+        mode_control.assert_called_once()
+        self.assertEqual(mode_control.call_args.args[1], ["decision", "professional"])
+        self.assertEqual(mode_control.call_args.kwargs["key"], "primary_workspace_mode")
         renderer = inspect.getsource(app.render_main_header)
-        main_source = inspect.getsource(app.main)
-        self.assertIn("/?workspace=decision&amp;request=", renderer)
-        self.assertIn("/?workspace=professional&amp;request=", renderer)
-        self.assertIn('target="_self"', renderer)
-        self.assertIn("#market-workspaces", renderer)
-        self.assertNotIn("workspace-mode-switch", renderer)
-        self.assertIn("professional_active", renderer)
-        self.assertNotIn('key="primary_workspace_mode"', main_source)
+        self.assertEqual(renderer.count("st.segmented_control("), 1)
+        self.assertNotIn("request=", renderer)
+        self.assertNotIn('href="/?workspace=', renderer)
 
     def test_professional_workspace_opens_directly_on_net_impact(self) -> None:
         import inspect
 
         from app import streamlit_app as app
 
-        main_source = inspect.getsource(app.main)
+        main_source = inspect.getsource(app.render_application_workspace)
+        header_source = inspect.getsource(app.render_main_header)
         self.assertNotIn('"overview": ui_text("Professional home", "专业首页")', main_source)
-        self.assertIn("st.segmented_control", main_source)
+        self.assertIn('key="primary_workspace_mode"', header_source)
         self.assertNotIn("render_professional_overview()", main_source)
         self.assertIn('active_workspace = active_workspace or "net_impact"', main_source)
         self.assertIn("render_professional_results_loader()", main_source)
         self.assertNotIn("st.radio(\n        ui_text(\"Professional workspace\"", main_source)
+
+    def test_product_workspace_is_fragment_scoped_for_fast_switching(self) -> None:
+        import inspect
+
+        from app import streamlit_app as app
+
+        main_source = inspect.getsource(app.main)
+        workspace_source = inspect.getsource(app.render_application_workspace)
+        self.assertIn("render_application_workspace(options)", main_source)
+        self.assertIn("@st.fragment", workspace_source)
+        self.assertNotIn("default_analysis_options()", workspace_source)
+        self.assertNotIn("restore_api_credentials_for_request()", workspace_source)
 
     def test_saved_professional_results_are_deferred_until_requested(self) -> None:
         from app import streamlit_app as app
@@ -522,12 +650,12 @@ class CloudWorkspaceBehaviorTests(unittest.TestCase):
         with patch.object(app.st, "markdown") as markdown:
             app.apply_custom_css()
         css = markdown.call_args.args[0]
-        self.assertIn("--canvas: #f7f8f5;", css)
-        self.assertIn("--surface: #fdfefb;", css)
+        self.assertIn("--canvas: #f4f8f7;", css)
+        self.assertIn("--surface: #fbfdfc;", css)
         self.assertNotIn("--canvas: #f7f7f2;", css)
-        self.assertIn("@keyframes ambient-field", css)
-        self.assertIn("@keyframes ambient-nodes", css)
-        self.assertIn("animation-timeline: scroll(root block)", css)
+        self.assertIn("@keyframes ambient-drift", css)
+        self.assertIn("@keyframes node-drift", css)
+        self.assertNotIn("animation-timeline: scroll(root block)", css)
         self.assertIn("animation-timeline: view()", css)
         self.assertIn('[data-testid="stPlotlyChart"]', css)
         self.assertIn('[data-testid="stDataFrame"]', css)
@@ -560,7 +688,7 @@ class CloudWorkspaceBehaviorTests(unittest.TestCase):
         css = markdown.call_args.args[0]
         self.assertIn("button:focus-visible", css)
         self.assertIn('[role="tab"]:focus-visible', css)
-        self.assertIn("outline: 3px solid rgba(53, 107, 101, 0.28)", css)
+        self.assertIn("outline: 3px solid rgba(110,175,198,.45)", css)
         self.assertIn("outline-offset: 2px", css)
 
     def test_data_surfaces_and_expanders_stay_bright(self) -> None:
@@ -820,7 +948,7 @@ class CloudWorkspaceBehaviorTests(unittest.TestCase):
 
         source = inspect.getsource(design_system.apply_design_system)
         self.assertIn('[data-testid="stSliderThumbValue"]', source)
-        self.assertIn("min-width: 3.25rem !important", source)
+        self.assertIn("min-width: max-content !important", source)
         self.assertIn("white-space: nowrap !important", source)
         self.assertIn("font-variant-numeric: tabular-nums", source)
 
@@ -850,14 +978,19 @@ class CloudWorkspaceBehaviorTests(unittest.TestCase):
         self.assertIn("FXImpactCNY", source)
         self.assertIn("InitialMarginCNY", source)
 
-    def test_decision_dashboard_reloads_calculations_before_the_page(self) -> None:
-        import inspect
-
+    def test_decision_dashboard_module_is_imported_without_forced_reload(self) -> None:
         from app import streamlit_app as app
 
-        source = inspect.getsource(app.load_decision_dashboard_module)
-        self.assertLess(source.index('import_module("src.decision_support")'), source.index('import_module("app.executive_dashboard")'))
-        self.assertIn("importlib.reload(decision_support_module)", source)
+        decision_module = object()
+        with (
+            patch.object(app.importlib, "import_module", return_value=decision_module) as import_module,
+            patch.object(app.importlib, "reload") as reload_module,
+        ):
+            returned = app.load_decision_dashboard_module()
+
+        self.assertIs(returned, decision_module)
+        import_module.assert_called_once_with("app.executive_dashboard")
+        reload_module.assert_not_called()
 
 
 if __name__ == "__main__":
