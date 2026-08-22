@@ -780,7 +780,7 @@ def render_decision_dashboard(ui_text: UiText, apply_theme: ThemeFunction) -> No
         refresh = st.button(
             ui_text("Refresh latest data", "更新最新数据"),
             type="primary",
-            use_container_width=True,
+            width="stretch",
             key="story_refresh_latest",
         )
     if refresh:
@@ -831,7 +831,7 @@ def render_decision_dashboard(ui_text: UiText, apply_theme: ThemeFunction) -> No
     )
     main_figure = _main_forecast_figure(result, frequency, ui_text)
     apply_theme(main_figure)
-    st.plotly_chart(main_figure, use_container_width=True, config=PLOT_CONFIG, key=f"story_main_{target}_{frequency}")
+    st.plotly_chart(main_figure, width="stretch", config=PLOT_CONFIG, key=f"story_main_{target}_{frequency}")
     st.caption(ui_text(
         "The 50% range is the central path, 80% is the planning range, and 95% is the stress range. The bands are calibrated on an earlier block of data and checked on a later, untouched block.",
         "50% 区间用于观察核心路径，80% 区间用于常规计划，95% 区间用于压力准备。区间先用较早一段数据校准，再用之后未参与校准的数据检验。",
@@ -893,7 +893,7 @@ def render_decision_dashboard(ui_text: UiText, apply_theme: ThemeFunction) -> No
     if isinstance(factors, pd.DataFrame) and not factors.empty:
         factor_chart = _factor_figure(factors, ui_text)
         apply_theme(factor_chart)
-        st.plotly_chart(factor_chart, use_container_width=True, config=PLOT_CONFIG, key=f"story_factors_{target}")
+        st.plotly_chart(factor_chart, width="stretch", config=PLOT_CONFIG, key=f"story_factors_{target}")
         strongest = factors.iloc[0]
         st.info(ui_text(
             f"The strongest recent link is {strongest['Variable']}, with an estimated {strongest['EstimatedEffectPercent']:+.2f}% association with the recent oil move.",
@@ -909,13 +909,13 @@ def render_decision_dashboard(ui_text: UiText, apply_theme: ThemeFunction) -> No
     ))
     imf_chart = _imf_story_figure(result, ui_text)
     apply_theme(imf_chart)
-    st.plotly_chart(imf_chart, use_container_width=True, config=PLOT_CONFIG, key=f"story_imf_{target}")
+    st.plotly_chart(imf_chart, width="stretch", config=PLOT_CONFIG, key=f"story_imf_{target}")
 
     st.markdown(ui_text("### What the risk model sees next", "### 接下来需要警惕什么风险"))
     if regime is not None:
         risk_chart = _risk_figure(regime, ui_text)
         apply_theme(risk_chart)
-        st.plotly_chart(risk_chart, use_container_width=True, config=PLOT_CONFIG, key=f"story_risk_{target}")
+        st.plotly_chart(risk_chart, width="stretch", config=PLOT_CONFIG, key=f"story_risk_{target}")
         risk_cols = st.columns(3)
         risk_cols[0].metric(ui_text("Current high-volatility state", "当前高波动状态概率"), f"{regime.current_probability:.1%}")
         risk_cols[1].metric(ui_text("Next business day", "下一个交易日"), f"{regime.probability_1d:.1%}")
@@ -1251,7 +1251,7 @@ def render_decision_dashboard(ui_text: UiText, apply_theme: ThemeFunction) -> No
         apply_theme(strategy_chart)
         st.plotly_chart(
             strategy_chart,
-            use_container_width=True,
+            width="stretch",
             config=PLOT_CONFIG,
             key=f"story_strategy_compare_{target}",
         )
@@ -1260,7 +1260,7 @@ def render_decision_dashboard(ui_text: UiText, apply_theme: ThemeFunction) -> No
         apply_theme(liquidity_chart)
         st.plotly_chart(
             liquidity_chart,
-            use_container_width=True,
+            width="stretch",
             config=PLOT_CONFIG,
             key=f"story_liquidity_compare_{target}",
         )
@@ -1273,7 +1273,7 @@ def render_decision_dashboard(ui_text: UiText, apply_theme: ThemeFunction) -> No
         apply_theme(hedge_chart)
         st.plotly_chart(
             hedge_chart,
-            use_container_width=True,
+            width="stretch",
             config=PLOT_CONFIG,
             key=f"story_hedge_{target}",
         )
@@ -1282,7 +1282,7 @@ def render_decision_dashboard(ui_text: UiText, apply_theme: ThemeFunction) -> No
         apply_theme(waterfall)
         st.plotly_chart(
             waterfall,
-            use_container_width=True,
+            width="stretch",
             config=PLOT_CONFIG,
             key=f"story_cost_waterfall_{target}",
         )
@@ -1310,13 +1310,13 @@ def render_decision_dashboard(ui_text: UiText, apply_theme: ThemeFunction) -> No
             "InitialMarginCNY", "VariationMarginPostedCNY", "LiquidityRequirementCNY",
             "FundingAndFeesCNY", "NetCostCNY", "BudgetVarianceCNY", "EffectiveUnitCostCNY",
         ]
-        st.dataframe(scenarios[detail_columns], use_container_width=True, hide_index=True)
+        st.dataframe(scenarios[detail_columns], width="stretch", hide_index=True)
         st.download_button(
             ui_text("Download strategy comparison", "下载策略对比明细"),
             data=comparison.to_csv(index=False).encode("utf-8-sig"),
             file_name=f"{target.lower()}_hedge_strategy_comparison.csv",
             mime="text/csv",
-            use_container_width=True,
+            width="stretch",
             key="download_story_strategy_comparison",
         )
     st.download_button(
@@ -1324,7 +1324,7 @@ def render_decision_dashboard(ui_text: UiText, apply_theme: ThemeFunction) -> No
         data=scenarios.to_csv(index=False).encode("utf-8-sig"),
         file_name=f"{target.lower()}_detailed_procurement_scenarios.csv",
         mime="text/csv",
-        use_container_width=True,
+        width="stretch",
         key="download_story_hedge_scenarios",
     )
     st.warning(ui_text(

@@ -1,4 +1,4 @@
-﻿"""Streamlit app for the multiscale net-impact analysis system."""
+"""Streamlit app for the multiscale net-impact analysis system."""
 
 from __future__ import annotations
 
@@ -637,12 +637,12 @@ def render_language_switcher() -> None:
     def select_language(language: LanguageCode) -> None:
         st.session_state[UI_LANGUAGE_STATE] = language
 
-    with st.popover("中" if active_language == "zh" else "EN", use_container_width=False):
+    with st.popover("中" if active_language == "zh" else "EN", width="content"):
         st.caption("界面语言 · Interface language")
         st.button(
             "中文",
             key="select_ui_language_zh",
-            use_container_width=True,
+            width="stretch",
             disabled=active_language == "zh",
             on_click=select_language,
             args=("zh",),
@@ -650,7 +650,7 @@ def render_language_switcher() -> None:
         st.button(
             "English",
             key="select_ui_language_en",
-            use_container_width=True,
+            width="stretch",
             disabled=active_language == "en",
             on_click=select_language,
             args=("en",),
@@ -783,10 +783,10 @@ def show_dataframe_or_sheets(data: pd.DataFrame | dict[str, pd.DataFrame]) -> No
     if isinstance(data, dict):
         for sheet_name, sheet_df in data.items():
             st.subheader(str(sheet_name))
-            st.dataframe(sheet_df, use_container_width=True)
+            st.dataframe(sheet_df, width="stretch")
         return
 
-    st.dataframe(data, use_container_width=True)
+    st.dataframe(data, width="stretch")
 
 
 def get_date_range_if_exists(path: str | Path) -> tuple[pd.Timestamp | None, pd.Timestamp | None]:
@@ -888,7 +888,7 @@ def show_dataframe_summary(df: pd.DataFrame) -> None:
     st.write("Missing values")
     st.dataframe(
         df.isna().sum().rename("MissingCount").reset_index().rename(columns={"index": "Column"}),
-        use_container_width=True,
+        width="stretch",
     )
 
     if "Date" in df.columns:
@@ -1372,7 +1372,7 @@ def render_api_settings_panel(status: dict[str, Any], *, browser_persistence: bo
             type="password",
             key="eia_api_key_input",
         )
-        submitted = st.form_submit_button(ui_text("Save API keys", "保存 API 密钥"), use_container_width=True)
+        submitted = st.form_submit_button(ui_text("Save API keys", "保存 API 密钥"), width="stretch")
     if submitted:
         if browser_persistence:
             saved, persisted = save_browser_api_values(fred_key, eia_key)
@@ -1404,7 +1404,7 @@ def render_api_settings_panel(status: dict[str, Any], *, browser_persistence: bo
     if browser_persistence and status.get("has_any_key"):
         if st.button(
             ui_text("Forget API keys in this browser", "清除当前浏览器中的 API 密钥"),
-            use_container_width=True,
+            width="stretch",
             key="clear_browser_api_keys",
         ):
             clear_browser_api_values()
@@ -1431,7 +1431,7 @@ def render_cloud_api_tool_menu() -> None:
         badge_text = ui_text("Your API keys are ready", "你的 API 密钥已就绪")
 
     st.markdown('<div class="top-tool-menu">', unsafe_allow_html=True)
-    with st.popover("API", use_container_width=False):
+    with st.popover("API", width="content"):
         st.markdown(
             f'<span class="api-status-badge {badge_class}">{badge_text}</span>',
             unsafe_allow_html=True,
@@ -1463,7 +1463,7 @@ def render_top_tool_menu() -> None:
         badge_text = ui_text("API configured", "API 已配置")
 
     st.markdown('<div class="top-tool-menu">', unsafe_allow_html=True)
-    with st.popover("API", use_container_width=False):
+    with st.popover("API", width="content"):
         st.markdown(
             f'<span class="api-status-badge {badge_class}">{badge_text}</span>',
             unsafe_allow_html=True,
@@ -1478,7 +1478,7 @@ def render_top_tool_menu() -> None:
                 "清理生成数据、缓存、上传文件、表格、图片、报告和模型输出；保留 API.env。",
             )
         )
-        if st.button(ui_text("Clear generated files", "清理生成文件"), use_container_width=True, key="open_workspace_cleanup"):
+        if st.button(ui_text("Clear generated files", "清理生成文件"), width="stretch", key="open_workspace_cleanup"):
             st.session_state["workspace_cleanup_confirm"] = True
 
         if st.session_state.get("workspace_cleanup_confirm"):
@@ -1490,7 +1490,7 @@ def render_top_tool_menu() -> None:
                 + ", ".join(group_name for group_name, _, _ in cleanup_artifact_groups())
             )
             confirm_col, cancel_col = st.columns(2)
-            if confirm_col.button("Confirm clear", use_container_width=True, key="confirm_workspace_cleanup"):
+            if confirm_col.button("Confirm clear", width="stretch", key="confirm_workspace_cleanup"):
                 result = clear_workspace_artifacts()
                 count = int(result.get("total", 0))
                 counts = result.get("counts", {})
@@ -1508,7 +1508,7 @@ def render_top_tool_menu() -> None:
                 st.session_state["workspace_cleanup_status"] = f"Workspace cleanup completed: {detail}."
                 st.session_state["workspace_cleanup_confirm"] = False
                 st.rerun()
-            if cancel_col.button("Cancel", use_container_width=True, key="cancel_workspace_cleanup"):
+            if cancel_col.button("Cancel", width="stretch", key="cancel_workspace_cleanup"):
                 st.session_state["workspace_cleanup_confirm"] = False
                 st.rerun()
     st.markdown("</div>", unsafe_allow_html=True)
@@ -3352,7 +3352,7 @@ def display_variable_pool_update_result(summary: dict[str, Any]) -> None:
             detail_columns = [column for column in detail_columns if column in failed_details.columns]
             if detail_columns:
                 st.write(ui_text("Automatic update failure details", "自动更新失败详情"))
-                st.dataframe(localized_workflow_frame(failed_details[detail_columns]), use_container_width=True, hide_index=True)
+                st.dataframe(localized_workflow_frame(failed_details[detail_columns]), width="stretch", hide_index=True)
     elif auto_attempts:
         st.success(ui_text("No selected auto-download variable failed.", "所选自动下载变量均未失败。"))
 
@@ -3420,7 +3420,7 @@ def display_variable_pool_update_result(summary: dict[str, Any]) -> None:
         ]
         st.dataframe(
             localized_workflow_frame(review_table[[column for column in display_columns if column in review_table.columns]]),
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
         )
 
@@ -3449,7 +3449,7 @@ def display_variable_pool_update_result(summary: dict[str, Any]) -> None:
         ]
         st.dataframe(
             localized_workflow_frame(alignment_table[[column for column in alignment_columns if column in alignment_table.columns]]),
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
         )
 
@@ -3465,7 +3465,7 @@ def display_variable_pool_update_result(summary: dict[str, Any]) -> None:
                 file_name=workbook_path.name,
                 mime=_download_mime(workbook_path),
                 key="download_data_refresh_preparation_workbook",
-                use_container_width=True,
+                width="stretch",
             )
         else:
             st.warning(ui_text(
@@ -3474,13 +3474,13 @@ def display_variable_pool_update_result(summary: dict[str, Any]) -> None:
             ))
     if expanded is not None:
         st.write(ui_text("Expanded variable pool preview", "扩展变量池预览"))
-        st.dataframe(localized_workflow_frame(expanded.tail(20)), use_container_width=True)
+        st.dataframe(localized_workflow_frame(expanded.tail(20)), width="stretch")
     if status is not None:
         st.write(ui_text("Download status log", "下载状态日志"))
-        st.dataframe(localized_workflow_frame(status), use_container_width=True)
+        st.dataframe(localized_workflow_frame(status), width="stretch")
     if quality is not None:
         st.write(ui_text("Quality filter report", "质量筛选报告"))
-        st.dataframe(localized_workflow_frame(quality), use_container_width=True)
+        st.dataframe(localized_workflow_frame(quality), width="stretch")
 
 
 def quality_filtered_explanatory_variables(
@@ -4054,9 +4054,9 @@ def render_data_tab(options: dict[str, Any], *, show_header: bool = True) -> Non
                 .reset_index()
                 .rename(columns={"index": "Variable"})
             )
-            st.dataframe(missing, use_container_width=True)
+            st.dataframe(missing, width="stretch")
             with st.expander("Displayed data preview"):
-                st.dataframe(data.head(10), use_container_width=True)
+                st.dataframe(data.head(10), width="stretch")
 
     with st.container(border=True):
         st.subheader("B. Data Source Log")
@@ -4067,7 +4067,7 @@ def render_data_tab(options: dict[str, Any], *, show_header: bool = True) -> Non
             wti_source = sources.loc[sources["Variable"] == "WTI", "ActualSource"]
             if not wti_source.empty:
                 st.metric("WTI actual source", str(wti_source.iloc[0]))
-            st.dataframe(sources, use_container_width=True)
+            st.dataframe(sources, width="stretch")
 
     with st.container(border=True):
         st.subheader("C. Net-Impact File Status")
@@ -4087,7 +4087,7 @@ def render_data_tab(options: dict[str, Any], *, show_header: bool = True) -> Non
                     "Status": "Available" if path.exists() else "Missing",
                 }
             )
-        st.dataframe(pd.DataFrame(status_rows), use_container_width=True)
+        st.dataframe(pd.DataFrame(status_rows), width="stretch")
 
 
 def render_paper_replication_tab() -> None:
@@ -4149,7 +4149,7 @@ def render_paper_replication_tab() -> None:
                     data=archive_bytes,
                     file_name="multiscale_net_impact_results.zip",
                     mime="application/zip",
-                    use_container_width=True,
+                    width="stretch",
                     key="download_all_result_artifacts",
                 )
                 st.caption(ui_text(f"{len(archive_names)} files", f"共 {len(archive_names)} 个文件"))
@@ -4157,7 +4157,7 @@ def render_paper_replication_tab() -> None:
                 st.button(
                     ui_text("No results yet", "暂无结果文件"),
                     disabled=True,
-                    use_container_width=True,
+                    width="stretch",
                     key="download_all_result_artifacts_empty",
                 )
 
@@ -4369,7 +4369,7 @@ def render_variable_pool_tab(*, show_header: bool = True) -> None:
                     st.info(f"{label} is not available yet.")
             else:
                 data = filter_variable_pool_display_table(label, data)
-                st.dataframe(data, use_container_width=True)
+                st.dataframe(data, width="stretch")
 
 
 def _download_mime(path: Path) -> str:
@@ -4405,11 +4405,11 @@ def render_artifact_download_button(path: Path, label: str, key_prefix: str) -> 
             data=path.read_bytes(),
             file_name=path.name,
             mime=_download_mime(path),
-            use_container_width=True,
+            width="stretch",
             key=_download_key(key_prefix, path),
         )
     else:
-        st.button(label, disabled=True, use_container_width=True, key=_download_key(f"missing_{key_prefix}", path))
+        st.button(label, disabled=True, width="stretch", key=_download_key(f"missing_{key_prefix}", path))
 
 
 def render_downloadable_table(
@@ -4433,7 +4433,7 @@ def render_downloadable_table(
         st.info(ui_text(f"{title} is not available yet.", f"{title} 尚未生成。"))
         return
     display_table = table.tail(max_rows) if max_rows and len(table) > max_rows else table
-    st.dataframe(localized_workflow_frame(display_table), use_container_width=True)
+    st.dataframe(localized_workflow_frame(display_table), width="stretch")
 
 
 def render_downloadable_plotly(title: str, path: Path, description: str | None = None) -> None:
@@ -4458,7 +4458,7 @@ def render_downloadable_plotly(title: str, path: Path, description: str | None =
     with chart_col:
         st.plotly_chart(
             figure,
-            use_container_width=True,
+            width="stretch",
             key=f"paper_plotly_{path.stem}",
             config={"displaylogo": False, "scrollZoom": True, "responsive": True},
         )
@@ -4647,7 +4647,7 @@ def render_upload_controls(options: dict[str, Any]) -> None:
                         continue
                     seen_upload_variable_names.add(sanitized_variable_name)
                     st.caption(ui_text("Preprocessed preview", "预处理预览"))
-                    st.dataframe(mapped_preview, use_container_width=True, hide_index=True)
+                    st.dataframe(mapped_preview, width="stretch", hide_index=True)
                     preprocess_rows.append(
                         uploaded_preprocess_summary_row(
                             file_name=safe_name,
@@ -4670,13 +4670,13 @@ def render_upload_controls(options: dict[str, Any]) -> None:
                     )
             if preprocess_rows:
                 st.subheader(ui_text("Preprocessing Confirmation", "确认预处理结果"))
-                st.dataframe(localized_workflow_frame(pd.DataFrame(preprocess_rows)), use_container_width=True, hide_index=True)
+                st.dataframe(localized_workflow_frame(pd.DataFrame(preprocess_rows)), width="stretch", hide_index=True)
                 if len(upload_jobs) < len(uploaded_files):
                     st.warning(ui_text(
                         "Only files with Ready status will be added to the variable pool after confirmation.",
                         "确认后，只有状态为“就绪”的文件会加入变量池。",
                     ))
-            if st.button(ui_text("Confirm and Add to Variable Pool", "确认并加入变量池"), use_container_width=True, disabled=not upload_jobs):
+            if st.button(ui_text("Confirm and Add to Variable Pool", "确认并加入变量池"), width="stretch", disabled=not upload_jobs):
                 if not upload_jobs:
                     st.warning(ui_text(
                         "No valid upload is ready. Check that each file has exactly two columns: Date and Value.",
@@ -4710,7 +4710,7 @@ def render_upload_controls(options: dict[str, Any]) -> None:
                         + ", ".join(path.stem for path in saved_paths)
                         + "。",
                     }
-                    st.dataframe(localized_workflow_frame(upload_report), use_container_width=True)
+                    st.dataframe(localized_workflow_frame(upload_report), width="stretch")
                     if (upload_report["Coverage"] < float(options["min_data_coverage"])).any():
                         st.warning(ui_text(
                             "At least one uploaded variable has lower coverage than the current minimum data coverage. "
@@ -4720,7 +4720,7 @@ def render_upload_controls(options: dict[str, Any]) -> None:
                     st.rerun()
                 elif not upload_report.empty:
                     st.error(ui_text("No uploaded variable was saved. Review the validation report below.", "未保存任何上传变量，请检查下方验证报告。"))
-                    st.dataframe(localized_workflow_frame(upload_report), use_container_width=True)
+                    st.dataframe(localized_workflow_frame(upload_report), width="stretch")
                 else:
                     st.warning(ui_text(
                         "No uploaded variable was saved. Check that at least one configured upload is valid.",
@@ -4730,7 +4730,7 @@ def render_upload_controls(options: dict[str, Any]) -> None:
             existing_manifest = load_excel_if_exists(PATHS["uploaded_variable_manifest"])
             if existing_manifest is not None and not existing_manifest.empty:
                 st.write(ui_text("Registered uploaded variables", "已注册的上传变量"))
-                st.dataframe(localized_workflow_frame(existing_manifest), use_container_width=True)
+                st.dataframe(localized_workflow_frame(existing_manifest), width="stretch")
 
 
 def render_professional_pipeline_tab(options: dict[str, Any]) -> None:
@@ -4921,11 +4921,11 @@ def render_professional_pipeline_tab(options: dict[str, Any]) -> None:
                 }
                 ordered_logs = [step_logs[key] for key in sorted(step_logs)]
                 with log_box.container():
-                    st.dataframe(pd.DataFrame(ordered_logs), use_container_width=True, hide_index=True)
+                    st.dataframe(pd.DataFrame(ordered_logs), width="stretch", hide_index=True)
 
             return progress, status_box, paper_status
 
-        if st.button(ui_text("Run Net-Impact Analysis", "运行净影响分析"), type="primary", use_container_width=True):
+        if st.button(ui_text("Run Net-Impact Analysis", "运行净影响分析"), type="primary", width="stretch"):
             if not net_targets:
                 st.error(ui_text("Select at least one target before running.", "运行前请至少选择一个目标变量。"))
                 return
@@ -5012,7 +5012,7 @@ def render_professional_pipeline_tab(options: dict[str, Any]) -> None:
                 if confirm_col.button(
                     ui_text("Confirm and Continue to VMD Review", "确认并继续 VMD 审查"),
                     type="primary",
-                    use_container_width=True,
+                    width="stretch",
                     disabled=not bool(next_step_variables),
                 ):
                     try:
@@ -5034,7 +5034,7 @@ def render_professional_pipeline_tab(options: dict[str, Any]) -> None:
                             "确认变量后，VMD 分解审查失败："
                             f"{safe_exception_text(exc)}",
                         ))
-                if cancel_col.button(ui_text("Cancel Pending Analysis", "取消待处理分析"), use_container_width=True):
+                if cancel_col.button(ui_text("Cancel Pending Analysis", "取消待处理分析"), width="stretch"):
                     st.session_state.pop(NET_IMPACT_CONFIRMATION_STATE, None)
                     st.session_state.pop(NET_IMPACT_VMD_CONFIRMATION_STATE, None)
                     st.session_state.pop(NET_IMPACT_TVP_CONFIRMATION_STATE, None)
@@ -5081,7 +5081,7 @@ def render_professional_pipeline_tab(options: dict[str, Any]) -> None:
                     ]
                     st.dataframe(
                         localized_workflow_frame(vmd_review_df[[column for column in display_columns if column in vmd_review_df.columns]]),
-                        use_container_width=True,
+                        width="stretch",
                         hide_index=True,
                     )
                     if "Status" in vmd_review_df.columns and not vmd_review_df["Status"].astype(str).eq("OK").all():
@@ -5097,7 +5097,7 @@ def render_professional_pipeline_tab(options: dict[str, Any]) -> None:
                 if confirm_col.button(
                     ui_text("Confirm VMD and Determine FEVD h", "确认 VMD 并确定 FEVD h"),
                     type="primary",
-                    use_container_width=True,
+                    width="stretch",
                     disabled=not can_continue_vmd,
                 ):
                     try:
@@ -5117,7 +5117,7 @@ def render_professional_pipeline_tab(options: dict[str, Any]) -> None:
                             f"FEVD h review failed after VMD confirmation: {safe_exception_text(exc)}",
                             f"确认 VMD 后，FEVD 预测期 h 审查失败：{safe_exception_text(exc)}",
                         ))
-                if cancel_col.button(ui_text("Cancel Pending VMD Analysis", "取消待处理 VMD 分析"), use_container_width=True):
+                if cancel_col.button(ui_text("Cancel Pending VMD Analysis", "取消待处理 VMD 分析"), width="stretch"):
                     st.session_state.pop(NET_IMPACT_VMD_CONFIRMATION_STATE, None)
                     st.session_state.pop(NET_IMPACT_TVP_CONFIRMATION_STATE, None)
                     st.rerun()
@@ -5161,7 +5161,7 @@ def render_professional_pipeline_tab(options: dict[str, Any]) -> None:
                     c3.metric(ui_text("Maximum h", "最大 h"), int(h_values.max()) if h_values.notna().any() else "NA")
                     st.dataframe(
                         localized_workflow_frame(h_review_df[[column for column in display_columns if column in h_review_df.columns]]),
-                        use_container_width=True,
+                        width="stretch",
                         hide_index=True,
                     )
                     st.info(ui_text(
@@ -5177,7 +5177,7 @@ def render_professional_pipeline_tab(options: dict[str, Any]) -> None:
                             file_name=PATHS["paper_h_review"].name,
                             mime=_download_mime(PATHS["paper_h_review"]),
                             key="download_paper_h_review_inline",
-                            use_container_width=True,
+                            width="stretch",
                         )
 
                 next_step_variables = pending_tvp_setup.get("candidate_variables_for_next_step", []) or []
@@ -5188,7 +5188,7 @@ def render_professional_pipeline_tab(options: dict[str, Any]) -> None:
                 if confirm_col.button(
                     ui_text("Confirm h and Start TVP/FEVD", "确认 h 并开始 TVP/FEVD"),
                     type="primary",
-                    use_container_width=True,
+                    width="stretch",
                     disabled=not can_continue_tvp,
                 ):
                     try:
@@ -5203,14 +5203,14 @@ def render_professional_pipeline_tab(options: dict[str, Any]) -> None:
                         st.session_state.pop(NET_IMPACT_TVP_CONFIRMATION_STATE, None)
                         st.success(ui_text("Net-impact analysis completed.", "净影响分析已完成。"))
                         if "net_impacts" in result:
-                            st.dataframe(result["net_impacts"], use_container_width=True)
+                            st.dataframe(result["net_impacts"], width="stretch")
                         st.info(ui_text("Open Net-Impact Results to review all tables and figures.", "打开“净影响结果”查看全部表格与图形。"))
                     except Exception as exc:  # noqa: BLE001 - keep Streamlit page alive.
                         st.error(ui_text(
                             f"TVP/FEVD analysis failed after h confirmation: {safe_exception_text(exc)}",
                             f"确认 h 后，TVP/FEVD 分析失败：{safe_exception_text(exc)}",
                         ))
-                if cancel_col.button(ui_text("Cancel Pending TVP/FEVD Analysis", "取消待处理 TVP/FEVD 分析"), use_container_width=True):
+                if cancel_col.button(ui_text("Cancel Pending TVP/FEVD Analysis", "取消待处理 TVP/FEVD 分析"), width="stretch"):
                     st.session_state.pop(NET_IMPACT_TVP_CONFIRMATION_STATE, None)
                     st.rerun()
 
@@ -5416,7 +5416,7 @@ def _render_quick_mode_results(result: dict[str, Any]) -> None:
                 height=440,
             )
             _apply_dark_plot_theme(figure)
-            st.plotly_chart(figure, use_container_width=True, key=f"quick_channel_pie_{target}")
+            st.plotly_chart(figure, width="stretch", key=f"quick_channel_pie_{target}")
 
     if not imf_summary.empty and "EventRangeShare" in imf_summary.columns:
         st.markdown(ui_text("#### Five-IMF event response", "#### 五个 IMF 的事件响应"))
@@ -5440,7 +5440,7 @@ def _render_quick_mode_results(result: dict[str, Any]) -> None:
         )
         figure.update_layout(height=430, margin=dict(l=20, r=20, t=60, b=20))
         _apply_dark_plot_theme(figure)
-        st.plotly_chart(figure, use_container_width=True, key="quick_imf_event_response")
+        st.plotly_chart(figure, width="stretch", key="quick_imf_event_response")
 
     table_columns = [
         column
@@ -5456,14 +5456,14 @@ def _render_quick_mode_results(result: dict[str, Any]) -> None:
         ]
         if column in imf_summary.columns
     ]
-    st.dataframe(imf_summary[table_columns], use_container_width=True, hide_index=True)
+    st.dataframe(imf_summary[table_columns], width="stretch", hide_index=True)
     download_columns = st.columns(2)
     download_columns[0].download_button(
         ui_text("Download five-IMF interpretation", "下载五 IMF 经济解释表"),
         data=PATHS["quick_imf_channel_summary"].read_bytes(),
         file_name=PATHS["quick_imf_channel_summary"].name,
         mime=_download_mime(PATHS["quick_imf_channel_summary"]),
-        use_container_width=True,
+        width="stretch",
         key="download_quick_imf_summary",
     )
     download_columns[1].download_button(
@@ -5471,7 +5471,7 @@ def _render_quick_mode_results(result: dict[str, Any]) -> None:
         data=PATHS["quick_channel_contribution_summary"].read_bytes(),
         file_name=PATHS["quick_channel_contribution_summary"].name,
         mime=_download_mime(PATHS["quick_channel_contribution_summary"]),
-        use_container_width=True,
+        width="stretch",
         key="download_quick_channel_summary",
     )
 
@@ -5533,7 +5533,7 @@ def _render_api_variable_catalog() -> list[dict[str, Any]]:
                 or not query.strip()
                 or (source == "EIA" and not route.strip())
             ),
-            use_container_width=True,
+            width="stretch",
             key="quick_catalog_search",
         ):
             try:
@@ -5577,7 +5577,7 @@ def _render_api_variable_catalog() -> list[dict[str, Any]]:
             if st.button(
                 ui_text("Add and auto-update this variable", "加入变量并自动更新数据"),
                 type="primary",
-                use_container_width=True,
+                width="stretch",
                 key=f"quick_catalog_add_{source}",
             ):
                 entry = catalog_item_to_registry_entry(selected_item)
@@ -5713,7 +5713,7 @@ def render_quick_pipeline_tab(options: dict[str, Any]) -> None:
     if st.button(
         ui_text("Run Quick Analysis", "运行快速分析"),
         type="primary",
-        use_container_width=True,
+        width="stretch",
         key="run_quick_analysis",
     ):
         if not selected_explanatory:
@@ -5846,7 +5846,7 @@ def _render_warning_results(payload: dict[str, Any]) -> None:
             legend=dict(orientation="h", y=1.08),
         )
         _apply_dark_plot_theme(figure)
-        st.plotly_chart(figure, use_container_width=True, key="warning_risk_timeline")
+        st.plotly_chart(figure, width="stretch", key="warning_risk_timeline")
 
     channels = result.channel_scores.copy()
     if not channels.empty:
@@ -5862,7 +5862,7 @@ def _render_warning_results(payload: dict[str, Any]) -> None:
         channel_figure.update_traces(texttemplate="%{label}<br>%{value:.1f}%")
         channel_figure.update_layout(height=440, margin=dict(l=20, r=20, t=70, b=20))
         _apply_dark_plot_theme(channel_figure)
-        st.plotly_chart(channel_figure, use_container_width=True, key="warning_channel_pie")
+        st.plotly_chart(channel_figure, width="stretch", key="warning_channel_pie")
 
     st.divider()
     st.subheader(ui_text("Literature crisis-state forecast", "文献危机状态预测"))
@@ -5933,7 +5933,7 @@ def _render_warning_results(payload: dict[str, Any]) -> None:
         yaxis=dict(title=ui_text("Probability", "概率"), range=[0, 100]),
     )
     _apply_dark_plot_theme(regime_figure)
-    st.plotly_chart(regime_figure, use_container_width=True, key="hamilton_crisis_regime_probability")
+    st.plotly_chart(regime_figure, width="stretch", key="hamilton_crisis_regime_probability")
 
     with st.expander(ui_text("Regime diagnostics", "状态模型诊断")):
         detail_columns = st.columns(4)
@@ -5941,7 +5941,7 @@ def _render_warning_results(payload: dict[str, Any]) -> None:
         detail_columns[1].metric(ui_text("High-state persistence", "高波动状态持续率"), f"{regime.crisis_persistence:.3f}")
         detail_columns[2].metric(ui_text("Expected duration", "预计持续时间"), f"{regime.expected_duration_days:.1f}")
         detail_columns[3].metric("AIC", f"{regime.aic:.1f}")
-        st.dataframe(regime.transition_matrix, use_container_width=True)
+        st.dataframe(regime.transition_matrix, width="stretch")
 
 
 def _price_forecast_result_path(target: str) -> Path:
@@ -6010,7 +6010,7 @@ def render_oil_price_forecast_panel() -> None:
         run_forecast = st.button(
             ui_text("Use latest verified data and forecast", "读取最近成功数据并生成预测"),
             type="primary",
-            use_container_width=True,
+            width="stretch",
             key="run_price_forecast",
         )
 
@@ -6205,7 +6205,7 @@ def render_oil_price_forecast_panel() -> None:
     )
     st.plotly_chart(
         figure,
-        use_container_width=True,
+        width="stretch",
         key=f"{target.lower()}_price_forecast_chart",
         config={"scrollZoom": True, "displaylogo": False, "responsive": True},
     )
@@ -6264,7 +6264,7 @@ def render_oil_price_forecast_panel() -> None:
                 for bound in ("Lower", "Upper")
             },
         })
-        st.dataframe(forecast_display, use_container_width=True, hide_index=True)
+        st.dataframe(forecast_display, width="stretch", hide_index=True)
     with model_tab:
         summary = result.model_summary.copy()
         summary[ui_text("Economic interpretation", "经济含义")] = summary[
@@ -6281,7 +6281,7 @@ def render_oil_price_forecast_panel() -> None:
                 ui_text("Model", "模型"),
                 ui_text("Center frequency", "中心频率"),
             ]],
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
         )
     with validation_tab:
@@ -6296,7 +6296,7 @@ def render_oil_price_forecast_panel() -> None:
             data=result_path.read_bytes(),
             file_name=result_path.name,
             mime=_download_mime(result_path),
-            use_container_width=True,
+            width="stretch",
             key=f"download_{target.lower()}_price_forecast",
         )
 
@@ -6354,7 +6354,7 @@ def render_crisis_warning_tab(options: dict[str, Any]) -> None:
     if st.button(
         ui_text("Refresh Data and Run Warning", "自动更新数据并运行预警"),
         type="primary",
-        use_container_width=True,
+        width="stretch",
         key="run_crisis_warning",
     ):
         status = st.status(ui_text("Refreshing warning data...", "正在更新预警数据……"), expanded=True)
@@ -6512,7 +6512,7 @@ def render_crisis_warning_tab(options: dict[str, Any]) -> None:
                 data=PATHS["warning_results"].read_bytes(),
                 file_name=PATHS["warning_results"].name,
                 mime=_download_mime(PATHS["warning_results"]),
-                use_container_width=True,
+                width="stretch",
                 key="download_warning_results",
             )
 
@@ -6613,7 +6613,7 @@ def render_professional_results_loader() -> None:
         if st.button(
             ui_text("Load complete saved results", "加载已有完整结果"),
             key="load_professional_saved_results",
-            use_container_width=True,
+            width="stretch",
         ):
             st.session_state["professional_results_expanded"] = True
             st.rerun()
@@ -6692,7 +6692,7 @@ def render_application_workspace(options: dict[str, Any]) -> None:
             _apply_dark_plot_theme(context_figure)
             st.plotly_chart(
                 context_figure,
-                use_container_width=True,
+                width="stretch",
                 config={"scrollZoom": True, "displaylogo": False, "responsive": True},
                 key="professional_net_impact_context",
             )
@@ -6711,7 +6711,7 @@ def render_application_workspace(options: dict[str, Any]) -> None:
             _apply_dark_plot_theme(risk_context)
             st.plotly_chart(
                 risk_context,
-                use_container_width=True,
+                width="stretch",
                 config={"scrollZoom": True, "displaylogo": False, "responsive": True},
                 key="professional_warning_context",
             )

@@ -571,7 +571,7 @@ def render_data_library(ui_text: UiText, apply_theme: ThemeFunction) -> None:
             hovermode="x unified",
         )
         apply_theme(context)
-        st.plotly_chart(context, use_container_width=True, config=PLOT_CONFIG, key="data_library_default_context")
+        st.plotly_chart(context, width="stretch", config=PLOT_CONFIG, key="data_library_default_context")
 
     search_col, action_col = st.columns([4.5, 1.0])
     query = search_col.text_input(
@@ -587,7 +587,7 @@ def render_data_library(ui_text: UiText, apply_theme: ThemeFunction) -> None:
         search = st.button(
             ui_text("Search", "搜索数据"),
             type="primary",
-            use_container_width=True,
+            width="stretch",
             disabled=not query.strip(),
             key="data_library_search",
         )
@@ -712,7 +712,7 @@ def render_data_library(ui_text: UiText, apply_theme: ThemeFunction) -> None:
                 apply_theme(figure)
                 st.plotly_chart(
                     figure,
-                    use_container_width=True,
+                    width="stretch",
                     config=PLOT_CONFIG,
                     key=f"data_preview_{preview_signature}_{frequency}",
                 )
@@ -721,7 +721,7 @@ def render_data_library(ui_text: UiText, apply_theme: ThemeFunction) -> None:
                     if st.button(
                         ui_text("Add to database", "加入变量库"),
                         type="primary",
-                        use_container_width=True,
+                        width="stretch",
                         disabled=bool(range_error) or not status.healthy,
                         key=f"data_add_{preview_signature}",
                     ):
@@ -746,7 +746,7 @@ def render_data_library(ui_text: UiText, apply_theme: ThemeFunction) -> None:
                     data=_excel_bytes(filtered, entry["name"]),
                     file_name=f"{entry['name']}_{start_date}_{end_date}.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    use_container_width=True,
+                    width="stretch",
                     disabled=bool(range_error) or filtered.empty,
                     key=f"download_data_excel_{preview_signature}",
                 )
@@ -796,5 +796,5 @@ def render_data_library(ui_text: UiText, apply_theme: ThemeFunction) -> None:
         if not audit.table.empty:
             authority = _authority_figure(audit.table, ui_text)
             apply_theme(authority)
-            st.plotly_chart(authority, use_container_width=True, config=PLOT_CONFIG, key="data_source_authority")
-            st.dataframe(audit.table, use_container_width=True, hide_index=True, height=420)
+            st.plotly_chart(authority, width="stretch", config=PLOT_CONFIG, key="data_source_authority")
+            st.dataframe(audit.table, width="stretch", hide_index=True, height=420)
