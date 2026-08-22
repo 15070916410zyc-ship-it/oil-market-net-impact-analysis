@@ -33,3 +33,4 @@ tmp/
 !outputs/figures/.gitkeep
 !outputs/tables/.gitkeep
 !outputs/models/.gitkeep
+.neon

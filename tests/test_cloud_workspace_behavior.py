@@ -28,6 +28,10 @@ class CloudWorkspaceBehaviorTests(unittest.TestCase):
         self.assertEqual(indexed[0]["source"], "EIA")
         self.assertIn("registry_entry", indexed[0])
 
+        treasury_matches = _indexed_catalog_results("美国10年期国债收益率")
+        self.assertTrue(treasury_matches)
+        self.assertEqual(treasury_matches[0]["registry_entry"]["name"], "TNote10Y")
+
     def test_market_download_workers_run_independent_series_concurrently(self) -> None:
         from src import data_fetcher
 
@@ -385,20 +389,41 @@ class CloudWorkspaceBehaviorTests(unittest.TestCase):
         from app import streamlit_app as app
 
         figure = app._apply_dark_plot_theme(go.Figure())
-        self.assertEqual(figure.layout.paper_bgcolor, "#FCFCF8")
-        self.assertEqual(figure.layout.plot_bgcolor, "#FCFCF8")
-        self.assertEqual(figure.layout.font.color, "#1F2825")
+        self.assertEqual(figure.layout.paper_bgcolor, "#FBFCFA")
+        self.assertEqual(figure.layout.plot_bgcolor, "#FBFCFA")
+        self.assertEqual(figure.layout.font.color, "#172522")
 
         with patch.object(app.st, "markdown") as markdown:
             app.apply_custom_css()
         css = markdown.call_args.args[0]
-        self.assertIn("--canvas: #f7f7f2;", css)
-        self.assertIn("--surface: #fcfcf8;", css)
+        self.assertIn("--canvas: #f3f6f4;", css)
+        self.assertIn("--surface: #fbfcfa;", css)
+        self.assertNotIn("--canvas: #f7f7f2;", css)
         self.assertIn("@keyframes ambient-field", css)
+        self.assertIn("@keyframes ambient-nodes", css)
         self.assertIn("animation-timeline: scroll(root block)", css)
         self.assertIn("animation-timeline: view()", css)
         self.assertIn('[data-testid="stPlotlyChart"]', css)
         self.assertIn('[data-testid="stDataFrame"]', css)
+
+    def test_date_chart_controls_have_dedicated_non_overlapping_space(self) -> None:
+        import plotly.graph_objects as go
+
+        from app import streamlit_app as app
+
+        figure = go.Figure(go.Scatter(x=["2026-01-01", "2026-02-01"], y=[1, 2], name="Series"))
+        figure.update_layout(title="Market path", margin=dict(t=40))
+        figure.update_xaxes(
+            rangeselector=dict(buttons=[dict(count=1, label="1M", step="month", stepmode="backward")]),
+            rangeslider=dict(visible=True),
+        )
+
+        app._apply_dark_plot_theme(figure)
+
+        self.assertGreaterEqual(figure.layout.margin.t, 132)
+        self.assertEqual(figure.layout.xaxis.rangeselector.xanchor, "right")
+        self.assertGreater(figure.layout.xaxis.rangeselector.y, figure.layout.legend.y)
+        self.assertEqual(figure.layout.title.xanchor, "left")
 
     def test_interactive_controls_have_visible_keyboard_focus(self) -> None:
         from app import streamlit_app as app
@@ -459,7 +484,7 @@ class CloudWorkspaceBehaviorTests(unittest.TestCase):
         plotly_chart.assert_called_once()
         rendered = plotly_chart.call_args.args[0]
         self.assertEqual(len(rendered.data), 1)
-        self.assertEqual(rendered.layout.paper_bgcolor, "#FCFCF8")
+        self.assertEqual(rendered.layout.paper_bgcolor, "#FBFCFA")
 
     def test_cloud_runtime_detection_supports_override_and_streamlit_marker(self) -> None:
         from app.streamlit_app import is_cloud_runtime

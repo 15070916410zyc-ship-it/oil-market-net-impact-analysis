@@ -148,7 +148,7 @@ def _main_forecast_figure(result: Any, frequency: str, ui_text: UiText) -> go.Fi
                 x=forecast_view["Date"],
                 y=forecast_view["PointForecast"],
                 mode="lines+markers",
-            name=ui_text("Five-IMF forecast", "五个 IMF 分量预测"),
+            name=ui_text("Multi-rhythm forecast", "多层波动合成预测"),
                 line=dict(color="#356B65", width=3),
                 marker=dict(size=5, color="#6F9189"),
                 hovertemplate="%{x|%Y-%m-%d}<br>$%{y:,.2f}<extra></extra>",

@@ -58,6 +58,10 @@ def _catalog_query(query: str) -> str:
     """Translate common Chinese research terms into official-catalog keywords."""
     normalized = str(query or "").strip()
     replacements = {
+        "美国10年期国债收益率": "10-year US Treasury yield",
+        "美国 10 年期国债收益率": "10-year US Treasury yield",
+        "美国2年期国债收益率": "2-year US Treasury yield",
+        "美国 2 年期国债收益率": "2-year US Treasury yield",
         "美国原油库存": "US crude oil stocks",
         "美国通胀预期": "US inflation expectations",
         "原油库存": "crude oil stocks",
@@ -80,8 +84,14 @@ def _catalog_query(query: str) -> str:
 
 def _indexed_catalog_results(query: str, limit: int = 30) -> list[dict[str, Any]]:
     """Return fast matches from the synced index of connected official series."""
-    keywords = [token for token in _catalog_query(query).lower().replace("-", " ").split() if token]
-    if not keywords:
+    raw_query = str(query or "").strip().lower().replace("-", " ")
+    catalog_query = _catalog_query(query).lower().replace("-", " ")
+    keyword_groups = [
+        [token for token in candidate.split() if token]
+        for candidate in dict.fromkeys([raw_query, catalog_query])
+        if candidate
+    ]
+    if not keyword_groups:
         return []
     matches: list[tuple[int, dict[str, Any]]] = []
     for entry in load_variable_registry():
@@ -105,7 +115,13 @@ def _indexed_catalog_results(query: str, limit: int = 30) -> list[dict[str, Any]
                 str(official.get("id", "")),
             ]
         ).lower().replace("-", " ")
-        score = sum(token in searchable for token in keywords)
+        compact_searchable = "".join(searchable.split())
+        score = max(
+            sum(token in searchable or "".join(token.split()) in compact_searchable for token in keywords)
+            for keywords in keyword_groups
+        )
+        if raw_query and (raw_query in searchable or "".join(raw_query.split()) in compact_searchable):
+            score += 2
         if score == 0:
             continue
         source_type = str(official.get("type", "")).lower()

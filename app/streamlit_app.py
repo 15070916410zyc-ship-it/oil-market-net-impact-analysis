@@ -3144,17 +3144,20 @@ def render_main_header() -> None:
         f'<a class="skip-link" href="#main-content">{ui_text("Skip to main content", "跳到主要内容")}</a>',
         unsafe_allow_html=True,
     )
-    brand_col, settings_col, language_col = st.columns([0.82, 0.10, 0.08])
+    brand_col, tools_col = st.columns([0.84, 0.16])
     with brand_col:
         st.markdown(
             f'<div class="research-brand"><span class="research-brand-mark"><i></i></span>'
             f'<span>{ui_text("Oil Research Desk", "原油研究台")}</span></div>',
             unsafe_allow_html=True,
         )
-    with settings_col:
-        render_top_tool_menu()
-    with language_col:
-        render_language_switcher()
+    with tools_col:
+        st.markdown('<span class="tool-dock-anchor" aria-hidden="true"></span>', unsafe_allow_html=True)
+        settings_col, language_col = st.columns([1.0, 0.82], gap="small")
+        with settings_col:
+            render_top_tool_menu()
+        with language_col:
+            render_language_switcher()
 
     title = ui_text("See oil clearly. Know the next move.", "看清油价，也看清下一步")
     subtitle = ui_text(
@@ -3872,6 +3875,7 @@ def render_cloud_api_tool_menu() -> None:
             unsafe_allow_html=True,
         )
         render_api_settings_panel(status_info, browser_persistence=True)
+    st.markdown("</div>", unsafe_allow_html=True)
 
 
 def render_top_tool_menu() -> None:
@@ -7652,30 +7656,77 @@ def render_professional_pipeline_tab(options: dict[str, Any]) -> None:
 
 
 def _apply_dark_plot_theme(figure: Any) -> Any:
-    """Apply the bright workspace theme to interactive Plotly figures."""
+    """Apply the shared light theme and reserve collision-free chart chrome."""
+    margin = figure.layout.margin
+    has_range_selector = False
+    for axis in figure.select_xaxes():
+        if axis.rangeselector and axis.rangeselector.buttons:
+            has_range_selector = True
+            axis.rangeselector.update(
+                x=0.99,
+                y=1.18,
+                xanchor="right",
+                yanchor="top",
+                bgcolor="#EEF3F0",
+                activecolor="#D5E7E1",
+                bordercolor="#C9D7D2",
+                borderwidth=1,
+                font=dict(color="#465A55", size=11),
+            )
+        if axis.rangeslider and axis.rangeslider.visible:
+            axis.rangeslider.update(
+                bgcolor="#E9EFEC",
+                bordercolor="#C9D7D2",
+                borderwidth=1,
+            )
+
+    top_margin = max(int(margin.t or 0), 132 if has_range_selector else 92)
+    left_margin = max(int(margin.l or 0), 48)
+    right_margin = max(int(margin.r or 0), 28)
+    bottom_margin = max(int(margin.b or 0), 42)
+    legend_y = 1.075 if has_range_selector else 1.035
     figure.update_layout(
         template="plotly_white",
-        paper_bgcolor="#FCFCF8",
-        plot_bgcolor="#FCFCF8",
-        font=dict(color="#1F2825", family="Aptos, Segoe UI, Microsoft YaHei UI, sans-serif"),
-        title_font=dict(color="#1F2825"),
-        legend=dict(bgcolor="rgba(252,252,248,0.92)", bordercolor="#DCE2DD", borderwidth=1),
-        hoverlabel=dict(bgcolor="#1F2825", bordercolor="#1F2825", font_color="#FFFFFF"),
-        colorway=["#356B65", "#526F78", "#75918A", "#8E9C97", "#AAB5B0", "#445653"],
+        paper_bgcolor="#FBFCFA",
+        plot_bgcolor="#FBFCFA",
+        margin=dict(l=left_margin, r=right_margin, t=top_margin, b=bottom_margin),
+        font=dict(color="#172522", family="Aptos, Segoe UI, Microsoft YaHei UI, sans-serif"),
+        title=dict(
+            x=0.015,
+            xanchor="left",
+            y=0.975,
+            yanchor="top",
+            font=dict(color="#172522", size=19),
+        ),
+        legend=dict(
+            orientation="h",
+            x=0.015,
+            xanchor="left",
+            y=legend_y,
+            yanchor="bottom",
+            bgcolor="rgba(251,252,250,0.86)",
+            bordercolor="#D7E0DC",
+            borderwidth=1,
+            font=dict(size=11, color="#465A55"),
+        ),
+        hoverlabel=dict(bgcolor="#172522", bordercolor="#172522", font_color="#FFFFFF"),
+        colorway=["#2F7168", "#4D7780", "#75958E", "#91A7A0", "#B3C1BC", "#405C56"],
     )
     figure.update_xaxes(
-        gridcolor="#E8ECE8",
-        linecolor="#C8D0CB",
-        zerolinecolor="#DCE2DD",
-        tickfont=dict(color="#68736E"),
-        title_font=dict(color="#1F2825"),
+        gridcolor="#E5EBE8",
+        linecolor="#BDCBC5",
+        zerolinecolor="#D7E0DC",
+        tickfont=dict(color="#64716D"),
+        title_font=dict(color="#172522"),
+        automargin=True,
     )
     figure.update_yaxes(
-        gridcolor="#E8ECE8",
-        linecolor="#C8D0CB",
-        zerolinecolor="#DCE2DD",
-        tickfont=dict(color="#68736E"),
-        title_font=dict(color="#1F2825"),
+        gridcolor="#E5EBE8",
+        linecolor="#BDCBC5",
+        zerolinecolor="#D7E0DC",
+        tickfont=dict(color="#64716D"),
+        title_font=dict(color="#172522"),
+        automargin=True,
     )
     return figure
 
@@ -8194,14 +8245,14 @@ def _render_warning_results(payload: dict[str, Any]) -> None:
                 x=history["Date"],
                 y=history["RiskScore"],
                 name=ui_text("Five-day risk score", "五日风险分数"),
-                line=dict(color="#7658B5", width=2.4),
+                line=dict(color="#4D7780", width=2.4),
                 hovertemplate="%{x|%Y-%m-%d}<br>%{y:.1f}<extra></extra>",
             )
         )
         figure.add_hline(
             y=result.alert_threshold,
             line_dash="dash",
-            line_color="#7A1F1F",
+            line_color="#A56F4F",
             annotation_text=ui_text("Alert threshold", "预警阈值"),
         )
         events = result.event_catalog.copy()
@@ -8219,7 +8270,7 @@ def _render_warning_results(payload: dict[str, Any]) -> None:
                     y=event_points["RiskScore"],
                     mode="markers",
                     name=ui_text("Expanding-tail crisis onset", "扩张尾部危机起点"),
-                    marker=dict(size=8, color="#111827", symbol="diamond"),
+                marker=dict(size=8, color="#274F4B", symbol="diamond"),
                     text=event_points["Event"],
                     hovertemplate="%{x|%Y-%m-%d}<br>%{text}<extra></extra>",
                 )
@@ -8309,7 +8360,7 @@ def _render_warning_results(payload: dict[str, Any]) -> None:
     regime_figure.add_hline(
         y=50,
         line_dash="dash",
-        line_color="#7658B5",
+        line_color="#A56F4F",
         annotation_text=ui_text("50% reference", "50% 参考线"),
     )
     regime_figure.update_layout(
@@ -8522,13 +8573,13 @@ def render_oil_price_forecast_panel() -> None:
         line=dict(color="#354554", width=2.2), hovertemplate="%{x|%Y-%m-%d}<br>$%{y:.2f}<extra></extra>",
     ))
     interval_colors = {
-        50: ("#6972CB", "rgba(105, 114, 203, 0.25)"),
-        60: ("#7E87D3", "rgba(126, 135, 211, 0.22)"),
-        70: ("#929ADA", "rgba(146, 154, 218, 0.19)"),
-        80: ("#A4AADE", "rgba(164, 170, 222, 0.17)"),
-        90: ("#B6BBE3", "rgba(182, 187, 227, 0.14)"),
-        95: ("#C6CAE9", "rgba(198, 202, 233, 0.12)"),
-        99: ("#D8DAEF", "rgba(216, 218, 239, 0.10)"),
+        50: ("#4B7E75", "rgba(75, 126, 117, 0.24)"),
+        60: ("#609087", "rgba(96, 144, 135, 0.21)"),
+        70: ("#76A198", "rgba(118, 161, 152, 0.18)"),
+        80: ("#8CB1A8", "rgba(140, 177, 168, 0.16)"),
+        90: ("#A2C0B8", "rgba(162, 192, 184, 0.13)"),
+        95: ("#B8CFC8", "rgba(184, 207, 200, 0.11)"),
+        99: ("#CEDDD8", "rgba(206, 221, 216, 0.09)"),
     }
     for level in sorted(selected_intervals, reverse=True):
         line_color, fill_color = interval_colors.get(
@@ -8555,7 +8606,7 @@ def render_oil_price_forecast_panel() -> None:
         ))
     figure.add_trace(go.Scatter(
         x=forecast_display["Date"], y=forecast_display["PointForecast"], name=ui_text("Forecast", "预测价格"),
-        line=dict(color="#6972CB", width=2.5, dash="dash"),
+        line=dict(color="#2F7168", width=2.5, dash="dash"),
         hovertemplate="%{x|%Y-%m-%d}<br>$%{y:.2f}<extra></extra>",
     ))
     visible_start, visible_end = _forecast_chart_default_range(
@@ -8581,8 +8632,8 @@ def render_oil_price_forecast_panel() -> None:
         rangeslider=dict(
             visible=True,
             thickness=0.09,
-            bgcolor="#1B1B1B",
-            bordercolor="#4A4A4A",
+            bgcolor="#E9EFEC",
+            bordercolor="#C9D7D2",
             borderwidth=1,
         ),
     )

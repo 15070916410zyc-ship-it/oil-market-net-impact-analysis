@@ -11,21 +11,21 @@ def apply_design_system() -> None:
         """
         <style>
         :root {
-            --canvas: #f7f7f2;
-            --surface: #fcfcf8;
-            --surface-soft: #eef1ed;
-            --ink: #1f2825;
-            --ink-soft: #68736e;
-            --line: #dce2dd;
-            --line-strong: #c8d0cb;
-            --accent: #356b65;
-            --accent-strong: #274f4b;
-            --accent-soft: #e3eeea;
+            --canvas: #f3f6f4;
+            --surface: #fbfcfa;
+            --surface-soft: #eaf0ed;
+            --ink: #172522;
+            --ink-soft: #64716d;
+            --line: #d7e0dc;
+            --line-strong: #bdcbc5;
+            --accent: #2f7168;
+            --accent-strong: #20564f;
+            --accent-soft: #dcece7;
             --positive: #55786f;
             --warning: #8b7454;
-            --radius-control: 12px;
-            --radius-panel: 20px;
-            --shadow-soft: 0 18px 50px rgba(52, 74, 67, 0.08);
+            --radius-control: 14px;
+            --radius-panel: 26px;
+            --shadow-soft: 0 22px 64px rgba(39, 67, 60, 0.08);
             --font-sans: "Aptos", "SF Pro Display", "Segoe UI", "PingFang SC", "Microsoft YaHei UI", sans-serif;
             --font-display: "Aptos Display", "SF Pro Display", "Segoe UI", "PingFang SC", "Microsoft YaHei UI", sans-serif;
         }
@@ -41,10 +41,10 @@ def apply_design_system() -> None:
         body { overflow-x: hidden; }
         .stApp {
             background:
-                radial-gradient(circle at 14% 9%, rgba(82, 132, 120, .10), transparent 26rem),
-                radial-gradient(circle at 86% 32%, rgba(118, 148, 161, .10), transparent 30rem),
-                radial-gradient(circle at 48% 76%, rgba(166, 177, 159, .09), transparent 34rem),
-                var(--canvas) !important;
+                radial-gradient(ellipse at 10% 4%, rgba(80, 148, 132, .14), transparent 31rem),
+                radial-gradient(ellipse at 92% 28%, rgba(112, 151, 163, .12), transparent 36rem),
+                radial-gradient(ellipse at 51% 88%, rgba(133, 167, 154, .10), transparent 42rem),
+                linear-gradient(145deg, #f7f9f7 0%, #f2f6f4 52%, #f7f8f6 100%) !important;
             isolation: isolate;
         }
         .stApp > [data-testid="stAppViewContainer"] {
@@ -103,13 +103,16 @@ def apply_design_system() -> None:
             inset: -8%;
             z-index: 0;
             pointer-events: none;
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1600 1200' fill='none' stroke='%2358746c' stroke-opacity='.24' stroke-width='1.2'%3E%3Cpath d='M-120 255 C180 90 365 390 665 220 S1160 35 1720 270'/%3E%3Cpath d='M-120 290 C185 125 375 425 675 255 S1170 70 1720 305'/%3E%3Cpath d='M-120 325 C190 160 385 460 685 290 S1180 105 1720 340'/%3E%3Cpath d='M-120 360 C195 195 395 495 695 325 S1190 140 1720 375'/%3E%3Cpath d='M-120 395 C200 230 405 530 705 360 S1200 175 1720 410'/%3E%3Cpath d='M-180 845 C130 620 390 980 700 760 S1220 590 1760 815'/%3E%3Cpath d='M-180 885 C140 660 400 1020 710 800 S1230 630 1760 855'/%3E%3Cpath d='M-180 925 C150 700 410 1060 720 840 S1240 670 1760 895'/%3E%3Cpath d='M-180 965 C160 740 420 1100 730 880 S1250 710 1760 935'/%3E%3Cpath d='M1110 -100 C925 175 1320 365 1050 640 S880 1040 1260 1300'/%3E%3Cpath d='M1170 -100 C985 175 1380 365 1110 640 S940 1040 1320 1300'/%3E%3Cpath d='M1230 -100 C1045 175 1440 365 1170 640 S1000 1040 1380 1300'/%3E%3C/svg%3E");
+            background-image:
+                radial-gradient(circle at 26% 22%, rgba(47,113,104,.14) 0 1px, transparent 2px),
+                radial-gradient(circle at 73% 68%, rgba(78,126,139,.12) 0 1px, transparent 2px),
+                url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1600 1200' fill='none' stroke='%23587970' stroke-opacity='.29' stroke-width='1.15'%3E%3Cpath d='M-180 235 C115 45 360 415 690 205 S1205 30 1770 290'/%3E%3Cpath d='M-180 276 C125 86 370 456 700 246 S1215 71 1770 331'/%3E%3Cpath d='M-180 317 C135 127 380 497 710 287 S1225 112 1770 372'/%3E%3Cpath d='M-180 358 C145 168 390 538 720 328 S1235 153 1770 413'/%3E%3Cpath d='M-180 399 C155 209 400 579 730 369 S1245 194 1770 454'/%3E%3Cpath d='M-210 835 C105 585 390 1010 735 752 S1280 575 1810 842'/%3E%3Cpath d='M-210 880 C115 630 400 1055 745 797 S1290 620 1810 887'/%3E%3Cpath d='M-210 925 C125 675 410 1100 755 842 S1300 665 1810 932'/%3E%3Cpath d='M1110 -140 C875 160 1360 390 1040 665 S870 1065 1290 1340'/%3E%3Cpath d='M1170 -140 C935 160 1420 390 1100 665 S930 1065 1350 1340'/%3E%3Cpath d='M1230 -140 C995 160 1480 390 1160 665 S990 1065 1410 1340'/%3E%3C/svg%3E");
             background-position: center;
             background-repeat: no-repeat;
             background-size: cover;
-            opacity: .78;
+            opacity: .88;
             transform-origin: center;
-            animation: ambient-field 4.8s cubic-bezier(.45,0,.55,1) infinite alternate;
+            animation: ambient-field 12s cubic-bezier(.4,0,.2,1) infinite alternate;
         }
         .stApp::after {
             content: "";
@@ -118,20 +121,26 @@ def apply_design_system() -> None:
             z-index: 0;
             pointer-events: none;
             background-image:
-                linear-gradient(90deg, rgba(247,247,242,.06), rgba(247,247,242,.42) 48%, rgba(247,247,242,.04)),
-                url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1600 1200' fill='none'%3E%3Cg stroke-width='1.3' stroke-opacity='.50'%3E%3Cpath d='M1080 -120V1320' stroke='%23699186'/%3E%3Cpath d='M1185 -120V1320' stroke='%23356b65'/%3E%3Cpath d='M1290 -120V1320' stroke='%237d98a2'/%3E%3Cpath d='M1395 -120V1320' stroke='%2390a09a'/%3E%3C/g%3E%3Cg fill='%23f7f7f2' stroke-width='1.6'%3E%3Ccircle cx='1080' cy='245' r='8' stroke='%23699186'/%3E%3Ccircle cx='1185' cy='410' r='5' stroke='%23356b65'/%3E%3Ccircle cx='1290' cy='665' r='7' stroke='%237d98a2'/%3E%3Ccircle cx='1395' cy='870' r='6' stroke='%2390a09a'/%3E%3Ccircle cx='1080' cy='940' r='58' stroke='%23699186' stroke-dasharray='3 4'/%3E%3Ccircle cx='1185' cy='170' r='38' stroke='%23356b65' stroke-opacity='.8'/%3E%3C/g%3E%3C/svg%3E");
+                radial-gradient(ellipse at 76% 18%, rgba(65,130,118,.12), transparent 18rem),
+                linear-gradient(90deg, rgba(243,246,244,.04), rgba(243,246,244,.48) 48%, rgba(243,246,244,.02)),
+                url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1600 1200' fill='none'%3E%3Cg stroke-width='1.15' stroke-opacity='.46'%3E%3Cpath d='M1050 -120V1320' stroke='%23699186'/%3E%3Cpath d='M1165 -120V1320' stroke='%232f7168'/%3E%3Cpath d='M1280 -120V1320' stroke='%237d98a2'/%3E%3Cpath d='M1395 -120V1320' stroke='%2390a09a'/%3E%3C/g%3E%3Cg fill='%23f3f6f4' stroke-width='1.6'%3E%3Ccircle cx='1050' cy='245' r='8' stroke='%23699186'/%3E%3Ccircle cx='1165' cy='410' r='5' stroke='%232f7168'/%3E%3Ccircle cx='1280' cy='665' r='7' stroke='%237d98a2'/%3E%3Ccircle cx='1395' cy='870' r='6' stroke='%2390a09a'/%3E%3Ccircle cx='1050' cy='940' r='58' stroke='%23699186' stroke-dasharray='3 4'/%3E%3Ccircle cx='1165' cy='170' r='38' stroke='%232f7168' stroke-opacity='.8'/%3E%3C/g%3E%3C/svg%3E");
             background-position: center;
             background-repeat: no-repeat;
             background-size: cover;
-            opacity: .66;
+            opacity: .72;
             transform-origin: center;
+            animation: ambient-nodes 16s cubic-bezier(.4,0,.2,1) infinite alternate;
         }
         @supports (animation-timeline: scroll()) {
             .stApp::after { animation: art-node-scroll linear both; animation-timeline: scroll(root block); }
         }
         @keyframes ambient-field {
-            from { transform: translate3d(-1.2%, -0.8%, 0) scale(1.035); opacity: .58; }
-            to { transform: translate3d(1.4%, 1.1%, 0) scale(1.075); opacity: .84; }
+            from { transform: translate3d(-1.8%, -1.1%, 0) scale(1.035) rotate(-.35deg); opacity: .62; }
+            to { transform: translate3d(2.2%, 1.6%, 0) scale(1.085) rotate(.45deg); opacity: .92; }
+        }
+        @keyframes ambient-nodes {
+            from { transform: translate3d(0, -1.2%, 0) scale(1.01); opacity: .48; }
+            to { transform: translate3d(-1.6%, 2.2%, 0) scale(1.045); opacity: .78; }
         }
         @keyframes art-field-scroll {
             from { transform: translate3d(-2%, -1.5%, 0) scale(1.03); opacity: .74; }
@@ -194,8 +203,8 @@ def apply_design_system() -> None:
             flex-direction: column;
             justify-content: center;
             align-items: center;
-            padding: 7rem 1rem 8rem;
-            text-align: center;
+            padding: 7rem 0 8rem;
+            text-align: left;
             animation: reveal-up 620ms cubic-bezier(.22,.72,.2,1) both;
         }
         .hero-kicker, .section-kicker {
@@ -207,10 +216,10 @@ def apply_design_system() -> None:
             text-transform: uppercase;
         }
         .hero-copy h1 {
-            max-width: 10ch;
+            max-width: 11ch;
             margin: 0 !important;
             color: var(--ink) !important;
-            font-size: clamp(3.4rem, 7.2vw, 7.4rem) !important;
+            font-size: clamp(3.4rem, 7.6vw, 7.8rem) !important;
             font-weight: 640 !important;
             line-height: 0.98 !important;
         }
@@ -221,7 +230,7 @@ def apply_design_system() -> None:
             font-size: clamp(1rem, 1.35vw, 1.18rem) !important;
             line-height: 1.85 !important;
         }
-        .hero-actions { display: flex; gap: 1.3rem; align-items: center; justify-content: center; margin-top: 2rem; }
+        .hero-actions { display: flex; gap: 1.3rem; align-items: center; justify-content: flex-start; margin-top: 2rem; }
         .hero-action-primary, .hero-action-secondary {
             display: inline-flex;
             align-items: center;
@@ -268,37 +277,48 @@ def apply_design_system() -> None:
         }
 
         .stTabs [data-baseweb="tab-list"] {
-            gap: clamp(0.85rem, 2vw, 2.4rem) !important;
-            min-height: 3.6rem;
-            padding: 0 !important;
-            border-bottom: 1px solid var(--line);
-            background: transparent !important;
+            gap: 0.35rem !important;
+            min-height: 3.4rem;
+            width: fit-content;
+            max-width: 100%;
+            padding: 0.35rem !important;
+            border: 1px solid var(--line);
+            border-radius: 999px !important;
+            background: rgba(234, 240, 237, 0.84) !important;
+            backdrop-filter: blur(18px);
         }
         .stTabs [data-baseweb="tab"] {
-            min-height: 3.6rem;
-            padding: 0.45rem 0.05rem !important;
+            min-height: 2.7rem;
+            padding: 0.5rem 1rem !important;
             border: 0 !important;
-            border-radius: 0 !important;
+            border-radius: 999px !important;
             background: transparent !important;
             color: var(--ink-soft) !important;
             font-weight: 600;
-            transition: color 160ms ease, transform 160ms ease;
+            transition: color 160ms cubic-bezier(.2,.7,.2,1), transform 160ms cubic-bezier(.2,.7,.2,1), background-color 160ms cubic-bezier(.2,.7,.2,1), box-shadow 160ms cubic-bezier(.2,.7,.2,1);
         }
         .stTabs [data-baseweb="tab"]:hover { color: var(--ink) !important; transform: translateY(-1px); }
-        .stTabs [aria-selected="true"] { color: var(--ink) !important; }
-        .stTabs [data-baseweb="tab-highlight"] { background: var(--accent) !important; height: 2px !important; }
+        .stTabs [aria-selected="true"] {
+            background: var(--surface) !important;
+            color: var(--ink) !important;
+            box-shadow: 0 5px 16px rgba(39,67,60,.09);
+        }
+        .stTabs [data-baseweb="tab-highlight"] { display: none !important; }
         .stTabs [data-baseweb="tab-border"] { display: none; }
 
         [data-testid="stVerticalBlockBorderWrapper"] {
             border-color: var(--line) !important;
             border-radius: var(--radius-panel) !important;
-            background: rgba(252, 252, 248, 0.84) !important;
+            background: rgba(251, 252, 250, 0.86) !important;
             box-shadow: 0 1px 0 rgba(255, 255, 255, 0.88) inset;
+            corner-shape: squircle;
         }
         [data-testid="stMetric"] {
             padding: 1rem 1.1rem !important;
-            border-left: 1px solid var(--line);
-            background: transparent !important;
+            border: 1px solid var(--line);
+            border-radius: 18px;
+            background: rgba(251,252,250,.76) !important;
+            box-shadow: 0 10px 30px rgba(39,67,60,.045);
         }
         [data-testid="stMetricLabel"] { color: var(--ink-soft) !important; }
         [data-testid="stMetricValue"] {
@@ -310,8 +330,9 @@ def apply_design_system() -> None:
             overflow: hidden;
             border: 1px solid var(--line) !important;
             border-radius: var(--radius-panel) !important;
-            background: rgba(252, 252, 248, 0.92) !important;
+            background: rgba(251, 252, 250, 0.94) !important;
             box-shadow: var(--shadow-soft);
+            corner-shape: squircle;
         }
         [data-testid="stPlotlyChart"] { padding: 0.45rem; }
 
@@ -365,7 +386,7 @@ def apply_design_system() -> None:
             color: var(--ink) !important;
             font-weight: 650 !important;
             box-shadow: none !important;
-            transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease, background-color 160ms ease !important;
+            transition: transform 160ms cubic-bezier(.2,.7,.2,1), border-color 160ms cubic-bezier(.2,.7,.2,1), box-shadow 160ms cubic-bezier(.2,.7,.2,1), background-color 160ms cubic-bezier(.2,.7,.2,1) !important;
             touch-action: manipulation;
         }
         .stButton > button:hover, .stDownloadButton > button:hover {
@@ -417,7 +438,7 @@ def apply_design_system() -> None:
             border-radius: 10px !important;
             background: transparent !important;
             color: var(--ink-soft) !important;
-            transition: background-color 150ms ease, color 150ms ease, box-shadow 150ms ease;
+            transition: background-color 150ms cubic-bezier(.2,.7,.2,1), color 150ms cubic-bezier(.2,.7,.2,1), box-shadow 150ms cubic-bezier(.2,.7,.2,1);
         }
         [data-testid="stRadio"] [role="radiogroup"] > label:has(input:checked) {
             background: var(--surface) !important;
@@ -454,7 +475,7 @@ def apply_design_system() -> None:
             min-height: 2.75rem !important;
             border: 1px solid var(--line) !important;
             border-radius: var(--radius-control) !important;
-            background: rgba(252, 252, 248, 0.90) !important;
+            background: rgba(251, 252, 250, 0.92) !important;
             color: var(--ink) !important;
             box-shadow: none !important;
         }
@@ -487,19 +508,33 @@ def apply_design_system() -> None:
             border-radius: var(--radius-panel);
             background:
                 radial-gradient(circle at 18% 30%, rgba(53,107,101,.10), transparent 18rem),
-                rgba(252,252,248,.72);
+                rgba(251,252,250,.76);
         }
         .data-empty-state strong { color: var(--ink); font-size: 1.35rem; }
         .data-empty-state span { color: var(--ink-soft); }
         [data-testid="stHorizontalBlock"]:has(.research-brand) {
             align-items: center !important;
         }
-        [data-testid="stHorizontalBlock"]:has(.research-brand) [data-testid="stPopoverButton"],
-        [data-testid="stHorizontalBlock"]:has(.research-brand) div[data-baseweb="select"] > div {
+        [data-testid="stColumn"]:has(.tool-dock-anchor) {
+            padding: .25rem .3rem !important;
+            border: 1px solid var(--line);
+            border-radius: 999px;
+            background: rgba(251,252,250,.78);
+            box-shadow: 0 10px 30px rgba(39,67,60,.06);
+            backdrop-filter: blur(18px) saturate(140%);
+        }
+        [data-testid="stColumn"]:has(.tool-dock-anchor) > [data-testid="stVerticalBlock"] {
+            gap: 0 !important;
+        }
+        .tool-dock-anchor { display: none; }
+        [data-testid="stColumn"]:has(.tool-dock-anchor) [data-testid="stPopoverButton"],
+        [data-testid="stColumn"]:has(.tool-dock-anchor) div[data-baseweb="select"] > div {
             min-height: 2.35rem !important;
             height: 2.35rem !important;
             padding-inline: .65rem !important;
             font-size: .78rem !important;
+            border: 0 !important;
+            background: transparent !important;
         }
 
         @keyframes reveal-up {
@@ -519,7 +554,7 @@ def apply_design_system() -> None:
             .block-container { padding: 1rem 1.25rem 4rem !important; }
             [data-testid="stHorizontalBlock"]:has(.research-brand) {
                 display: grid !important;
-                grid-template-columns: minmax(7.8rem, 1fr) 4.1rem 5.5rem !important;
+                grid-template-columns: minmax(7.8rem, 1fr) minmax(8.2rem, 10rem) !important;
                 gap: 0.55rem !important;
                 align-items: center !important;
             }
@@ -527,21 +562,21 @@ def apply_design_system() -> None:
                 width: auto !important;
                 min-width: 0 !important;
             }
-            [data-testid="stHorizontalBlock"]:has(.research-brand) [data-testid="stPopoverButton"] {
+            [data-testid="stColumn"]:has(.tool-dock-anchor) [data-testid="stPopoverButton"] {
                 min-height: 2.55rem !important;
                 padding-inline: 0.7rem !important;
                 font-size: 0.75rem !important;
                 white-space: nowrap;
             }
-            [data-testid="stHorizontalBlock"]:has(.research-brand) div[data-baseweb="select"] > div {
+            [data-testid="stColumn"]:has(.tool-dock-anchor) div[data-baseweb="select"] > div {
                 min-height: 2.55rem !important;
             }
-            [data-testid="stHorizontalBlock"]:has(.research-brand) div[data-baseweb="select"] {
-                min-width: 5.5rem !important;
+            [data-testid="stColumn"]:has(.tool-dock-anchor) div[data-baseweb="select"] {
+                min-width: 3.8rem !important;
             }
             .research-brand { margin: 0; font-size: 1.05rem; }
             .research-brand-mark { width: 1.7rem; height: 1.7rem; }
-            .hero-copy { min-height: 72vh; padding: 5rem 0 5.5rem; }
+            .hero-copy { min-height: 72vh; padding: 5rem 0 5.5rem; align-items: flex-start; }
             .hero-copy h1 { max-width: 12ch; font-size: clamp(2.8rem, 12vw, 4.4rem) !important; }
             .stTabs [data-baseweb="tab-list"] { gap: 1rem !important; overflow-x: auto; }
             .stTabs [data-baseweb="tab"] { white-space: nowrap; }
