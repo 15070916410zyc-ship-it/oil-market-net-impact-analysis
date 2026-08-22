@@ -3140,12 +3140,12 @@ def apply_custom_css() -> None:
 
 def render_main_header() -> None:
     """Render the editorial navigation over a site-wide art field."""
-    professional_request = os.urandom(8).hex()
+    navigation_request = os.urandom(8).hex()
     st.markdown(
         f'<a class="skip-link" href="#main-content">{ui_text("Skip to main content", "跳到主要内容")}</a>',
         unsafe_allow_html=True,
     )
-    brand_col, tools_col = st.columns([0.84, 0.16])
+    brand_col, tools_col = st.columns([0.91, 0.09], gap="small")
     with brand_col:
         st.markdown(
             f'<div class="research-brand"><span class="research-brand-mark"><i></i></span>'
@@ -3172,8 +3172,8 @@ def render_main_header() -> None:
           <h1>{title}</h1>
           <p>{subtitle}</p>
           <div class="hero-actions">
-            <a class="hero-action-primary" href="#market-workspaces">{ui_text("View latest outlook", "查看最新判断")}</a>
-            <a class="hero-action-secondary" href="/?workspace=professional&amp;request={professional_request}#market-workspaces" target="_self">{ui_text("Open research tools", "进入专业模式")}</a>
+            <a class="hero-action-primary" href="/?workspace=decision&amp;request={navigation_request}#market-workspaces" target="_self">{ui_text("View latest outlook", "查看最新判断")}</a>
+            <a class="hero-action-secondary" href="/?workspace=professional&amp;request={navigation_request}#market-workspaces" target="_self">{ui_text("Open research tools", "进入专业模式")}</a>
           </div>
         </section>
         """,
@@ -7688,16 +7688,16 @@ def _apply_dark_plot_theme(figure: Any) -> Any:
     legend_y = 1.075 if has_range_selector else 1.035
     figure.update_layout(
         template="plotly_white",
-        paper_bgcolor="#FBFCFA",
-        plot_bgcolor="#FBFCFA",
+        paper_bgcolor="#FDFEFB",
+        plot_bgcolor="#FDFEFB",
         margin=dict(l=left_margin, r=right_margin, t=top_margin, b=bottom_margin),
-        font=dict(color="#172522", family="Aptos, Segoe UI, Microsoft YaHei UI, sans-serif"),
+        font=dict(color="#182622", family="Aptos, Segoe UI, Microsoft YaHei UI, sans-serif"),
         title=dict(
             x=0.015,
             xanchor="left",
             y=0.975,
             yanchor="top",
-            font=dict(color="#172522", size=19),
+            font=dict(color="#182622", size=19),
         ),
         legend=dict(
             orientation="h",
@@ -7710,7 +7710,7 @@ def _apply_dark_plot_theme(figure: Any) -> Any:
             borderwidth=1,
             font=dict(size=11, color="#465A55"),
         ),
-        hoverlabel=dict(bgcolor="#172522", bordercolor="#172522", font_color="#FFFFFF"),
+        hoverlabel=dict(bgcolor="#182622", bordercolor="#182622", font_color="#FFFFFF"),
         colorway=["#2F7168", "#4D7780", "#75958E", "#91A7A0", "#B3C1BC", "#405C56"],
     )
     figure.update_xaxes(
@@ -7718,7 +7718,7 @@ def _apply_dark_plot_theme(figure: Any) -> Any:
         linecolor="#BDCBC5",
         zerolinecolor="#D7E0DC",
         tickfont=dict(color="#64716D"),
-        title_font=dict(color="#172522"),
+        title_font=dict(color="#182622"),
         automargin=True,
     )
     figure.update_yaxes(
@@ -7726,7 +7726,7 @@ def _apply_dark_plot_theme(figure: Any) -> Any:
         linecolor="#BDCBC5",
         zerolinecolor="#D7E0DC",
         tickfont=dict(color="#64716D"),
-        title_font=dict(color="#172522"),
+        title_font=dict(color="#182622"),
         automargin=True,
     )
     return figure
@@ -9017,7 +9017,7 @@ def main_navigation_labels() -> list[str]:
 
 
 def sync_primary_workspace_from_query(navigation: list[str]) -> None:
-    """Consume a hero navigation request without disabling the sticky switcher."""
+    """Consume one of the two hero navigation requests."""
     try:
         workspace = st.query_params.get("workspace")
         request_token = st.query_params.get("request")
@@ -9034,7 +9034,7 @@ def sync_primary_workspace_from_query(navigation: list[str]) -> None:
     if st.session_state.get(state_key) == request_signature:
         return
     st.session_state[state_key] = request_signature
-    st.session_state["primary_workspace_mode"] = navigation[1 if workspace == "professional" else 0]
+    st.session_state["primary_workspace_mode"] = workspace
 
 
 def main() -> None:
@@ -9048,14 +9048,10 @@ def main() -> None:
 
     navigation = main_navigation_labels()
     sync_primary_workspace_from_query(navigation)
-    active_mode = st.radio(
-        ui_text("Workspace", "工作模式"),
-        navigation,
-        horizontal=True,
-        label_visibility="collapsed",
-        key="primary_workspace_mode",
-    )
-    if active_mode == navigation[0]:
+    stored_mode = st.session_state.get("primary_workspace_mode", "decision")
+    active_workspace = "professional" if stored_mode in {"professional", navigation[1]} else "decision"
+    st.session_state["primary_workspace_mode"] = active_workspace
+    if active_workspace == "decision":
         decision_module = importlib.import_module("app.executive_dashboard")
         importlib.reload(decision_module)
         decision_module.render_decision_dashboard(ui_text, _apply_dark_plot_theme)

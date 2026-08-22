@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import tempfile
 import threading
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 from zipfile import ZipFile
@@ -187,7 +188,7 @@ class CloudWorkspaceBehaviorTests(unittest.TestCase):
         results.assert_called_once()
         self.assertEqual(returned["analysis_mode"], "professional")
 
-    def test_hero_professional_link_changes_workspace_once_and_keeps_manual_switch(self) -> None:
+    def test_hero_workspace_links_change_workspace_once(self) -> None:
         from app import streamlit_app as app
 
         navigation = ["决策模式", "专业模式"]
@@ -197,28 +198,31 @@ class CloudWorkspaceBehaviorTests(unittest.TestCase):
             patch.object(app.st, "session_state", session_state),
         ):
             app.sync_primary_workspace_from_query(navigation)
-            self.assertEqual(session_state["primary_workspace_mode"], "专业模式")
+            self.assertEqual(session_state["primary_workspace_mode"], "professional")
 
-            session_state["primary_workspace_mode"] = "决策模式"
+            session_state["primary_workspace_mode"] = "decision"
             app.sync_primary_workspace_from_query(navigation)
-            self.assertEqual(session_state["primary_workspace_mode"], "决策模式")
+            self.assertEqual(session_state["primary_workspace_mode"], "decision")
 
         with (
             patch.object(app.st, "query_params", {"workspace": "professional", "request": "second"}),
             patch.object(app.st, "session_state", session_state),
         ):
             app.sync_primary_workspace_from_query(navigation)
-        self.assertEqual(session_state["primary_workspace_mode"], "专业模式")
+        self.assertEqual(session_state["primary_workspace_mode"], "professional")
 
-    def test_hero_professional_link_carries_workspace_and_scroll_target(self) -> None:
+    def test_hero_links_replace_the_duplicate_workspace_radio(self) -> None:
         import inspect
 
         from app import streamlit_app as app
 
         renderer = inspect.getsource(app.render_main_header)
+        main_source = inspect.getsource(app.main)
+        self.assertIn("/?workspace=decision&amp;request=", renderer)
         self.assertIn("/?workspace=professional&amp;request=", renderer)
         self.assertIn('target="_self"', renderer)
         self.assertIn("#market-workspaces", renderer)
+        self.assertNotIn('key="primary_workspace_mode"', main_source)
 
     def test_analysis_dates_are_rendered_inside_the_run_workspace(self) -> None:
         import inspect
@@ -296,6 +300,44 @@ class CloudWorkspaceBehaviorTests(unittest.TestCase):
         self.assertEqual(displayed.iloc[0]["Upper80"], 93.0)
         self.assertEqual(displayed.iloc[1]["Date"], forecast.iloc[0]["Date"])
         self.assertEqual(len(displayed), len(forecast) + 1)
+
+    def test_decision_chart_connects_the_forecast_and_shows_three_colored_ranges(self) -> None:
+        from app import executive_dashboard as dashboard
+
+        history = pd.DataFrame(
+            {
+                "Date": pd.to_datetime(["2026-08-13", "2026-08-14"]),
+                "Actual": [91.0, 93.0],
+            }
+        )
+        forecast = pd.DataFrame(
+            {
+                "Date": pd.to_datetime(["2026-08-17", "2026-08-18"]),
+                "PointForecast": [92.0, 91.5],
+                "Lower50": [90.0, 89.0],
+                "Upper50": [94.0, 94.0],
+                "Lower80": [88.0, 87.0],
+                "Upper80": [96.0, 96.5],
+                "Lower95": [85.0, 84.0],
+                "Upper95": [99.0, 100.0],
+            }
+        )
+        result = SimpleNamespace(
+            history=history,
+            forecast=forecast,
+            metrics={"AsOfDate": "2026-08-14"},
+        )
+
+        figure = dashboard._main_forecast_figure(result, "daily", lambda _en, zh: zh)
+        traces = {trace.name: trace for trace in figure.data if trace.name}
+
+        self.assertIn("50%经验区间", traces)
+        self.assertIn("80%经验区间", traces)
+        self.assertIn("95%经验区间", traces)
+        self.assertEqual(len({traces[name].fillcolor for name in ("50%经验区间", "80%经验区间", "95%经验区间")}), 3)
+        forecast_trace = traces["多层波动合成预测"]
+        self.assertEqual(pd.Timestamp(forecast_trace.x[0]), history.iloc[-1]["Date"])
+        self.assertEqual(float(forecast_trace.y[0]), float(history.iloc[-1]["Actual"]))
 
     def test_warning_dataset_restores_complete_brent_history_after_alignment(self) -> None:
         import pandas as pd
@@ -422,15 +464,15 @@ class CloudWorkspaceBehaviorTests(unittest.TestCase):
         from app import streamlit_app as app
 
         figure = app._apply_dark_plot_theme(go.Figure())
-        self.assertEqual(figure.layout.paper_bgcolor, "#FBFCFA")
-        self.assertEqual(figure.layout.plot_bgcolor, "#FBFCFA")
-        self.assertEqual(figure.layout.font.color, "#172522")
+        self.assertEqual(figure.layout.paper_bgcolor, "#FDFEFB")
+        self.assertEqual(figure.layout.plot_bgcolor, "#FDFEFB")
+        self.assertEqual(figure.layout.font.color, "#182622")
 
         with patch.object(app.st, "markdown") as markdown:
             app.apply_custom_css()
         css = markdown.call_args.args[0]
-        self.assertIn("--canvas: #f3f6f4;", css)
-        self.assertIn("--surface: #fbfcfa;", css)
+        self.assertIn("--canvas: #f7f8f5;", css)
+        self.assertIn("--surface: #fdfefb;", css)
         self.assertNotIn("--canvas: #f7f7f2;", css)
         self.assertIn("@keyframes ambient-field", css)
         self.assertIn("@keyframes ambient-nodes", css)
@@ -517,7 +559,7 @@ class CloudWorkspaceBehaviorTests(unittest.TestCase):
         plotly_chart.assert_called_once()
         rendered = plotly_chart.call_args.args[0]
         self.assertEqual(len(rendered.data), 1)
-        self.assertEqual(rendered.layout.paper_bgcolor, "#FBFCFA")
+        self.assertEqual(rendered.layout.paper_bgcolor, "#FDFEFB")
 
     def test_cloud_runtime_detection_supports_override_and_streamlit_marker(self) -> None:
         from app.streamlit_app import is_cloud_runtime

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict
+import re
 from typing import Any, Callable
 
 import numpy as np
@@ -93,6 +94,22 @@ def _forecast_result(target: str, horizon: int, history_months: int) -> Any | No
     return payload.get("result")
 
 
+def _anchored_forecast_view(history_view: pd.DataFrame, forecast_view: pd.DataFrame) -> pd.DataFrame:
+    """Join future paths to the last observed price without altering model output."""
+    if history_view.empty or forecast_view.empty:
+        return forecast_view.copy()
+    last_observation = history_view.iloc[-1]
+    anchor: dict[str, object] = {"Date": last_observation["Date"]}
+    for column in forecast_view.columns:
+        if column == "Date":
+            continue
+        if column == "PointForecast" or re.fullmatch(r"(?:Lower|Upper)\d+", str(column)):
+            anchor[column] = float(last_observation["Price"])
+        else:
+            anchor[column] = np.nan
+    return pd.concat([pd.DataFrame([anchor]), forecast_view], ignore_index=True)
+
+
 def _main_forecast_figure(result: Any, frequency: str, ui_text: UiText) -> go.Figure:
     history = result.history.rename(columns={"Actual": "Price"})
     forecast = result.forecast.copy()
@@ -102,6 +119,7 @@ def _main_forecast_figure(result: Any, frequency: str, ui_text: UiText) -> go.Fi
         frequency,
         methods={column: "last" for column in forecast.columns if column != "Date"},
     )
+    forecast_view = _anchored_forecast_view(history_view, forecast_view)
     figure = go.Figure()
     figure.add_trace(
         go.Scatter(
@@ -114,35 +132,49 @@ def _main_forecast_figure(result: Any, frequency: str, ui_text: UiText) -> go.Fi
         )
     )
     if not forecast_view.empty:
-        figure.add_trace(
-            go.Scatter(
-                x=forecast_view["Date"],
-                y=forecast_view["Upper80"],
-                mode="lines",
-                line=dict(color="rgba(53,107,101,0.24)", width=1),
-                hoverinfo="skip",
-                showlegend=False,
+        interval_colors = {
+            50: ("#B57D4F", "rgba(181, 125, 79, 0.18)"),
+            80: ("#3F8074", "rgba(63, 128, 116, 0.14)"),
+            95: ("#718DA3", "rgba(113, 141, 163, 0.10)"),
+        }
+        available_intervals = [
+            level
+            for level in (95, 80, 50)
+            if f"Lower{level}" in forecast_view and f"Upper{level}" in forecast_view
+        ]
+        for level in available_intervals:
+            line_color, fill_color = interval_colors[level]
+            lower_column = f"Lower{level}"
+            upper_column = f"Upper{level}"
+            figure.add_trace(
+                go.Scatter(
+                    x=forecast_view["Date"],
+                    y=forecast_view[upper_column],
+                    mode="lines",
+                    line=dict(color=line_color, width=0.8),
+                    hoverinfo="skip",
+                    showlegend=False,
+                )
             )
-        )
-        figure.add_trace(
-            go.Scatter(
-                x=forecast_view["Date"],
-                y=forecast_view["Lower80"],
-                mode="lines",
-                name=ui_text("80% empirical range", "80%经验区间"),
-                fill="tonexty",
-                fillcolor="rgba(53,107,101,0.12)",
-                line=dict(color="rgba(53,107,101,0.38)", width=1),
-                customdata=forecast_view[["Lower80", "Upper80"]].to_numpy(),
-                hovertemplate=(
-                    "%{x|%Y-%m-%d}<br>"
-                    + ui_text("Lower", "下界")
-                    + ": $%{customdata[0]:,.2f}<br>"
-                    + ui_text("Upper", "上界")
-                    + ": $%{customdata[1]:,.2f}<extra></extra>"
-                ),
+            figure.add_trace(
+                go.Scatter(
+                    x=forecast_view["Date"],
+                    y=forecast_view[lower_column],
+                    mode="lines",
+                    name=ui_text(f"{level}% empirical range", f"{level}%经验区间"),
+                    fill="tonexty",
+                    fillcolor=fill_color,
+                    line=dict(color=line_color, width=0.8),
+                    customdata=forecast_view[[lower_column, upper_column]].to_numpy(),
+                    hovertemplate=(
+                        "%{x|%Y-%m-%d}<br>"
+                        + ui_text("Lower", "下界")
+                        + ": $%{customdata[0]:,.2f}<br>"
+                        + ui_text("Upper", "上界")
+                        + ": $%{customdata[1]:,.2f}<extra></extra>"
+                    ),
+                )
             )
-        )
         figure.add_trace(
             go.Scatter(
                 x=forecast_view["Date"],

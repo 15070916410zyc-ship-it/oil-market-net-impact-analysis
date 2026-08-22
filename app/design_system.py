@@ -11,16 +11,16 @@ def apply_design_system() -> None:
         """
         <style>
         :root {
-            --canvas: #f3f6f4;
-            --surface: #fbfcfa;
-            --surface-soft: #eaf0ed;
-            --ink: #172522;
-            --ink-soft: #64716d;
-            --line: #d7e0dc;
-            --line-strong: #bdcbc5;
-            --accent: #2f7168;
-            --accent-strong: #20564f;
-            --accent-soft: #dcece7;
+            --canvas: #f7f8f5;
+            --surface: #fdfefb;
+            --surface-soft: #edf2ee;
+            --ink: #182622;
+            --ink-soft: #66736f;
+            --line: #dbe3df;
+            --line-strong: #c3d0ca;
+            --accent: #2f746a;
+            --accent-strong: #205a52;
+            --accent-soft: #dfeee9;
             --positive: #55786f;
             --warning: #8b7454;
             --radius-control: 14px;
@@ -41,10 +41,9 @@ def apply_design_system() -> None:
         body { overflow-x: hidden; }
         .stApp {
             background:
-                radial-gradient(ellipse at 10% 4%, rgba(80, 148, 132, .14), transparent 31rem),
-                radial-gradient(ellipse at 92% 28%, rgba(112, 151, 163, .12), transparent 36rem),
-                radial-gradient(ellipse at 51% 88%, rgba(133, 167, 154, .10), transparent 42rem),
-                linear-gradient(145deg, #f7f9f7 0%, #f2f6f4 52%, #f7f8f6 100%) !important;
+                radial-gradient(ellipse at 4% 2%, rgba(114, 173, 157, .13), transparent 30rem),
+                radial-gradient(ellipse at 96% 38%, rgba(126, 159, 176, .11), transparent 36rem),
+                linear-gradient(150deg, #fafbf8 0%, #f5f8f5 48%, #f8f9f6 100%) !important;
             isolation: isolate;
         }
         .stApp > [data-testid="stAppViewContainer"] {
@@ -100,19 +99,18 @@ def apply_design_system() -> None:
         .stApp::before {
             content: "";
             position: fixed;
-            inset: -8%;
+            inset: -14%;
             z-index: 0;
             pointer-events: none;
-            background-image:
-                radial-gradient(circle at 26% 22%, rgba(47,113,104,.14) 0 1px, transparent 2px),
-                radial-gradient(circle at 73% 68%, rgba(78,126,139,.12) 0 1px, transparent 2px),
-                url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1600 1200' fill='none' stroke='%23587970' stroke-opacity='.29' stroke-width='1.15'%3E%3Cpath d='M-180 235 C115 45 360 415 690 205 S1205 30 1770 290'/%3E%3Cpath d='M-180 276 C125 86 370 456 700 246 S1215 71 1770 331'/%3E%3Cpath d='M-180 317 C135 127 380 497 710 287 S1225 112 1770 372'/%3E%3Cpath d='M-180 358 C145 168 390 538 720 328 S1235 153 1770 413'/%3E%3Cpath d='M-180 399 C155 209 400 579 730 369 S1245 194 1770 454'/%3E%3Cpath d='M-210 835 C105 585 390 1010 735 752 S1280 575 1810 842'/%3E%3Cpath d='M-210 880 C115 630 400 1055 745 797 S1290 620 1810 887'/%3E%3Cpath d='M-210 925 C125 675 410 1100 755 842 S1300 665 1810 932'/%3E%3Cpath d='M1110 -140 C875 160 1360 390 1040 665 S870 1065 1290 1340'/%3E%3Cpath d='M1170 -140 C935 160 1420 390 1100 665 S930 1065 1350 1340'/%3E%3Cpath d='M1230 -140 C995 160 1480 390 1160 665 S990 1065 1410 1340'/%3E%3C/svg%3E");
-            background-position: center;
-            background-repeat: no-repeat;
-            background-size: cover;
-            opacity: .88;
+            background:
+                radial-gradient(ellipse at 22% 26%, rgba(99, 165, 148, .22) 0 12%, transparent 42%),
+                radial-gradient(ellipse at 74% 20%, rgba(152, 181, 193, .20) 0 10%, transparent 39%),
+                radial-gradient(ellipse at 63% 78%, rgba(191, 207, 193, .22) 0 9%, transparent 42%),
+                conic-gradient(from 208deg at 48% 48%, rgba(255,255,255,.08), rgba(72,133,121,.09), rgba(255,255,255,.03), rgba(112,146,163,.08), rgba(255,255,255,.08));
+            filter: blur(44px) saturate(108%);
+            opacity: .76;
             transform-origin: center;
-            animation: ambient-field 12s cubic-bezier(.4,0,.2,1) infinite alternate;
+            animation: ambient-field 18s cubic-bezier(.45,.05,.25,1) infinite alternate;
         }
         .stApp::after {
             content: "";
@@ -121,34 +119,35 @@ def apply_design_system() -> None:
             z-index: 0;
             pointer-events: none;
             background-image:
-                radial-gradient(ellipse at 76% 18%, rgba(65,130,118,.12), transparent 18rem),
-                linear-gradient(90deg, rgba(243,246,244,.04), rgba(243,246,244,.48) 48%, rgba(243,246,244,.02)),
-                url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1600 1200' fill='none'%3E%3Cg stroke-width='1.15' stroke-opacity='.46'%3E%3Cpath d='M1050 -120V1320' stroke='%23699186'/%3E%3Cpath d='M1165 -120V1320' stroke='%232f7168'/%3E%3Cpath d='M1280 -120V1320' stroke='%237d98a2'/%3E%3Cpath d='M1395 -120V1320' stroke='%2390a09a'/%3E%3C/g%3E%3Cg fill='%23f3f6f4' stroke-width='1.6'%3E%3Ccircle cx='1050' cy='245' r='8' stroke='%23699186'/%3E%3Ccircle cx='1165' cy='410' r='5' stroke='%232f7168'/%3E%3Ccircle cx='1280' cy='665' r='7' stroke='%237d98a2'/%3E%3Ccircle cx='1395' cy='870' r='6' stroke='%2390a09a'/%3E%3Ccircle cx='1050' cy='940' r='58' stroke='%23699186' stroke-dasharray='3 4'/%3E%3Ccircle cx='1165' cy='170' r='38' stroke='%232f7168' stroke-opacity='.8'/%3E%3C/g%3E%3C/svg%3E");
+                radial-gradient(circle at 18% 14%, rgba(47,116,106,.26) 0 .7px, transparent .85px),
+                radial-gradient(circle at 82% 72%, rgba(96,124,138,.20) 0 .65px, transparent .82px),
+                linear-gradient(115deg, transparent 0 43%, rgba(255,255,255,.34) 48%, transparent 54%);
             background-position: center;
-            background-repeat: no-repeat;
-            background-size: cover;
-            opacity: .72;
+            background-repeat: repeat, repeat, no-repeat;
+            background-size: 5px 5px, 7px 7px, cover;
+            mask-image: linear-gradient(to bottom, rgba(0,0,0,.72), rgba(0,0,0,.20) 76%, transparent);
+            opacity: .30;
             transform-origin: center;
-            animation: ambient-nodes 16s cubic-bezier(.4,0,.2,1) infinite alternate;
+            animation: ambient-nodes 22s cubic-bezier(.45,.05,.25,1) infinite alternate;
         }
         @supports (animation-timeline: scroll()) {
             .stApp::after { animation: art-node-scroll linear both; animation-timeline: scroll(root block); }
         }
         @keyframes ambient-field {
-            from { transform: translate3d(-1.8%, -1.1%, 0) scale(1.035) rotate(-.35deg); opacity: .62; }
-            to { transform: translate3d(2.2%, 1.6%, 0) scale(1.085) rotate(.45deg); opacity: .92; }
+            from { transform: translate3d(-2.4%, -1.6%, 0) scale(1.02) rotate(-1.2deg); opacity: .58; }
+            to { transform: translate3d(3.1%, 2.2%, 0) scale(1.09) rotate(1.1deg); opacity: .82; }
         }
         @keyframes ambient-nodes {
-            from { transform: translate3d(0, -1.2%, 0) scale(1.01); opacity: .48; }
-            to { transform: translate3d(-1.6%, 2.2%, 0) scale(1.045); opacity: .78; }
+            from { transform: translate3d(0, -1.4%, 0) scale(1.01); opacity: .20; }
+            to { transform: translate3d(-1.8%, 2.4%, 0) scale(1.04); opacity: .36; }
         }
         @keyframes art-field-scroll {
             from { transform: translate3d(-2%, -1.5%, 0) scale(1.03); opacity: .74; }
             to { transform: translate3d(2.5%, 4%, 0) scale(1.10); opacity: .46; }
         }
         @keyframes art-node-scroll {
-            from { transform: translate3d(0, -5%, 0) scale(1.02); opacity: .38; }
-            to { transform: translate3d(-1.5%, 8%, 0) scale(1.06); opacity: .76; }
+            from { transform: translate3d(0, -3%, 0) scale(1.01); opacity: .16; }
+            to { transform: translate3d(-1.2%, 5%, 0) scale(1.035); opacity: .30; }
         }
         @supports (animation-timeline: view()) {
             .view-reveal {
@@ -513,28 +512,79 @@ def apply_design_system() -> None:
         .data-empty-state strong { color: var(--ink); font-size: 1.35rem; }
         .data-empty-state span { color: var(--ink-soft); }
         [data-testid="stHorizontalBlock"]:has(.research-brand) {
+            display: grid !important;
+            grid-template-columns: minmax(12rem, 1fr) 8.8rem !important;
+            gap: 1rem !important;
             align-items: center !important;
         }
+        [data-testid="stHorizontalBlock"]:has(.research-brand) > [data-testid="stColumn"] {
+            width: auto !important;
+            min-width: 0 !important;
+        }
+        [data-testid="stHorizontalBlock"]:has(.research-brand) > [data-testid="stColumn"]:last-child {
+            width: 8.8rem !important;
+            justify-self: end;
+        }
         [data-testid="stColumn"]:has(.tool-dock-anchor) {
-            padding: .25rem .3rem !important;
-            border: 1px solid var(--line);
-            border-radius: 999px;
-            background: rgba(251,252,250,.78);
-            box-shadow: 0 10px 30px rgba(39,67,60,.06);
-            backdrop-filter: blur(18px) saturate(140%);
-        }
-        [data-testid="stColumn"]:has(.tool-dock-anchor) > [data-testid="stVerticalBlock"] {
-            gap: 0 !important;
-        }
-        .tool-dock-anchor { display: none; }
-        [data-testid="stColumn"]:has(.tool-dock-anchor) [data-testid="stPopoverButton"],
-        [data-testid="stColumn"]:has(.tool-dock-anchor) div[data-baseweb="select"] > div {
-            min-height: 2.35rem !important;
-            height: 2.35rem !important;
-            padding-inline: .65rem !important;
-            font-size: .78rem !important;
+            width: 8.8rem !important;
+            height: fit-content !important;
+            min-height: 0 !important;
+            align-self: center !important;
+            padding: 0 !important;
             border: 0 !important;
             background: transparent !important;
+            box-shadow: none !important;
+        }
+        [data-testid="stColumn"]:has(.tool-dock-anchor) > [data-testid="stVerticalBlock"] {
+            height: fit-content !important;
+            min-height: 0 !important;
+            gap: 0 !important;
+        }
+        [data-testid="stColumn"]:has(.tool-dock-anchor) > [data-testid="stVerticalBlock"] > [data-testid="stLayoutWrapper"] {
+            height: 2.52rem !important;
+            min-height: 2.52rem !important;
+            margin-block: auto !important;
+            display: flex !important;
+            align-items: center !important;
+            padding: .18rem !important;
+            border: 1px solid var(--line);
+            border-radius: 15px;
+            background: rgba(253,254,251,.70);
+            box-shadow: 0 8px 24px rgba(39,67,60,.055), inset 0 1px 0 rgba(255,255,255,.86);
+            backdrop-filter: blur(20px) saturate(125%);
+        }
+        [data-testid="stColumn"]:has(.tool-dock-anchor) > [data-testid="stVerticalBlock"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] {
+            width: 100% !important;
+            height: auto !important;
+        }
+        [data-testid="stColumn"]:has(.tool-dock-anchor) [data-testid="stHorizontalBlock"] {
+            display: grid !important;
+            grid-template-columns: 1fr .78fr !important;
+            gap: 0 !important;
+            align-items: center !important;
+        }
+        [data-testid="stColumn"]:has(.tool-dock-anchor) [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {
+            width: auto !important;
+            min-width: 0 !important;
+            padding: 0 !important;
+        }
+        .tool-dock-anchor { display: none; }
+        [data-testid="stElementContainer"]:has(.tool-dock-anchor) { display: none !important; }
+        [data-testid="stColumn"]:has(.tool-dock-anchor) [data-testid="stPopoverButton"],
+        [data-testid="stColumn"]:has(.tool-dock-anchor) div[data-baseweb="select"] > div {
+            min-height: 2.08rem !important;
+            height: 2.08rem !important;
+            padding-inline: .48rem !important;
+            font-size: .74rem !important;
+            border: 0 !important;
+            background: transparent !important;
+        }
+        [data-testid="stColumn"]:has(.tool-dock-anchor) [data-testid="stPopoverButton"] {
+            border-radius: 11px !important;
+        }
+        [data-testid="stColumn"]:has(.tool-dock-anchor) div[data-baseweb="select"] > div {
+            border-left: 1px solid var(--line) !important;
+            border-radius: 0 11px 11px 0 !important;
         }
 
         @keyframes reveal-up {
@@ -554,7 +604,7 @@ def apply_design_system() -> None:
             .block-container { padding: 1rem 1.25rem 4rem !important; }
             [data-testid="stHorizontalBlock"]:has(.research-brand) {
                 display: grid !important;
-                grid-template-columns: minmax(7.8rem, 1fr) minmax(8.2rem, 10rem) !important;
+                grid-template-columns: minmax(7.8rem, 1fr) 8.35rem !important;
                 gap: 0.55rem !important;
                 align-items: center !important;
             }
@@ -562,17 +612,21 @@ def apply_design_system() -> None:
                 width: auto !important;
                 min-width: 0 !important;
             }
+            [data-testid="stHorizontalBlock"]:has(.research-brand) > [data-testid="stColumn"]:last-child,
+            [data-testid="stColumn"]:has(.tool-dock-anchor) {
+                width: 8.35rem !important;
+            }
             [data-testid="stColumn"]:has(.tool-dock-anchor) [data-testid="stPopoverButton"] {
-                min-height: 2.55rem !important;
-                padding-inline: 0.7rem !important;
-                font-size: 0.75rem !important;
+                min-height: 2.12rem !important;
+                padding-inline: 0.45rem !important;
+                font-size: 0.72rem !important;
                 white-space: nowrap;
             }
             [data-testid="stColumn"]:has(.tool-dock-anchor) div[data-baseweb="select"] > div {
-                min-height: 2.55rem !important;
+                min-height: 2.12rem !important;
             }
             [data-testid="stColumn"]:has(.tool-dock-anchor) div[data-baseweb="select"] {
-                min-width: 3.8rem !important;
+                min-width: 3.2rem !important;
             }
             .research-brand { margin: 0; font-size: 1.05rem; }
             .research-brand-mark { width: 1.7rem; height: 1.7rem; }
