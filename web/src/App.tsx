@@ -887,24 +887,19 @@ function HedgeCalculator({ lang, market, suggestedRatio }: { lang: Lang; market:
   const set = (k: keyof Hedge, n: number) => setV((s) => ({ ...s, [k]: n }));
   const unhedged = v.volume * market * v.fx;
   const protectedBarrels = (v.volume * v.ratio) / 100;
+  const futuresBarrels = protectedBarrels * v.futures / 100;
   const futuresGain =
-    ((protectedBarrels * v.futures) / 100) *
+    futuresBarrels *
     (market - v.budget - v.basis) *
     v.fx;
-  const optionLike =
-    protectedBarrels *
-    (1 - v.futures / 100) *
-    Math.max(0, market - v.budget) *
-    0.62 *
-    v.fx;
   const finance =
-    ((protectedBarrels * v.budget * v.fx * v.margin) / 100) *
+    ((futuresBarrels * v.budget * v.fx * v.margin) / 100) *
     (v.finance / 100) *
     (v.horizon / 365);
-  const fees = (protectedBarrels / v.contract) * v.fee * v.contract * v.fx;
-  const hedged = unhedged - futuresGain - optionLike + finance + fees;
+  const fees = (futuresBarrels / v.contract) * v.fee * v.contract * v.fx;
+  const hedged = unhedged - futuresGain + finance + fees;
   const budget = v.volume * v.budget * v.fx;
-  const marginReq = (protectedBarrels * v.budget * v.fx * v.margin) / 100;
+  const marginReq = (futuresBarrels * v.budget * v.fx * v.margin) / 100;
   return (
     <Card
       title={tx(lang, "采购成本预警测算", "Procurement cost stress test")}
@@ -1316,16 +1311,6 @@ function ForecastLab({ lang }: { lang: Lang }) {
         />
         <Field label={tx(lang, "训练窗口", "Training window")} value={training} suffix={freq === "daily" ? tx(lang,"个观测","observations") : tx(lang,"月","months")} min={60} max={1500} onChange={setTraining} />
         <Field label={tx(lang,"VMD分量","VMD components")} value={imf} suffix={tx(lang,"个","components")} min={3} max={8} onChange={setImf}/>
-        <label className="field">
-          <span>{tx(lang, "模型组合", "Model ensemble")}</span>
-          <div>
-            <select defaultValue="ensemble">
-              <option value="ensemble">{tx(lang, "多尺度组合", "Multi-scale ensemble")}</option>
-              <option value="linear">{tx(lang, "线性基准", "Linear baseline")}</option>
-              <option value="tree">{tx(lang, "树模型", "Tree model")}</option>
-            </select>
-          </div>
-        </label>
       </div>
       <button className="primary compact" onClick={() => void run()}>{running ? tx(lang, "模型运行中…", "Model running…") : tx(lang, "用最新数据运行模型", "Run on latest data")}</button>
       {error && <StatusPanel error text={tx(lang,`预测未完成：${error}`,`Forecast did not complete: ${error}`)}/>} {!liveData.length && !error && <StatusPanel text={tx(lang,"运行后展示真实历史、预测与滚动验证结果。","Run the model to display verified history, forecasts and rolling validation.")}/>} {liveData.length > 0 && <ForecastChart data={liveData} lang={lang} />}
@@ -1392,14 +1377,6 @@ function RiskLab({ lang }: { lang: Lang }) {
             max={60}
             onChange={setForward}
           />
-          <label className="check">
-            <input type="checkbox" defaultChecked />
-            {tx(lang, "使用实时窗口分解", "Use live-window decomposition")}
-          </label>
-          <label className="check">
-            <input type="checkbox" defaultChecked />
-            {tx(lang, "保留数据时间戳", "Preserve data timestamps")}
-          </label>
         </aside>
         <div>
           {error && <StatusPanel error text={tx(lang,`预警未完成：${error}`,`Warning run did not complete: ${error}`)}/>} {!liveRisk && !error && <StatusPanel text={tx(lang,"运行后展示基于真实价格序列计算的历史风险分位。","Run the model to display historical risk percentiles calculated from the official price series.")}/>} {liveRisk && <><RiskChart lang={lang} data={liveRisk.history} threshold={threshold} />
