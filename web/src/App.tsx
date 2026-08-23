@@ -192,15 +192,17 @@ function App() {
         )}
       </header>
       <main id="main">
-        {mode === "landing" && (
-          <Landing
-            t={t}
-            onDecision={() => navigate("decision")}
-            onProfessional={() => navigate("professional")}
-          />
-        )}
-        {mode === "decision" && <Decision lang={lang} t={t} />}
-        {mode === "professional" && <Professional lang={lang} t={t} />}
+        <div key={mode} className={`route-view route-${mode}`}>
+          {mode === "landing" && (
+            <Landing
+              t={t}
+              onDecision={() => navigate("decision")}
+              onProfessional={() => navigate("professional")}
+            />
+          )}
+          {mode === "decision" && <Decision lang={lang} t={t} />}
+          {mode === "professional" && <Professional lang={lang} t={t} />}
+        </div>
       </main>
       <footer>
         <span>© 2026 {t.brand}</span>
@@ -237,6 +239,48 @@ function Landing({
   onDecision: () => void;
   onProfessional: () => void;
 }) {
+  const [quotes, setQuotes] = useState({
+    brent: 94.39,
+    brentMove: 1.8,
+    wti: 90.77,
+    wtiMove: 1.4,
+    updated: "",
+  });
+
+  useEffect(() => {
+    let active = true;
+    const loadQuote = async (id: string) => {
+      const result = await fetchSeries(id, "daily");
+      const latest = result.points.at(-1);
+      const previous = result.points.at(-2);
+      return {
+        value: latest?.value,
+        move:
+          latest && previous
+            ? ((latest.value / previous.value - 1) * 100)
+            : undefined,
+        updated: result.updated,
+      };
+    };
+    void Promise.allSettled([loadQuote("EIA-BRENT"), loadQuote("FRED-DCOILWTICO")]).then(
+      ([brentResult, wtiResult]) => {
+        if (!active) return;
+        const brent = brentResult.status === "fulfilled" ? brentResult.value : null;
+        const wti = wtiResult.status === "fulfilled" ? wtiResult.value : null;
+        setQuotes((current) => ({
+          brent: brent?.value ?? current.brent,
+          brentMove: brent?.move ?? current.brentMove,
+          wti: wti?.value ?? current.wti,
+          wtiMove: wti?.move ?? current.wtiMove,
+          updated: [brent?.updated, wti?.updated].filter(Boolean).sort().at(-1) || "",
+        }));
+      },
+    );
+    return () => {
+      active = false;
+    };
+  }, []);
+
   return (
     <section className="hero">
       <div className="hero-copy">
@@ -263,28 +307,69 @@ function Landing({
         </div>
       </div>
       <div className="signal-stage">
-        <div className="orb">
-          <span />
-          <i />
-          <b />
-        </div>
+        <EnergyGlobe />
         <div className="metric-float mf-one">
           <small>BRENT</small>
-          <strong>$94.39</strong>
-          <em>+1.8%</em>
+          <strong>${quotes.brent.toFixed(2)}</strong>
+          <em>{quotes.brentMove >= 0 ? "+" : ""}{quotes.brentMove.toFixed(1)}%</em>
         </div>
         <div className="metric-float mf-two">
-          <small>RISK</small>
+          <small>WTI</small>
+          <strong>${quotes.wti.toFixed(2)}</strong>
+          <em>{quotes.wtiMove >= 0 ? "+" : ""}{quotes.wtiMove.toFixed(1)}%</em>
+        </div>
+        <div className="metric-float mf-three">
+          <small>MARKET RISK</small>
           <strong>63.4</strong>
           <em>中高</em>
         </div>
         <div className="pulse-line">
+          <span>{quotes.updated ? `数据更新至 ${quotes.updated}` : "正在同步官方市场数据"}</span>
           <svg viewBox="0 0 500 160">
             <path d="M0 117 C30 105 45 132 80 110 S125 42 160 70 S214 122 250 82 S310 21 350 59 S405 119 500 42" />
           </svg>
         </div>
       </div>
     </section>
+  );
+}
+
+function EnergyGlobe() {
+  return (
+    <div className="energy-globe" aria-label="持续转动的全球能源与市场数据网络">
+      <div className="globe-halo" />
+      <div className="globe-sphere">
+        <div className="globe-grid" />
+        <div className="world-belt">
+          <svg viewBox="0 0 1200 420" role="img" aria-label="世界能源市场地图">
+            <g className="land" transform="translate(0 2)">
+              <path d="M82 94l48-32 72 9 40 31 53 11 27 39-22 37-49 13-18 45-45 31-21-52-43-22-18-49-39-19z" />
+              <path d="M245 250l38 22 19 53-18 70-30-23-9-55-24-38z" />
+              <path d="M443 91l54-30 73 10 36 25 63-10 94 35 38 37-29 32-67-7-41 24-56-9-33 41-36-17-24-51-48-11-34-31z" />
+              <path d="M529 214l58 8 38 45-13 77-41 44-43-37-22-73z" />
+              <path d="M803 292l53-22 47 26 11 46-59 24-47-24z" />
+              <path d="M1004 95l48-31 72 8 40 31 53 11 27 39-23 37-48 13-18 45-45 31-21-52-43-22-18-49-39-19z" />
+            </g>
+            <g className="energy-routes">
+              <path d="M142 174 Q320 42 546 192 T884 165" />
+              <path d="M276 282 Q470 168 648 286 T1010 204" />
+              <circle cx="142" cy="174" r="5" />
+              <circle cx="546" cy="192" r="5" />
+              <circle cx="884" cy="165" r="5" />
+              <circle cx="648" cy="286" r="5" />
+            </g>
+          </svg>
+        </div>
+        <div className="globe-shade" />
+        <div className="globe-scan" />
+      </div>
+      <div className="energy-orbit orbit-a"><i /></div>
+      <div className="energy-orbit orbit-b"><i /></div>
+      <div className="oil-signal" aria-hidden="true">
+        <svg viewBox="0 0 32 42"><path d="M16 1C13 8 4 17 4 27a12 12 0 0 0 24 0C28 17 19 8 16 1Z" /></svg>
+        <span>ENERGY FLOW</span>
+      </div>
+    </div>
   );
 }
 
@@ -343,16 +428,22 @@ function Decision({
   const [frequency, setFrequency] = useState<Frequency>("daily");
   const [livePoints, setLivePoints] = useState<Array<{ date: string; value: number }>>([]);
   const [liveUpdated, setLiveUpdated] = useState("");
+  const [wti, setWti] = useState<number | null>(null);
   useEffect(() => {
     let active = true;
-    void fetchSeries("EIA-BRENT", frequency)
-      .then((result) => {
+    void Promise.allSettled([
+      fetchSeries("EIA-BRENT", frequency),
+      fetchSeries("FRED-DCOILWTICO", frequency),
+    ]).then(([brentResult, wtiResult]) => {
+        const result = brentResult.status === "fulfilled" ? brentResult.value : null;
         if (!active) return;
-        setLivePoints(result.points);
-        setLiveUpdated(result.updated);
-      })
-      .catch(() => {
-        if (active) { setLivePoints([]); setLiveUpdated(""); }
+        setLivePoints(result?.points || []);
+        setLiveUpdated(result?.updated || "");
+        setWti(
+          wtiResult.status === "fulfilled"
+            ? wtiResult.value.points.at(-1)?.value ?? null
+            : null,
+        );
       });
     return () => { active = false; };
   }, [frequency]);
@@ -380,6 +471,7 @@ function Decision({
           value={`$${latest.toFixed(2)}`}
           delta="日变动 +1.8%"
         />
+        <Kpi label="WTI" value={wti == null ? "同步中" : `$${wti.toFixed(2)}`} delta="美国原油现货" />
         <Kpi label="30日中位路径" value="$96.18" delta="较现价 +1.9%" />
         <Kpi label="95%决策区间" value="$81.3—112.7" />
         <Kpi

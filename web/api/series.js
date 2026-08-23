@@ -19,18 +19,24 @@ function monthly(points) {
 async function fetchFred(providerId, start, end) {
   const key = process.env.FRED_API_KEY;
   if (key) {
-    const url = new URL("https://api.stlouisfed.org/fred/series/observations");
-    url.searchParams.set("series_id", providerId);
-    url.searchParams.set("api_key", key);
-    url.searchParams.set("file_type", "json");
-    url.searchParams.set("observation_start", start);
-    url.searchParams.set("observation_end", end);
-    const result = await fetch(url, { headers: { accept: "application/json" } });
-    if (!result.ok) throw new Error(`FRED ${result.status}`);
-    const payload = await result.json();
-    return payload.observations
-      .filter((row) => row.value !== "." && Number.isFinite(Number(row.value)))
-      .map((row) => ({ date: row.date, value: Number(row.value) }));
+    try {
+      const url = new URL("https://api.stlouisfed.org/fred/series/observations");
+      url.searchParams.set("series_id", providerId);
+      url.searchParams.set("api_key", key);
+      url.searchParams.set("file_type", "json");
+      url.searchParams.set("observation_start", start);
+      url.searchParams.set("observation_end", end);
+      const result = await fetch(url, { headers: { accept: "application/json" } });
+      if (result.ok) {
+        const payload = await result.json();
+        const points = payload.observations
+          .filter((row) => row.value !== "." && Number.isFinite(Number(row.value)))
+          .map((row) => ({ date: row.date, value: Number(row.value) }));
+        if (points.length) return points;
+      }
+    } catch {
+      // The official CSV endpoint below remains available without a key.
+    }
   }
   const url = new URL("https://fred.stlouisfed.org/graph/fredgraph.csv");
   url.searchParams.set("id", providerId);
