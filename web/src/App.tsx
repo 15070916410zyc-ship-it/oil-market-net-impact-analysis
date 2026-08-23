@@ -49,7 +49,7 @@ import {
   type DataSeries,
   type Frequency,
 } from "./data";
-import { checkApiHealth, fetchCatalog, fetchSeries, saveLocalRecord } from "./storage";
+import { checkApiHealth, fetchCatalog, fetchSeries, requestLiveAnalysis, saveLocalRecord } from "./storage";
 
 type Lang = "zh" | "en";
 type Mode = "landing" | "decision" | "professional";
@@ -975,6 +975,15 @@ function Tab({
 function ImpactLab() {
   const [imf, setImf] = useState(5);
   const [window, setWindow] = useState(60);
+  const [components, setComponents] = useState<Array<{ imf: string; channelZh: string; volatilityShare: number }>>([]);
+  const [running, setRunning] = useState(false);
+  const run = async () => {
+    setRunning(true);
+    try {
+      const result = await requestLiveAnalysis<{ components: typeof components }>("/api/models/decomposition", { imf });
+      if (result) setComponents(result.components);
+    } finally { setRunning(false); }
+  };
   return (
     <Card
       title="多尺度净影响分析"
@@ -1001,10 +1010,11 @@ function ImpactLab() {
               <input type="date" defaultValue="2026-07-31" />
             </div>
           </label>
-          <button className="primary compact">重新计算</button>
+          <button className="primary compact" onClick={() => void run()}>{running ? "正在计算…" : "重新计算"}</button>
         </aside>
         <div>
           <DriverChart />
+          {components.length > 0 && <div className="metric-table">{components.map((item) => <span key={item.imf}><b>{item.imf} · {item.channelZh}</b>{item.volatilityShare.toFixed(1)}%</span>)}</div>}
           <div className="method-steps">
             <span>01 数据对齐</span>
             <span>02 分解 {imf} 个分量</span>
@@ -1020,7 +1030,23 @@ function ImpactLab() {
 function ForecastLab() {
   const [freq, setFreq] = useState<Frequency>("monthly");
   const [h, setH] = useState(12);
-  const data = useMemo(() => makeForecast(freq, h), [freq, h]);
+  const [liveData, setLiveData] = useState<ReturnType<typeof makeForecast>>([]);
+  const [metrics, setMetrics] = useState<Record<string, number>>({});
+  const [running, setRunning] = useState(false);
+  const run = async () => {
+    setRunning(true);
+    try {
+      const result = await requestLiveAnalysis<{ history: Array<{ Date: string; Actual: number }>; forecast: Array<Record<string, number | string>>; metrics: Record<string, number> }>("/api/models/forecast", { horizon: h });
+      if (result) {
+        setLiveData([
+          ...result.history.map((row) => ({ date: row.Date, actual: row.Actual })),
+          ...result.forecast.map((row) => ({ date: String(row.Date), forecast: Number(row.PointForecast), lo50: Number(row.Lower50), hi50: Number(row.Upper50), lo80: Number(row.Lower80), hi80: Number(row.Upper80), lo95: Number(row.Lower95), hi95: Number(row.Upper95) })),
+        ]);
+        setMetrics(result.metrics);
+      }
+    } finally { setRunning(false); }
+  };
+  const data = liveData.length ? liveData : makeForecast(freq, h);
   return (
     <Card
       title="价格预测实验"
@@ -1055,16 +1081,17 @@ function ForecastLab() {
           </div>
         </label>
       </div>
+      <button className="primary compact" onClick={() => void run()}>{running ? "模型运行中…" : "用最新数据运行模型"}</button>
       <ForecastChart data={data} />
       <div className="metric-table">
         <span>
-          <b>MAE</b> 3.18
+          <b>MAE</b> {metrics.ValidationMAE?.toFixed?.(2) ?? "3.18"}
         </span>
         <span>
-          <b>RMSE</b> 4.72
+          <b>RMSE</b> {metrics.ValidationRMSE?.toFixed?.(2) ?? "4.72"}
         </span>
         <span>
-          <b>方向准确率</b> 61.7%
+          <b>方向准确率</b> {metrics.DirectionalAccuracyPercent?.toFixed?.(1) ?? "61.7"}%
         </span>
         <span>
           <b>区间覆盖率</b> 82.4%
@@ -1076,6 +1103,15 @@ function ForecastLab() {
 
 function RiskLab() {
   const [threshold, setThreshold] = useState(70);
+  const [liveRisk, setLiveRisk] = useState<number | null>(null);
+  const [running, setRunning] = useState(false);
+  const run = async () => {
+    setRunning(true);
+    try {
+      const result = await requestLiveAnalysis<{ riskScore: number }>("/api/models/risk", {});
+      if (result) setLiveRisk(result.riskScore);
+    } finally { setRunning(false); }
+  };
   return (
     <Card
       title="危机风险预警"
@@ -1093,6 +1129,7 @@ function RiskLab() {
             suffix="分"
             onChange={setThreshold}
           />
+          <button className="primary compact" onClick={() => void run()}>{running ? "模型运行中…" : "用最新数据运行预警"}</button>
           <Field
             label="前瞻窗口"
             value={20}
@@ -1118,10 +1155,10 @@ function RiskLab() {
               <b>Brier</b> 0.137
             </span>
             <span>
-              <b>当前风险</b> 63.4
+              <b>当前风险</b> {(liveRisk ?? 63.4).toFixed(1)}
             </span>
             <span>
-              <b>距离阈值</b> {Math.max(0, threshold - 63.4).toFixed(1)}
+              <b>距离阈值</b> {Math.max(0, threshold - (liveRisk ?? 63.4)).toFixed(1)}
             </span>
           </div>
         </div>

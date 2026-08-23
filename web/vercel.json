@@ -1,5 +1,13 @@
 {
+  "functions": {
+    "api/models.py": {
+      "maxDuration": 300,
+      "memory": 2048,
+      "includeFiles": "../src/**"
+    }
+  },
   "rewrites": [
+    { "source": "/api/models/:path*", "destination": "/api/models.py/:path*" },
     { "source": "/api/:path*", "destination": "/api/:path*" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
