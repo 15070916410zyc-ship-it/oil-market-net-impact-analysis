@@ -65,7 +65,7 @@ body{background:#fbfcfc}
 .oil-signal svg{width:13px;height:18px;fill:none;stroke:#bd7548;stroke-width:1.6}
 .risk-high .oil-signal{color:#9a512d}.risk-high .oil-signal svg{stroke:#b66135}.risk-high .energy-orbit i{background:#b95f33;box-shadow:0 0 0 7px rgba(185,95,51,.12),0 0 20px rgba(185,95,51,.62)}
 .metric-float{z-index:9;background:rgba(255,255,255,.78);border-color:rgba(255,255,255,.92);box-shadow:0 30px 75px -42px rgba(21,66,62,.48)}
-.mf-one{left:1%;top:24%}.mf-two{right:0;top:13%;animation-delay:-3s}.mf-three{right:1%;top:42%;animation-delay:-6s}
+.mf-one{left:1%;top:24%}.mf-two{right:4%;top:13%;animation-delay:-3s}.mf-three{right:3%;top:42%;animation-delay:-6s}
 .pulse-line{z-index:7;left:0;bottom:5%;height:175px;background:rgba(255,255,255,.7);border-color:rgba(28,82,78,.1);box-shadow:0 35px 85px -52px rgba(22,64,61,.48)}
 .pulse-line span{position:absolute;z-index:2;top:1rem;left:1.15rem;color:#70827f;font:500 .58rem "Space Grotesk";letter-spacing:.06em}
 .pulse-line svg{padding-top:1.1rem}
