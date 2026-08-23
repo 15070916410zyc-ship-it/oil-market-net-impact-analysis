@@ -60,7 +60,8 @@ const tx = (lang: Lang, zh: string, en: string) => (lang === "zh" ? zh : en);
 type DriverResult = { id: string; nameZh: string; nameEn: string; impact: number; coefficient: number };
 type ComponentResult = { imf: string; channelZh: string; channelEn: string; centerFrequency: number; volatilityShare: number; points: Array<{ date: string; value: number }> };
 type GrangerResult = { id: string; nameZh: string; nameEn: string; lag: number; fStatistic: number; pValue: number; significant: boolean };
-type NetImpactResult = { mode: string; method: string; asOf: string; observations: number; rSquared: number; drivers: DriverResult[]; granger: GrangerResult[]; components: ComponentResult[]; rolling: Array<{ date: string; observed: number; fitted: number }>; sources: Array<{ id: string; providerId: string; nameZh: string; nameEn: string }> };
+type ScaleGrangerResult = GrangerResult & { imf: string };
+type NetImpactResult = { mode: string; method: string; asOf: string; observations: number; rSquared: number; drivers: DriverResult[]; granger: GrangerResult[]; scaleGranger: ScaleGrangerResult[]; selectedScales: Array<{id:string;nameZh:string;nameEn:string;imf:string;pValue:number}>; components: ComponentResult[]; fevd: Array<{id:string;nameZh:string;nameEn:string;share:number}>; fevdOwnShare:number; fevdHorizon:number; varLag:number; rolling: Array<{ date: string; observed: number; fitted: number }>; rollingFevd:Array<{date:string;externalShare:number;ownShare:number;lag:number}>; breakTest:{candidateCount:number;bestDate:string;rssImprovementPercent:number;profile:Array<{date:string;rss:number;improvementPercent:number}>}; sources: Array<{ id: string; providerId: string; nameZh: string; nameEn: string }> };
 type RiskResult = { mode: string; method: string; latestDate: string; riskScore: number; alertThreshold: number; alert: boolean; history: Array<{ date: string; score: number }> };
 type ForecastResult = { mode: string; method: string; asOf: string; latestPrice: number; history: Array<{ Date: string; Actual: number }>; forecast: Array<Record<string, number | string>>; metrics: Record<string, number>; components: Array<{ imf: string; channelZh: string; channelEn: string; centerFrequency: number; latestForecast: number }> };
 
@@ -1055,6 +1056,19 @@ function GrangerChart({ lang, data, alpha }: { lang: Lang; data: GrangerResult[]
 function RollingImpactChart({ lang, data }: { lang: Lang; data: NetImpactResult["rolling"] }) {
   return <ChartFrame label={tx(lang,"拖动底部范围条查看滚动结果","Drag the range selector to inspect the rolling result")}><div className="chart medium"><ResponsiveContainer><LineChart data={data}><CartesianGrid vertical={false}/><XAxis dataKey="date" minTickGap={35} tick={{fontSize:10}}/><YAxis tick={{fontSize:10}}/><Tooltip/><Legend/><Line dataKey="observed" name={tx(lang,"实际变动","Observed change")} stroke="#30343d" dot={false}/><Line dataKey="fitted" name={tx(lang,"模型拟合","Model fit")} stroke="#6f69a2" dot={false}/><Brush dataKey="date" height={22} stroke="#6f69a2"/></LineChart></ResponsiveContainer></div></ChartFrame>;
 }
+
+function FevdChart({ lang, data }: { lang: Lang; data: NetImpactResult["fevd"] }) {
+  const rows = data.map((row) => ({ name: lang === "zh" ? row.nameZh : row.nameEn, share: row.share }));
+  return <ChartFrame label={tx(lang,"缩放查看各因素对油价预测误差的解释份额","Zoom to inspect factor shares of oil-price forecast error variance")}><div className="chart medium"><ResponsiveContainer><BarChart data={rows} layout="vertical" margin={{left:35,right:30}}><CartesianGrid horizontal={false}/><XAxis type="number" unit="%"/><YAxis type="category" dataKey="name" width={150} tick={{fontSize:10}}/><Tooltip formatter={(v)=>[`${Number(v).toFixed(2)}%`,tx(lang,"份额","Share")]}/><Bar dataKey="share" fill="#c47d59" radius={[0,8,8,0]}/></BarChart></ResponsiveContainer></div></ChartFrame>;
+}
+
+function RollingFevdChart({ lang, data }: { lang: Lang; data: NetImpactResult["rollingFevd"] }) {
+  return <ChartFrame label={tx(lang,"拖动范围条查看冲击来源随时间的变化","Drag the range selector to inspect changing shock sources")}><div className="chart medium"><ResponsiveContainer><AreaChart data={data}><CartesianGrid vertical={false}/><XAxis dataKey="date" minTickGap={35} tick={{fontSize:10}}/><YAxis domain={[0,100]} unit="%"/><Tooltip formatter={(v)=>`${Number(v).toFixed(2)}%`}/><Legend/><Area dataKey="externalShare" name={tx(lang,"外部因素冲击","External-factor shocks")} stackId="1" stroke="#c47d59" fill="#ead0c1"/><Area dataKey="ownShare" name={tx(lang,"油价自身冲击","Oil-price own shocks")} stackId="1" stroke="#6f69a2" fill="#d9d5ea"/><Brush dataKey="date" height={22} stroke="#6f69a2"/></AreaChart></ResponsiveContainer></div></ChartFrame>;
+}
+
+function BreakChart({ lang, data }: { lang: Lang; data: NetImpactResult["breakTest"]["profile"] }) {
+  return <ChartFrame label={tx(lang,"拖动范围条检查候选结构变化日期","Drag the range selector to inspect candidate break dates")}><div className="chart medium"><ResponsiveContainer><LineChart data={data}><CartesianGrid vertical={false}/><XAxis dataKey="date" minTickGap={35} tick={{fontSize:10}}/><YAxis unit="%"/><Tooltip formatter={(v)=>[`${Number(v).toFixed(2)}%`,tx(lang,"分段拟合改善","Segmented-fit improvement")]}/><Line dataKey="improvementPercent" stroke="#587a9a" dot={false}/><Brush dataKey="date" height={22} stroke="#587a9a"/></LineChart></ResponsiveContainer></div></ChartFrame>;
+}
 function Advice({
   n,
   title,
@@ -1147,6 +1161,7 @@ function ImpactLab({ lang }: { lang: Lang }) {
   const [imf, setImf] = useState(5);
   const [window, setWindow] = useState(60);
   const [maxLag, setMaxLag] = useState(5);
+  const [fevdHorizon, setFevdHorizon] = useState(12);
   const [alpha, setAlpha] = useState(.1);
   const [start, setStart] = useState("2005-01-01");
   const [end, setEnd] = useState(new Date().toISOString().slice(0, 10));
@@ -1170,7 +1185,7 @@ function ImpactLab({ lang }: { lang: Lang }) {
   const run = async () => {
     setRunning(true); setError(""); setResult(null);
     try {
-      const payload = await requestLiveAnalysis<NetImpactResult>("/api/models/net-impact", { imf, window, maxLag, alpha, start, end, target, factors: [...factors] });
+      const payload = await requestLiveAnalysis<NetImpactResult>("/api/models/net-impact", { imf, window, maxLag, fevdHorizon, alpha, start, end, target, factors: [...factors] });
       if (payload) setResult(payload);
     } catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)); }
     finally { setRunning(false); }
@@ -1200,6 +1215,7 @@ function ImpactLab({ lang }: { lang: Lang }) {
             onChange={setWindow}
           />
           <Field label={tx(lang, "最大格兰杰滞后", "Maximum Granger lag")} value={maxLag} suffix={tx(lang, "阶", "lags")} min={1} max={6} onChange={setMaxLag} />
+          <Field label={tx(lang, "FEVD预测期", "FEVD horizon")} value={fevdHorizon} suffix={tx(lang, "期", "steps")} min={2} max={36} onChange={setFevdHorizon} />
           <Field label={tx(lang, "显著性阈值", "Significance level")} value={alpha} suffix="α" step={.01} min={.01} max={.2} onChange={setAlpha} />
           <DateField lang={lang} label={tx(lang, "估计开始", "Estimation start")} value={start} onChange={setStart} />
           <DateField lang={lang} label={tx(lang, "估计结束", "Estimation end")} value={end} onChange={setEnd} />
@@ -1216,14 +1232,23 @@ function ImpactLab({ lang }: { lang: Lang }) {
             <h3 className="result-title">B · VMD</h3><ScaleCard lang={lang} components={result.components} />
             <h3 className="result-title">C · {tx(lang,"格兰杰检验","Granger tests")}</h3><GrangerChart lang={lang} data={result.granger} alpha={alpha} />
             <div className="granger-table">{result.granger.map((row) => <div key={row.id}><b>{lang === "zh" ? row.nameZh : row.nameEn}</b><span>lag {row.lag}</span><span>F {row.fStatistic.toFixed(3)}</span><span>p {row.pValue.toFixed(4)}</span><em className={row.significant ? "yes" : ""}>{row.significant ? tx(lang,"通过","Pass") : tx(lang,"未通过","Not significant")}</em></div>)}</div>
-            <h3 className="result-title">D · {tx(lang,"滚动样本拟合","Rolling-window fit")}</h3><RollingImpactChart lang={lang} data={result.rolling} />
+            <h3 className="result-title">D · {tx(lang,"逐分量格兰杰检验","Granger tests by IMF")}</h3>
+            <div className="granger-table">{result.scaleGranger.map((row) => <div key={`${row.id}-${row.imf}`}><b>{lang === "zh" ? row.nameZh : row.nameEn}</b><span>{row.imf}</span><span>lag {row.lag}</span><span>p {row.pValue.toFixed(4)}</span><em className={row.significant ? "yes" : ""}>{row.significant ? tx(lang,"通过","Pass") : tx(lang,"未通过","Not significant")}</em></div>)}</div>
+            <h3 className="result-title">E · {tx(lang,`广义FEVD（${result.fevdHorizon}期，VAR(${result.varLag})）`,`Generalized FEVD (${result.fevdHorizon} steps, VAR(${result.varLag}))`)}</h3><FevdChart lang={lang} data={result.fevd}/>
+            <div className="metric-table"><span><b>{tx(lang,"油价自身冲击份额","Oil-price own-shock share")}</b>{result.fevdOwnShare.toFixed(2)}%</span><span><b>{tx(lang,"外部因素冲击份额","External-factor shock share")}</b>{(100-result.fevdOwnShare).toFixed(2)}%</span></div>
+            <h3 className="result-title">F · {tx(lang,"滚动FEVD","Rolling FEVD")}</h3><RollingFevdChart lang={lang} data={result.rollingFevd}/>
+            <h3 className="result-title">G · {tx(lang,"滚动样本拟合","Rolling-window fit")}</h3><RollingImpactChart lang={lang} data={result.rolling} />
+            <h3 className="result-title">H · {tx(lang,"结构变化候选检验","Candidate structural-break test")}</h3><BreakChart lang={lang} data={result.breakTest.profile}/>
+            <div className="metric-table"><span><b>{tx(lang,"最优候选日期","Best candidate date")}</b>{result.breakTest.bestDate}</span><span><b>{tx(lang,"分段RSS改善","Segmented RSS improvement")}</b>{result.breakTest.rssImprovementPercent.toFixed(2)}%</span><span><b>{tx(lang,"检验候选数","Candidates tested")}</b>{result.breakTest.candidateCount}</span></div>
             <div className="provenance"><Database/><span><b>{tx(lang,"本次数据血缘","Data provenance")}</b><small>{result.sources.map((s) => `${lang === "zh" ? s.nameZh : s.nameEn} [FRED:${s.providerId}]`).join(" · ")}</small></span></div>
           </>}
           <div className="method-steps">
             <span>{tx(lang, "01 数据对齐", "01 Data alignment")}</span>
             <span>{tx(lang, `02 分解 ${imf} 个分量`, `02 Decompose ${imf} components`)}</span>
             <span>{tx(lang, "03 BIC选择滞后与格兰杰检验", "03 BIC lag selection and Granger tests")}</span>
-            <span>{tx(lang, "04 标准化OLS贡献与滚动拟合", "04 Standardized OLS contributions and rolling fit")}</span>
+            <span>{tx(lang, "04 逐分量检验与尺度筛选", "04 IMF-level tests and scale selection")}</span>
+            <span>{tx(lang, "05 广义FEVD与滚动冲击份额", "05 Generalized and rolling FEVD")}</span>
+            <span>{tx(lang, "06 滚动拟合与结构变化检验", "06 Rolling fit and structural-break search")}</span>
           </div>
         </div>
       </div>

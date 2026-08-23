@@ -137,6 +137,65 @@ def granger_test(y, x, max_lag):
         if best is None or row[0] < best[0]: best = row
     return best or (float("nan"), 1, 0.0, 1.0)
 
+def fit_var(data, lag):
+    """Fit a reduced-form VAR with an intercept and return coefficients/covariance."""
+    n, variables = data.shape
+    dependent = data[lag:]
+    design = np.column_stack([np.ones(n-lag)] + [data[lag-k:n-k] for k in range(1, lag+1)])
+    coefficients = np.linalg.lstsq(design, dependent, rcond=None)[0]
+    residuals = dependent-design@coefficients
+    degrees = max(len(residuals)-design.shape[1], 1)
+    covariance = residuals.T@residuals/degrees
+    return coefficients, covariance, residuals
+
+def select_var_lag(data, max_lag):
+    best = None
+    variables = data.shape[1]
+    for lag in range(1, max_lag+1):
+        if len(data)-lag <= variables*lag+2: continue
+        coefficients, covariance, residuals = fit_var(data, lag)
+        sign, logdet = np.linalg.slogdet(covariance + np.eye(variables)*1e-10)
+        if sign <= 0: continue
+        bic = logdet + math.log(len(residuals))*(variables*variables*lag+variables)/len(residuals)
+        if best is None or bic < best[0]: best = (bic, lag, coefficients, covariance)
+    if best is None: raise ValueError("Insufficient observations for VAR estimation")
+    return best[1], best[2], best[3]
+
+def generalized_fevd(data, horizon, max_lag):
+    """Pesaran-Shin generalized FEVD, row-normalized for correlated innovations."""
+    lag, coefficients, covariance = select_var_lag(data, max_lag)
+    variables = data.shape[1]
+    ar = [coefficients[1+i*variables:1+(i+1)*variables].T for i in range(lag)]
+    phi = [np.eye(variables)]
+    for step in range(1, horizon):
+        value = np.zeros((variables, variables))
+        for offset in range(1, min(lag, step)+1): value += phi[step-offset]@ar[offset-1]
+        phi.append(value)
+    theta = np.zeros((variables, variables))
+    diagonal = np.maximum(np.diag(covariance), 1e-12)
+    for i in range(variables):
+        denominator = sum(float((matrix@covariance@matrix.T)[i, i]) for matrix in phi)
+        for j in range(variables):
+            numerator = sum(float((matrix@covariance)[i, j])**2 for matrix in phi)/diagonal[j]
+            theta[i, j] = numerator/max(denominator, 1e-12)
+    theta /= np.maximum(theta.sum(axis=1, keepdims=True), 1e-12)
+    return lag, theta
+
+def segmented_break_test(values, dates):
+    """Search interior break dates by comparing pooled and two-segment OLS RSS."""
+    y = np.asarray(values, dtype=float); t = np.arange(len(y), dtype=float)
+    pooled = ols_sse(np.column_stack([np.ones(len(y)), t]), y)
+    minimum = max(18, len(y)//8); profile = []; best = None
+    for split in range(minimum, len(y)-minimum, max(1, len(y)//80)):
+        left_x = np.column_stack([np.ones(split), t[:split]])
+        right_x = np.column_stack([np.ones(len(y)-split), t[split:]-t[split]])
+        rss = ols_sse(left_x, y[:split])+ols_sse(right_x, y[split:])
+        improvement = max(0.0, 1-rss/max(pooled, 1e-12))*100
+        row = {"date": dates[split], "rss": float(rss), "improvementPercent": float(improvement)}
+        profile.append(row)
+        if best is None or rss < best[0]: best = (rss, row)
+    return {"candidateCount": len(profile), "bestDate": best[1]["date"], "rssImprovementPercent": best[1]["improvementPercent"], "profile": profile}
+
 def net_impact(payload):
     target = payload.get("target", "EIA-BRENT"); selected = [x for x in payload.get("factors", []) if (x in SERIES or re.fullmatch(r"FRED-[A-Z0-9_]+", x)) and x != target]
     if not selected: selected = ["FRED-PETINV", "FRED-DTWEXBGS", "FRED-DGS10", "FRED-INDPRO", "FRED-T10YIE", "FRED-VIXCLS", "FRED-HENRYHUB"]
@@ -154,12 +213,34 @@ def net_impact(payload):
         meta = series_meta(sid); _, lag, statistic, p_value = granger_test(y, x[:, index], max_lag); granger.append({"id": sid, "nameZh": meta[1], "nameEn": meta[2], "lag": lag, "fStatistic": statistic, "pValue": p_value, "significant": p_value < alpha})
     modes, freq = decompose(y_level[-min(600, len(y_level)):], count); component_dates = common[-modes.shape[1]:]
     components = [{"imf": f"IMF{i+1}", "channelZh": CHANNELS_ZH[i] if i < 5 else "长期趋势", "channelEn": CHANNELS_EN[i] if i < 5 else "Long-run trend", "centerFrequency": float(freq[i]), "volatilityShare": float(np.var(modes[i])/max(np.var(y_level), 1e-12)*100), "points": [{"date": d, "value": float(v)} for d, v in zip(component_dates[-180:], modes[i, -180:])]} for i in range(count)]
-    window = min(max(int(payload.get("window", 60)), 24), len(y)); rolling = []
+    # Multi-resolution Granger tests use decompositions of the same aligned monthly sample.
+    y_modes, _ = decompose(y, count); factor_modes = [decompose(x[:, index], count)[0] for index in range(len(selected))]
+    scale_granger = []
+    for factor_index, sid in enumerate(selected):
+        meta = series_meta(sid)
+        for scale_index in range(count):
+            _, lag, statistic, p_value = granger_test(y_modes[scale_index], factor_modes[factor_index][scale_index], max_lag)
+            scale_granger.append({"id": sid, "nameZh": meta[1], "nameEn": meta[2], "imf": f"IMF{scale_index+1}", "lag": lag, "fStatistic": statistic, "pValue": p_value, "significant": p_value < alpha})
+    selected_scales = []
+    for sid in selected:
+        candidates = [row for row in scale_granger if row["id"] == sid]
+        chosen = min(candidates, key=lambda row: row["pValue"])
+        selected_scales.append({"id": sid, "nameZh": chosen["nameZh"], "nameEn": chosen["nameEn"], "imf": chosen["imf"], "pValue": chosen["pValue"]})
+    horizon = min(max(int(payload.get("fevdHorizon", 12)), 2), 36)
+    var_data = np.column_stack([y, x])
+    var_lag, fevd_matrix = generalized_fevd(var_data, horizon, max_lag)
+    fevd = [{"id": sid, "nameZh": series_meta(sid)[1], "nameEn": series_meta(sid)[2], "share": float(fevd_matrix[0, index+1]*100)} for index, sid in enumerate(selected)]
+    own_share = float(fevd_matrix[0, 0]*100)
+    window = min(max(int(payload.get("window", 60)), 24), len(y)); rolling = []; rolling_fevd = []
     for end in range(window, len(y)+1):
         local_x, local_y = x[end-window:end], y[end-window:end]; local_design = np.column_stack([np.ones(window), local_x]); local_beta = np.linalg.lstsq(local_design, local_y, rcond=None)[0]
         rolling.append({"date": common[end], "observed": float(local_y[-1]), "fitted": float(local_design[-1]@local_beta)})
+        if (end-window) % 3 == 0 or end == len(y):
+            local_lag, local_fevd = generalized_fevd(np.column_stack([local_y, local_x]), horizon, min(max_lag, 3))
+            rolling_fevd.append({"date": common[end], "externalShare": float((1-local_fevd[0,0])*100), "ownShare": float(local_fevd[0,0]*100), "lag": local_lag})
     drivers = [{"id": sid, "nameZh": series_meta(sid)[1], "nameEn": series_meta(sid)[2], "impact": float(contributions[i]), "coefficient": float(beta[i+1])} for i, sid in enumerate(selected)]; drivers.sort(key=lambda row: abs(row["impact"]), reverse=True)
-    return {"mode": "verified-live", "method": "Monthly aligned official series; VMD; BIC-selected Granger F tests; standardized OLS contribution", "asOf": common[-1], "target": target, "observations": len(common), "rSquared": r2, "drivers": drivers, "granger": granger, "components": components, "rolling": rolling[-180:], "sources": [{"id": sid, "providerId": series_meta(sid)[0], "nameZh": series_meta(sid)[1], "nameEn": series_meta(sid)[2]} for sid in [target]+selected]}
+    break_test = segmented_break_test(y, common[1:])
+    return {"mode": "verified-live", "method": "Monthly aligned official series; VMD; multi-resolution Granger tests; generalized FEVD; rolling OLS and FEVD; segmented RSS break search", "asOf": common[-1], "target": target, "observations": len(common), "rSquared": r2, "drivers": drivers, "granger": granger, "scaleGranger": scale_granger, "selectedScales": selected_scales, "components": components, "fevd": fevd, "fevdOwnShare": own_share, "fevdHorizon": horizon, "varLag": var_lag, "rolling": rolling[-180:], "rollingFevd": rolling_fevd[-120:], "breakTest": break_test, "sources": [{"id": sid, "providerId": series_meta(sid)[0], "nameZh": series_meta(sid)[1], "nameEn": series_meta(sid)[2]} for sid in [target]+selected]}
 
 class handler(BaseHTTPRequestHandler):
     def send_json(self, status, payload):
