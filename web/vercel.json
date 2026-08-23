@@ -2,8 +2,7 @@
   "functions": {
     "api/models.py": {
       "maxDuration": 300,
-      "memory": 2048,
-      "includeFiles": "../src/**"
+      "memory": 1024
     }
   },
   "rewrites": [
