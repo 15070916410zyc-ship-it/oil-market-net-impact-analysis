@@ -58,6 +58,7 @@ class handler(BaseHTTPRequestHandler):
     def do_POST(self):
         try:
             payload = json.loads(self.rfile.read(int(self.headers.get("Content-Length", "0"))) or b"{}"); path = urlparse(self.path).path.rstrip("/")
-            result = forecast(payload) if path.endswith("/forecast") else risk() if path.endswith("/risk") else decomposition(payload) if path.endswith("/decomposition") else None
+            action = payload.get("action") or path.rsplit("/", 1)[-1]
+            result = forecast(payload) if action == "forecast" else risk() if action == "risk" else decomposition(payload) if action == "decomposition" else None
             self.send_json(200, result) if result else self.send_json(404, {"error": "Unknown model endpoint"})
         except Exception as exc: self.send_json(500, {"error": "Model execution failed", "detail": str(exc)[:300]})

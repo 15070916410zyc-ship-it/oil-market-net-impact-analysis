@@ -53,10 +53,15 @@ export async function fetchSeries(id: string, frequency: "daily" | "monthly") {
 }
 
 export async function requestLiveAnalysis<T>(path: string, body: unknown): Promise<T | null> {
-  const response = await fetch(apiUrl(path), {
+  const modelAction = path.match(/^\/api\/models\/([^/]+)$/)?.[1];
+  const endpoint = modelAction ? "/api/models" : path;
+  const payload = modelAction && body && typeof body === "object"
+    ? { ...(body as Record<string, unknown>), action: modelAction }
+    : body;
+  const response = await fetch(apiUrl(endpoint), {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
+    body: JSON.stringify(payload),
   });
   if (!response.ok) throw new Error(`Analysis API returned ${response.status}`);
   return response.json() as Promise<T>;
