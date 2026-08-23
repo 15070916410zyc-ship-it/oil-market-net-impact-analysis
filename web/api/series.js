@@ -54,7 +54,7 @@ async function fetchFred(providerId, start, end) {
 
 export default async function handler(request, response) {
   const id = String(request.query?.id || "");
-  const item = catalog.find((candidate) => candidate.id === id);
+  const item = catalog.find((candidate) => candidate.id === id) || (/^FRED-[A-Z0-9_]+$/.test(id) ? { id, providerId: id.slice(5), name: id.slice(5), nameEn: id.slice(5), source: "FRED", unit: "", frequency: "", color: "#587a9a" } : null);
   if (!item) return response.status(404).json({ error: "Unknown series" });
   const today = new Date().toISOString().slice(0, 10);
   const start = iso(request.query?.start, "2018-01-01");

@@ -38,8 +38,9 @@ export async function checkApiHealth(): Promise<boolean> {
   }
 }
 
-export async function fetchCatalog(): Promise<Array<Record<string, string>>> {
-  const response = await fetch(apiUrl("/api/catalog"), { headers: { accept: "application/json" } });
+export async function fetchCatalog(q = ""): Promise<Array<Record<string, string>>> {
+  const suffix = q.trim() ? `?${new URLSearchParams({ q: q.trim() })}` : "";
+  const response = await fetch(apiUrl(`/api/catalog${suffix}`), { headers: { accept: "application/json" } });
   if (!response.ok) throw new Error(`Catalog API returned ${response.status}`);
   const payload = await response.json();
   return payload.items;
