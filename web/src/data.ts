@@ -82,12 +82,12 @@ export const riskRows = Array.from({ length: 18 }, (_, i) => ({
 
 export type DataSeries = { id: string; name: string; source: string; unit: string; frequency: string; updated: string; color: string };
 export const catalog: DataSeries[] = [
-  { id: "EIA-BRENT", name: "Brent现货价格", source: "EIA", unit: "美元/桶", frequency: "日度", updated: "2026-08-21", color: "#1c7c72" },
-  { id: "FRED-DCOILWTICO", name: "WTI现货价格", source: "FRED / EIA", unit: "美元/桶", frequency: "日度", updated: "2026-08-21", color: "#bd7548" },
-  { id: "EIA-STOCKS", name: "美国商业原油库存", source: "EIA", unit: "千桶", frequency: "周度", updated: "2026-08-19", color: "#377dce" },
+  { id: "EIA-BRENT", name: "Brent现货价格", source: "EIA", unit: "美元/桶", frequency: "日度", updated: "2026-08-21", color: "#716aa4" },
+  { id: "FRED-DCOILWTICO", name: "WTI现货价格", source: "FRED / EIA", unit: "美元/桶", frequency: "日度", updated: "2026-08-21", color: "#c47d59" },
+  { id: "EIA-STOCKS", name: "美国商业原油库存", source: "EIA", unit: "千桶", frequency: "周度", updated: "2026-08-19", color: "#587a9a" },
   { id: "FRED-DTWEXBGS", name: "美元广义指数", source: "FRED", unit: "指数", frequency: "日度", updated: "2026-08-20", color: "#c07843" },
   { id: "FRED-DGS10", name: "美国10年期国债收益率", source: "FRED", unit: "%", frequency: "日度", updated: "2026-08-20", color: "#6b77bd" },
-  { id: "WB-GDP", name: "世界经济增长", source: "World Bank", unit: "%", frequency: "年度", updated: "2026-07-01", color: "#65936f" },
+  { id: "WB-GDP", name: "世界经济增长", source: "World Bank", unit: "%", frequency: "年度", updated: "2026-07-01", color: "#9a8b62" },
   { id: "IMF-CPI", name: "全球通胀指标", source: "IMF", unit: "%", frequency: "月度", updated: "2026-07-31", color: "#b85d5d" },
   { id: "OECD-CLI", name: "OECD综合领先指标", source: "OECD", unit: "指数", frequency: "月度", updated: "2026-07-31", color: "#6d8893" },
 ];

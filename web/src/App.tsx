@@ -684,7 +684,7 @@ function DriverChart({ lang }: { lang: Lang }) {
           layout="vertical"
           margin={{ left: 28, right: 28 }}
         >
-          <CartesianGrid horizontal={false} stroke="#dbe7e4" />
+          <CartesianGrid horizontal={false} stroke="#e6e0dc" />
           <XAxis type="number" tick={{ fontSize: 11 }} unit={tx(lang, " 美元", " USD")} />
           <YAxis
             type="category"
@@ -693,10 +693,10 @@ function DriverChart({ lang }: { lang: Lang }) {
             tick={{ fontSize: 11 }}
           />
           <Tooltip formatter={(v) => [tx(lang, `${v} 美元/桶`, `$${v}/bbl`), tx(lang, "估计净影响", "Estimated net impact")]} />
-          <ReferenceLine x={0} stroke="#78918c" />
+          <ReferenceLine x={0} stroke="#968d87" />
           <Bar dataKey="value" radius={[0, 8, 8, 0]}>
             {localizedDrivers.map((d, i) => (
-              <Cell key={i} fill={d.value > 0 ? "#2e8176" : "#c27a4c"} />
+              <Cell key={i} fill={d.value > 0 ? "#587a9a" : "#c47d59"} />
             ))}
           </Bar>
         </BarChart>
@@ -720,7 +720,7 @@ function ForecastChart({ data, lang }: { data: ReturnType<typeof makeForecast>; 
           data={rows}
           margin={{ left: 2, right: 16, top: 15, bottom: 5 }}
         >
-          <CartesianGrid vertical={false} stroke="#dce8e5" />
+          <CartesianGrid vertical={false} stroke="#e6e0dc" />
           <XAxis dataKey="date" minTickGap={45} tick={{ fontSize: 11 }} />
           <YAxis
             domain={["dataMin - 3", "dataMax + 3"]}
@@ -732,44 +732,44 @@ function ForecastChart({ data, lang }: { data: ReturnType<typeof makeForecast>; 
           <Area
             dataKey="band95"
             name={tx(lang, "95%区间", "95% range")}
-            stroke="#b8ced7"
-            fill="#dbeaf0"
+            stroke="#a9bacb"
+            fill="#dfe7ee"
             fillOpacity={0.62}
           />
           <Area
             dataKey="band80"
             name={tx(lang, "80%区间", "80% range")}
-            stroke="#8bbdb4"
-            fill="#bfe0da"
+            stroke="#8b87b5"
+            fill="#d9d6e8"
             fillOpacity={0.62}
           />
           <Area
             dataKey="band50"
             name={tx(lang, "50%区间", "50% range")}
-            stroke="#d29a72"
-            fill="#efd1ba"
+            stroke="#c78a67"
+            fill="#ead2c2"
             fillOpacity={0.72}
           />
           <Line
             dataKey="actual"
             name={tx(lang, "实际价格", "Actual price")}
-            stroke="#243b4a"
+            stroke="#30343d"
             strokeWidth={2.4}
             dot={false}
           />
           <Line
             dataKey="forecast"
             name={tx(lang, "预测中位路径", "Median forecast")}
-            stroke="#176f66"
+            stroke="#69649b"
             strokeWidth={2.6}
             dot={false}
           />
           {cutoff && (
             <ReferenceLine
               x={cutoff}
-              stroke="#78918c"
+              stroke="#928985"
               strokeDasharray="4 4"
-              label={{ value: tx(lang, "预测起点", "Forecast start"), fontSize: 11, fill: "#526b67" }}
+              label={{ value: tx(lang, "预测起点", "Forecast start"), fontSize: 11, fill: "#746e6a" }}
             />
           )}
         </ComposedChart>
@@ -783,28 +783,28 @@ function RiskChart({ lang }: { lang: Lang }) {
     <div className="chart small">
       <ResponsiveContainer>
         <AreaChart data={riskRows}>
-          <CartesianGrid vertical={false} stroke="#dce8e5" />
+          <CartesianGrid vertical={false} stroke="#e6e0dc" />
           <XAxis dataKey="date" minTickGap={35} tick={{ fontSize: 10 }} />
           <YAxis domain={[0, 100]} tick={{ fontSize: 10 }} />
           <Tooltip />
           <Area
             dataKey="stress"
             name={tx(lang, "压力情景", "Stress scenario")}
-            stroke="#bf7549"
-            fill="#ebc9ae"
+            stroke="#c47752"
+            fill="#edd0bd"
             fillOpacity={0.45}
           />
           <Area
             dataKey="baseline"
             name={tx(lang, "基准风险", "Baseline risk")}
-            stroke="#237a70"
-            fill="#a8d8cf"
+            stroke="#7771a7"
+            fill="#d6d2e7"
             fillOpacity={0.55}
           />
           <ReferenceLine
             y={70}
             label={tx(lang, "高风险", "High risk")}
-            stroke="#b96c52"
+            stroke="#ab5e59"
             strokeDasharray="4 4"
           />
         </AreaChart>
@@ -842,15 +842,15 @@ function ScaleCard({ lang }: { lang: Lang }) {
       <div className="chart small">
         <ResponsiveContainer>
           <LineChart data={rows}>
-            <CartesianGrid vertical={false} stroke="#dce8e5" />
+            <CartesianGrid vertical={false} stroke="#e6e0dc" />
             <XAxis dataKey="i" hide />
             <YAxis tick={{ fontSize: 10 }} />
             <Tooltip />
-            <Line dataKey="short" stroke="#c27a4c" dot={false} />
-            <Line dataKey="medium" stroke="#3e7fb8" dot={false} />
+            <Line dataKey="short" stroke="#c47d59" dot={false} />
+            <Line dataKey="medium" stroke="#587a9a" dot={false} />
             <Line
               dataKey="long"
-              stroke="#24766d"
+              stroke="#756fa5"
               strokeWidth={2.4}
               dot={false}
             />
@@ -1462,13 +1462,13 @@ function DataLab({ lang }: { lang: Lang }) {
           <div className="chart small">
             <ResponsiveContainer>
               <LineChart data={series}>
-                <CartesianGrid vertical={false} stroke="#dce8e5" />
+                <CartesianGrid vertical={false} stroke="#e6e0dc" />
                 <XAxis dataKey="date" minTickGap={30} tick={{ fontSize: 10 }} />
                 <YAxis tick={{ fontSize: 10 }} />
                 <Tooltip />
                 <Line
                   dataKey="value"
-                  stroke="#26786e"
+                  stroke="#6f69a2"
                   strokeWidth={2.4}
                   dot={false}
                 />

@@ -78,3 +78,36 @@ body{background:#fbfcfc}
 @media(max-width:1050px){.energy-globe{left:25%;width:min(52vw,540px)}.signal-stage{min-height:570px}.kpi-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:760px){.route-view{min-height:calc(100dvh - 64px)}.signal-stage{min-height:445px}.energy-globe{top:4%;left:14%;width:72vw}.mf-one{left:0;top:24%}.mf-two{right:0;top:12%}.mf-three{right:1%;top:43%}.oil-signal{display:none}.pulse-line{height:136px}.ambient svg{opacity:.1}.kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:430px){.signal-stage{min-height:395px}.energy-globe{left:7%;width:82vw}.metric-float{min-width:112px}.mf-three{top:47%}.pulse-line{height:118px}}
+
+/* July-inspired neutral interface: warm paper, quiet chrome, varied data color. */
+:root{--ink:#302d2c;--muted:#756f6b;--teal:#6f69a2;--teal2:#9a95bd;--blue:#587a9a;--copper:#c47d59;--paper:rgba(255,253,250,.94);--line:rgba(73,65,61,.13);--shadow:0 34px 88px -58px rgba(54,45,42,.4);background:#f8f7f5}
+body{background:#f8f7f5}
+.ambient{background:radial-gradient(circle at 13% 18%,rgba(112,105,162,.07),transparent 28%),radial-gradient(circle at 86% 72%,rgba(196,125,89,.055),transparent 25%),#f8f7f5}
+.ambient .wash.one{background:radial-gradient(circle,rgba(121,137,170,.09),transparent 68%)}
+.ambient .wash.two{background:radial-gradient(circle,rgba(201,148,112,.07),transparent 68%)}
+.ambient path{stroke:#a59da6}.ambient circle{fill:#fffdfb;stroke:#8f88a9}.ambient-grid{background-image:linear-gradient(rgba(83,75,72,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(83,75,72,.045) 1px,transparent 1px)}
+.ambient-radar{border-color:rgba(108,101,151,.1);box-shadow:0 0 0 34px rgba(108,101,151,.028),0 0 0 76px rgba(108,101,151,.018)}
+.ambient-coordinate{color:rgba(71,64,61,.28)}
+.topbar{background:rgba(250,249,247,.88);border-color:rgba(73,65,61,.11);box-shadow:0 16px 45px -38px rgba(45,38,36,.5)}
+.brand-orbit{background:linear-gradient(145deg,#4c485f,#8983ae);box-shadow:0 12px 28px rgba(79,72,105,.2)}
+.mode-switch,.segment,.utility{border-color:rgba(73,65,61,.13);background:rgba(255,254,252,.78)}
+.mode-switch .active{background:#353132;box-shadow:0 10px 24px rgba(48,42,41,.18)}
+.segment .active{background:#e9e6f1;color:#514b80}
+.primary{background:#353132;box-shadow:0 18px 36px -22px rgba(47,40,39,.7)}.primary:hover{background:#58506f}
+.trust-row span,.data-badge{border-color:rgba(73,65,61,.12);background:rgba(255,253,250,.78)}
+.card,.kpi,.metric-float,.pulse-line{border-color:rgba(73,65,61,.11);background:rgba(255,253,250,.9);box-shadow:0 32px 80px -58px rgba(47,39,37,.46)}
+.story-rail{border:1px solid rgba(73,65,61,.1);background:rgba(255,253,250,.65)}
+.insight-strip,.plain-note,.provenance{background:#eef0f5;color:#665f61}.insight-strip b,.provenance svg{color:#68629b}
+.risk-summary{background:#f5e7df}.advice{background:linear-gradient(135deg,rgba(247,242,238,.96),rgba(239,238,246,.94))}
+.s1{background:#c47d59}.s2{background:#587a9a}.s3{background:#756fa5}
+.pro-tabs{border-color:rgba(73,65,61,.14);background:rgba(248,247,245,.9);box-shadow:0 18px 42px -34px rgba(51,43,41,.45)}
+.pro-tabs .active{color:#514b80;background:#fffdfb;box-shadow:0 8px 20px rgba(72,63,85,.1)}
+.lab-layout aside{border:1px solid rgba(73,65,61,.09);background:#f1eff4}
+.field>div,.search{min-height:50px;padding:.62rem .78rem;border-color:rgba(73,65,61,.16);border-radius:15px;background:#fffdfb;box-shadow:inset 0 1px rgba(255,255,255,.8),0 10px 28px -25px rgba(47,39,37,.55);transition:border-color .25s,box-shadow .25s,transform .25s}
+.field>div:focus-within,.search:focus-within{border-color:rgba(104,98,155,.55);box-shadow:0 0 0 4px rgba(104,98,155,.09),0 16px 32px -26px rgba(57,48,78,.5);transform:translateY(-1px)}
+.source-row button{border-color:rgba(73,65,61,.12);background:#fffdfb}.source-row .active{border-color:#c6c1db;background:#e9e6f1;color:#514b80}
+.series-list button{background:rgba(255,253,250,.68)}.series-list button.active{border-color:#c7c1da;background:#efedf5}
+.preview{border:1px solid rgba(73,65,61,.09);background:#fbf9f7}.preview-actions>button{border-color:rgba(73,65,61,.14);background:#fffdfb}
+.method-steps span,.metric-table span{border-color:rgba(73,65,61,.12);background:#fffdfb}
+.mobile-panel{background:#fbfaf8}.mobile-panel button:hover{background:#efedf4}
+.recharts-cartesian-grid line{stroke:#e6e0dc}.recharts-default-tooltip{border:1px solid rgba(73,65,61,.13)!important;border-radius:12px!important;background:rgba(255,253,250,.96)!important;box-shadow:0 18px 42px -28px rgba(48,40,38,.35)!important}
