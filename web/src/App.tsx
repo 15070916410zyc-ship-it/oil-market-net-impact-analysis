@@ -1069,6 +1069,15 @@ function RollingFevdChart({ lang, data }: { lang: Lang; data: NetImpactResult["r
 function BreakChart({ lang, data }: { lang: Lang; data: NetImpactResult["breakTest"]["profile"] }) {
   return <ChartFrame label={tx(lang,"拖动范围条检查候选结构变化日期","Drag the range selector to inspect candidate break dates")}><div className="chart medium"><ResponsiveContainer><LineChart data={data}><CartesianGrid vertical={false}/><XAxis dataKey="date" minTickGap={35} tick={{fontSize:10}}/><YAxis unit="%"/><Tooltip formatter={(v)=>[`${Number(v).toFixed(2)}%`,tx(lang,"分段拟合改善","Segmented-fit improvement")]}/><Line dataKey="improvementPercent" stroke="#587a9a" dot={false}/><Brush dataKey="date" height={22} stroke="#587a9a"/></LineChart></ResponsiveContainer></div></ChartFrame>;
 }
+
+function ScaleGrangerMatrix({ lang, data }: { lang: Lang; data: ScaleGrangerResult[] }) {
+  const imfs = [...new Set(data.map((row) => row.imf))];
+  const factors = [...new Map(data.map((row) => [row.id, { id: row.id, name: lang === "zh" ? row.nameZh : row.nameEn }])).values()];
+  return <div className="scale-matrix" style={{"--imf-count":imfs.length} as React.CSSProperties}>
+    <div className="matrix-head"><b>{tx(lang,"解释变量","Factor")}</b>{imfs.map((imf)=><b key={imf}>{imf}</b>)}</div>
+    {factors.map((factor)=><div className="matrix-row" key={factor.id}><strong>{factor.name}</strong>{imfs.map((imf)=>{const row=data.find((item)=>item.id===factor.id&&item.imf===imf)!; const intensity=Math.min(1,Math.max(0,-Math.log10(Math.max(row.pValue,1e-12))/4)); return <span key={imf} className={row.significant?"significant":""} style={{"--strength":intensity} as React.CSSProperties} title={`${factor.name} · ${imf} · lag ${row.lag} · F ${row.fStatistic.toFixed(3)} · p ${row.pValue.toFixed(4)}`}>{row.pValue.toFixed(3)}</span>})}</div>)}
+  </div>;
+}
 function Advice({
   n,
   title,
@@ -1233,7 +1242,7 @@ function ImpactLab({ lang }: { lang: Lang }) {
             <h3 className="result-title">C · {tx(lang,"格兰杰检验","Granger tests")}</h3><GrangerChart lang={lang} data={result.granger} alpha={alpha} />
             <div className="granger-table">{result.granger.map((row) => <div key={row.id}><b>{lang === "zh" ? row.nameZh : row.nameEn}</b><span>lag {row.lag}</span><span>F {row.fStatistic.toFixed(3)}</span><span>p {row.pValue.toFixed(4)}</span><em className={row.significant ? "yes" : ""}>{row.significant ? tx(lang,"通过","Pass") : tx(lang,"未通过","Not significant")}</em></div>)}</div>
             <h3 className="result-title">D · {tx(lang,"逐分量格兰杰检验","Granger tests by IMF")}</h3>
-            <div className="granger-table">{result.scaleGranger.map((row) => <div key={`${row.id}-${row.imf}`}><b>{lang === "zh" ? row.nameZh : row.nameEn}</b><span>{row.imf}</span><span>lag {row.lag}</span><span>p {row.pValue.toFixed(4)}</span><em className={row.significant ? "yes" : ""}>{row.significant ? tx(lang,"通过","Pass") : tx(lang,"未通过","Not significant")}</em></div>)}</div>
+            <ScaleGrangerMatrix lang={lang} data={result.scaleGranger}/>
             <h3 className="result-title">E · {tx(lang,`广义FEVD（${result.fevdHorizon}期，VAR(${result.varLag})）`,`Generalized FEVD (${result.fevdHorizon} steps, VAR(${result.varLag}))`)}</h3><FevdChart lang={lang} data={result.fevd}/>
             <div className="metric-table"><span><b>{tx(lang,"油价自身冲击份额","Oil-price own-shock share")}</b>{result.fevdOwnShare.toFixed(2)}%</span><span><b>{tx(lang,"外部因素冲击份额","External-factor shock share")}</b>{(100-result.fevdOwnShare).toFixed(2)}%</span></div>
             <h3 className="result-title">F · {tx(lang,"滚动FEVD","Rolling FEVD")}</h3><RollingFevdChart lang={lang} data={result.rollingFevd}/>
