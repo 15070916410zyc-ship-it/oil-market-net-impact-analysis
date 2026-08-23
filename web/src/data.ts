@@ -29,6 +29,39 @@ export function makeForecast(frequency: Frequency, horizon = frequency === "dail
   return rows;
 }
 
+export function makeForecastFromHistory(
+  points: Array<{ date: string; value: number }>,
+  frequency: Frequency,
+  horizon = frequency === "daily" ? 30 : 12,
+): PriceRow[] {
+  if (points.length < 8) return makeForecast(frequency, horizon);
+  const history = points.slice(-(frequency === "daily" ? 120 : 60));
+  const rows: PriceRow[] = history.map((point) => ({ date: point.date, actual: point.value }));
+  const changes = history.slice(1).map((point, index) => point.value - history[index].value);
+  const recent = changes.slice(-Math.min(changes.length, frequency === "daily" ? 30 : 12));
+  const drift = recent.reduce((sum, value) => sum + value, 0) / Math.max(1, recent.length);
+  const variance = recent.reduce((sum, value) => sum + (value - drift) ** 2, 0) / Math.max(1, recent.length - 1);
+  const volatility = Math.max(Math.sqrt(variance), frequency === "daily" ? 0.35 : 1.1);
+  const last = history.at(-1)!;
+  const cutoff = rows.at(-1)!;
+  cutoff.forecast = cutoff.actual;
+  cutoff.lo50 = cutoff.hi50 = cutoff.lo80 = cutoff.hi80 = cutoff.lo95 = cutoff.hi95 = cutoff.actual;
+  const start = new Date(`${last.date.length === 7 ? `${last.date}-01` : last.date}T00:00:00Z`);
+  for (let i = 1; i <= horizon; i++) {
+    const step = frequency === "daily" ? 86400000 : 30 * 86400000;
+    const level = last.value + drift * i;
+    const sigma = volatility * Math.sqrt(i);
+    rows.push({
+      date: new Date(start.getTime() + i * step).toISOString().slice(0, frequency === "daily" ? 10 : 7),
+      forecast: round(level),
+      lo50: round(level - sigma * .67), hi50: round(level + sigma * .67),
+      lo80: round(level - sigma * 1.28), hi80: round(level + sigma * 1.28),
+      lo95: round(level - sigma * 1.96), hi95: round(level + sigma * 1.96),
+    });
+  }
+  return rows;
+}
+
 export const drivers = [
   { name: "OPEC+产量纪律", value: 3.42, group: "供给" },
   { name: "地缘与航运扰动", value: 2.74, group: "事件" },

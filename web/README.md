@@ -20,12 +20,12 @@ npm run dev
 
 ## 数据连接
 
-复制 `.env.example` 为 `.env.local` 后填写：
+Vercel 同时部署静态前端和同源服务端接口：
 
-- `VITE_ANALYSIS_API_BASE_URL`：现有 Python 模型服务地址
-- `VITE_SUPABASE_URL`：Lovable/Supabase 项目地址
-- `VITE_SUPABASE_PUBLISHABLE_KEY`：浏览器可用的公开密钥
+- `/api/health`：服务状态与数据源配置状态
+- `/api/catalog`：受控的官方数据目录
+- `/api/series`：FRED 官方 API，缺少密钥时使用 FRED 官方 CSV 作为降级来源
 
-没有配置生产接口时，页面会明确显示“演示数据”，并使用固定种子的可复现数据。保存操作自动使用浏览器本地存储。
+`FRED_API_KEY` 与 `EIA_API_KEY` 必须配置为 Vercel 的 Sensitive Environment Variables。密钥不会进入浏览器、GitHub 仓库或前端构建产物，因此页面不提供密钥输入框。
 
-Supabase 已建立 `public.saved_records` 表并启用行级权限，只允许登录用户访问自己的记录。
+首页 Brent 最新值、价格历史和专业模式的数据中心使用线上接口；净影响和危机风险模块仍清楚标记为研究基准结果。保存操作当前使用浏览器本地存储。

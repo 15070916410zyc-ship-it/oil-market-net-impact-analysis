@@ -43,11 +43,13 @@ import {
   catalog,
   drivers,
   makeForecast,
+  makeForecastFromHistory,
   riskRows,
   seriesPreview,
+  type DataSeries,
   type Frequency,
 } from "./data";
-import { saveLocalRecord } from "./storage";
+import { checkApiHealth, fetchCatalog, fetchSeries, saveLocalRecord } from "./storage";
 
 type Lang = "zh" | "en";
 type Mode = "landing" | "decision" | "professional";
@@ -102,12 +104,17 @@ function App() {
     () => (localStorage.getItem("opi.lang") as Lang) || "zh",
   );
   const [menu, setMenu] = useState(false);
+  const [apiLive, setApiLive] = useState(false);
   const t = copy[lang];
 
   useEffect(() => {
     const onPop = () => setMode(routeFromPath());
     addEventListener("popstate", onPop);
     return () => removeEventListener("popstate", onPop);
+  }, []);
+
+  useEffect(() => {
+    void checkApiHealth().then(setApiLive);
   }, []);
 
   const navigate = (next: Mode) => {
@@ -160,8 +167,8 @@ function App() {
           </nav>
         )}
         <div className="utility">
-          <span title="尚未连接生产分析接口">
-            <Radio size={13} /> <em>{t.demo}</em>
+          <span title={apiLive ? "官方数据接口已连接" : "数据接口暂不可用，使用演示数据"}>
+            <Radio size={13} /> <em>{apiLive ? "实时数据" : t.demo}</em>
           </span>
           <button onClick={toggleLang}>
             <Languages size={14} /> {lang === "zh" ? "中" : "EN"}
@@ -197,7 +204,7 @@ function App() {
       </main>
       <footer>
         <span>© 2026 {t.brand}</span>
-        <span>{t.demo} · 研究结果不构成投资建议</span>
+        <span>{apiLive ? "官方数据接口已连接" : t.demo} · 研究结果不构成投资建议</span>
       </footer>
     </div>
   );
@@ -334,13 +341,31 @@ function Decision({
   t: typeof copy.zh | typeof copy.en;
 }) {
   const [frequency, setFrequency] = useState<Frequency>("daily");
-  const forecast = useMemo(() => makeForecast(frequency), [frequency]);
+  const [livePoints, setLivePoints] = useState<Array<{ date: string; value: number }>>([]);
+  const [liveUpdated, setLiveUpdated] = useState("");
+  useEffect(() => {
+    let active = true;
+    void fetchSeries("EIA-BRENT", frequency)
+      .then((result) => {
+        if (!active) return;
+        setLivePoints(result.points);
+        setLiveUpdated(result.updated);
+      })
+      .catch(() => {
+        if (active) { setLivePoints([]); setLiveUpdated(""); }
+      });
+    return () => { active = false; };
+  }, [frequency]);
+  const forecast = useMemo(
+    () => livePoints.length ? makeForecastFromHistory(livePoints, frequency) : makeForecast(frequency),
+    [frequency, livePoints],
+  );
   const latest =
     forecast.filter((r) => r.actual != null).at(-1)?.actual ?? 94.39;
   return (
     <div className="page">
       <PageIntro
-        eyebrow="Decision intelligence · 2026-08-21"
+        eyebrow={`Decision intelligence · ${liveUpdated || "2026-08-21"}`}
         title={lang === "zh" ? "今天需要关注什么" : "What matters today"}
         desc={
           lang === "zh"
@@ -349,7 +374,7 @@ function Decision({
         }
       />
       <div className="kpi-grid">
-        <Kpi label="最新数据" value="2026-08-21" />
+        <Kpi label="最新数据" value={liveUpdated || "2026-08-21"} />
         <Kpi
           label="Brent"
           value={`$${latest.toFixed(2)}`}
@@ -374,7 +399,7 @@ function Decision({
       <Card
         title={t.drivers}
         desc="净影响表示该因素与当前油价变动的方向和估计幅度，不代表单一因果关系。"
-        action={<span className="data-badge">{t.demo}</span>}
+        action={<span className="data-badge">研究基准结果</span>}
       >
         <DriverChart />
         <div className="insight-strip">
@@ -1107,11 +1132,45 @@ function RiskLab() {
 
 function DataLab() {
   const [q, setQ] = useState("");
-  const [sources, setSources] = useState(
-    () => new Set(catalog.map((x) => x.source)),
-  );
+  const [liveCatalog, setLiveCatalog] = useState<DataSeries[]>(catalog);
+  const [sources, setSources] = useState(() => new Set(catalog.map((x) => x.source)));
   const [selected, setSelected] = useState(catalog[0].id);
-  const found = catalog.filter(
+  const [frequency, setFrequency] = useState<Frequency>("monthly");
+  const [liveSeries, setLiveSeries] = useState<Array<{ date: string; value: number }>>([]);
+  const [seriesLive, setSeriesLive] = useState(false);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    let active = true;
+    void fetchCatalog()
+      .then((items) => {
+        if (!active || !items.length) return;
+        const next = items as unknown as DataSeries[];
+        setLiveCatalog(next);
+        setSources(new Set(next.map((item) => item.source)));
+        setSelected((current) => next.some((item) => item.id === current) ? current : next[0].id);
+      })
+      .catch(() => {})
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, []);
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    void fetchSeries(selected, frequency)
+      .then((result) => {
+        if (!active) return;
+        setLiveSeries(result.points);
+        setSeriesLive(true);
+      })
+      .catch(() => {
+        if (!active) return;
+        setLiveSeries([]);
+        setSeriesLive(false);
+      })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [selected, frequency]);
+  const found = liveCatalog.filter(
     (x) =>
       sources.has(x.source) &&
       (x.name.toLowerCase().includes(q.toLowerCase()) ||
@@ -1123,9 +1182,9 @@ function DataLab() {
       n.has(s) ? n.delete(s) : n.add(s);
       return n;
     });
-  const series = seriesPreview(selected);
+  const series = liveSeries.length ? liveSeries : seriesPreview(selected);
   const save = () => {
-    const item = catalog.find((candidate) => candidate.id === selected)!;
+    const item = liveCatalog.find((candidate) => candidate.id === selected)!;
     saveLocalRecord({
       id: selected,
       kind: "series",
@@ -1146,10 +1205,10 @@ function DataLab() {
     <Card
       title="搜索并连接数据"
       desc="官方来源默认全选；选择序列后预览、下载或保存到研究库。"
-      action={<span className="data-badge">{catalog.length} 个官方序列</span>}
+      action={<span className="data-badge">{loading ? "正在连接…" : `${liveCatalog.length} 个官方序列`}</span>}
     >
       <div className="source-row">
-        {[...new Set(catalog.map((x) => x.source))].map((s) => (
+        {[...new Set(liveCatalog.map((x) => x.source))].map((s) => (
           <button
             key={s}
             className={sources.has(s) ? "active" : ""}
@@ -1189,8 +1248,8 @@ function DataLab() {
         <div className="preview">
           <div className="preview-actions">
             <Segment
-              value={"monthly"}
-              onChange={() => {}}
+              value={frequency}
+              onChange={setFrequency}
               options={[
                 { v: "monthly", l: "月度" },
                 { v: "daily", l: "日度" },
@@ -1224,10 +1283,10 @@ function DataLab() {
           <div className="provenance">
             <Database />
             <span>
-              <b>{catalog.find((x) => x.id === selected)?.source}</b> ·{" "}
+              <b>{liveCatalog.find((x) => x.id === selected)?.source}</b> ·{" "}
               {selected}
               <small>
-                当前显示可复现演示序列；接入生产 API 后界面无需改动。
+                {seriesLive ? "来自官方数据接口；密钥仅保存在 Vercel 服务端。" : "官方接口暂不可用，当前显示可复现备用序列。"}
               </small>
             </span>
           </div>
