@@ -1339,16 +1339,16 @@ function ForecastLab({ lang }: { lang: Lang }) {
       {error && <StatusPanel error text={tx(lang,`预测未完成：${error}`,`Forecast did not complete: ${error}`)}/>} {!liveData.length && !error && <StatusPanel text={tx(lang,"运行后展示真实历史、预测与滚动验证结果。","Run the model to display verified history, forecasts and rolling validation.")}/>} {liveData.length > 0 && <ForecastChart data={liveData} lang={lang} />}
       {liveData.length > 0 && <div className="metric-table">
         <span>
-          <b>MAE</b> {metrics.ValidationMAE?.toFixed?.(2)}
+          <b>MAE</b> {metrics.ValidationMAE?.toFixed?.(3)}
         </span>
         <span>
-          <b>RMSE</b> {metrics.ValidationRMSE?.toFixed?.(2)}
+          <b>RMSE</b> {metrics.ValidationRMSE?.toFixed?.(3)}
         </span>
         <span>
-          <b>{tx(lang, "方向准确率", "Directional accuracy")}</b> {metrics.DirectionalAccuracyPercent?.toFixed?.(1)}%
+          <b>{tx(lang, "方向准确率", "Directional accuracy")}</b> {metrics.DirectionalAccuracyPercent?.toFixed?.(3)}%
         </span>
         <span>
-          <b>{tx(lang, "80%区间验证覆盖率", "80% validation coverage")}</b> {metrics.IntervalCoveragePercent?.toFixed?.(1)}%
+          <b>{tx(lang, "80%区间验证覆盖率", "80% validation coverage")}</b> {metrics.IntervalCoveragePercent?.toFixed?.(3)}%
         </span>
         <span><b>{tx(lang,"滚动验证起点","Rolling validation origins")}</b>{metrics.ValidationOrigins}</span>
       </div>}
