@@ -1474,10 +1474,14 @@ function DataLab({ lang }: { lang: Lang }) {
     return () => { active = false; };
   }, [selected, frequency]);
   const found = liveCatalog.filter(
-    (x) =>
-      sources.has(x.source) &&
-      (seriesText(x, lang).name.toLowerCase().includes(q.toLowerCase()) ||
-        x.id.toLowerCase().includes(q.toLowerCase())),
+    (x) => {
+      const needle = q.trim().toLowerCase();
+      const haystack = [x.name, x.nameEn, x.id, x.source, x.category, x.unit, x.frequency]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return sources.has(x.source) && haystack.includes(needle);
+    },
   );
   const toggle = (s: string) =>
     setSources((p) => {
