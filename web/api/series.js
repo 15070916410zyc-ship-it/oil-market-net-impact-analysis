@@ -30,7 +30,7 @@ async function fetchFred(providerId, start, end) {
       if (result.ok) {
         const payload = await result.json();
         const points = payload.observations
-          .filter((row) => row.value !== "." && Number.isFinite(Number(row.value)))
+          .filter((row) => typeof row.value === "string" && row.value.trim() !== "" && row.value !== "." && Number.isFinite(Number(row.value)))
           .map((row) => ({ date: row.date, value: Number(row.value) }));
         if (points.length) return points;
       }
@@ -47,8 +47,10 @@ async function fetchFred(providerId, start, end) {
   const text = await result.text();
   return text.trim().split(/\r?\n/).slice(1).flatMap((line) => {
     const [date, raw] = line.split(",");
-    const value = Number(raw);
-    return date && Number.isFinite(value) ? [{ date, value }] : [];
+    const clean = String(raw ?? "").trim();
+    if (!date || clean === "" || clean === ".") return [];
+    const value = Number(clean);
+    return Number.isFinite(value) ? [{ date, value }] : [];
   });
 }
 
