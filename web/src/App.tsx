@@ -54,6 +54,42 @@ import { checkApiHealth, fetchCatalog, fetchSeries, requestLiveAnalysis, saveLoc
 type Lang = "zh" | "en";
 type Mode = "landing" | "decision" | "professional";
 type ProTab = "impact" | "forecast" | "risk" | "data";
+const tx = (lang: Lang, zh: string, en: string) => (lang === "zh" ? zh : en);
+
+const driverNamesEn: Record<string, string> = {
+  "OPEC+产量纪律": "OPEC+ production discipline",
+  "地缘与航运扰动": "Geopolitical & shipping disruption",
+  "中国需求景气": "China demand momentum",
+  "炼厂开工与裂解价差": "Refinery runs & crack spreads",
+  "投机净持仓": "Speculative net positioning",
+  "实际利率预期": "Real-rate expectations",
+  "OECD商业库存": "OECD commercial inventories",
+  "美元指数": "US dollar index",
+  "美国页岩油产量": "US shale production",
+};
+
+const seriesNamesEn: Record<string, string> = {
+  "EIA-BRENT": "Brent spot price",
+  "FRED-DCOILWTICO": "WTI spot price",
+  "EIA-STOCKS": "US commercial crude inventories",
+  "FRED-DTWEXBGS": "Broad US dollar index",
+  "FRED-DGS10": "US 10-year Treasury yield",
+  "FRED-DGS2": "US 2-year Treasury yield",
+  "FRED-FEDFUNDS": "Effective federal funds rate",
+  "FRED-CPIAUCSL": "US consumer price index",
+  "FRED-INDPRO": "US industrial production",
+  "FRED-UNRATE": "US unemployment rate",
+  "FRED-T10YIE": "US 10-year inflation expectations",
+  "WB-GDP": "World economic growth",
+  "IMF-CPI": "Global inflation indicator",
+  "OECD-CLI": "OECD composite leading indicator",
+};
+
+const seriesText = (item: DataSeries, lang: Lang) => ({
+  name: lang === "en" ? seriesNamesEn[item.id] || item.name : item.name,
+  frequency: lang === "en" ? ({ 日度: "Daily", 周度: "Weekly", 月度: "Monthly", 年度: "Annual" }[item.frequency] || item.frequency) : item.frequency,
+  unit: lang === "en" ? ({ "美元/桶": "USD/bbl", 千桶: "thousand bbl", 指数: "index", 年度: "annual" }[item.unit] || item.unit) : item.unit,
+});
 
 const copy = {
   zh: {
@@ -72,6 +108,7 @@ const copy = {
     hedge: "采购成本与套保方案",
     advice: "行动建议",
     source: "数据中心",
+    brandTag: "Oil Price Intelligence",
   },
   en: {
     brand: "Oil Price Intelligence",
@@ -89,6 +126,7 @@ const copy = {
     hedge: "Procurement & hedge plan",
     advice: "Recommended actions",
     source: "Data workspace",
+    brandTag: "Research & decision system",
   },
 } as const;
 
@@ -117,6 +155,14 @@ function App() {
     void checkApiHealth().then(setApiLive);
   }, []);
 
+  useEffect(() => {
+    document.documentElement.lang = lang === "zh" ? "zh-CN" : "en";
+    document.title =
+      lang === "zh"
+        ? "油价智析 · 原油市场研究与决策"
+        : "Oil Price Intelligence · Market Research & Decisions";
+  }, [lang]);
+
   const navigate = (next: Mode) => {
     history.pushState({}, "", next === "landing" ? "/" : `/${next}`);
     setMode(next);
@@ -134,24 +180,24 @@ function App() {
     <div className="site-shell">
       <Ambient />
       <a href="#main" className="skip-link">
-        跳到主要内容
+        {tx(lang, "跳到主要内容", "Skip to main content")}
       </a>
       <header className="topbar">
         <button
           className="brand"
           onClick={() => navigate("landing")}
-          aria-label="返回首页"
+          aria-label={tx(lang, "返回首页", "Back to home")}
         >
           <span className="brand-orbit">
             <i />
           </span>
           <span>
             <b>{t.brand}</b>
-            <small>Oil Price Intelligence</small>
+            <small>{t.brandTag}</small>
           </span>
         </button>
         {mode !== "landing" && (
-          <nav className="mode-switch" aria-label="模式切换">
+          <nav className="mode-switch" aria-label={tx(lang, "模式切换", "Mode switcher")}>
             <button
               className={mode === "decision" ? "active" : ""}
               onClick={() => navigate("decision")}
@@ -167,8 +213,8 @@ function App() {
           </nav>
         )}
         <div className="utility">
-          <span title={apiLive ? "官方数据接口已连接" : "数据接口暂不可用，使用演示数据"}>
-            <Radio size={13} /> <em>{apiLive ? "实时数据" : t.demo}</em>
+          <span title={apiLive ? tx(lang, "官方数据接口已连接", "Official data feed connected") : tx(lang, "数据接口暂不可用，使用演示数据", "Data feed unavailable; using demonstration data")}>
+            <Radio size={13} /> <em>{apiLive ? tx(lang, "实时数据", "Live data") : t.demo}</em>
           </span>
           <button onClick={toggleLang}>
             <Languages size={14} /> {lang === "zh" ? "中" : "EN"}
@@ -195,6 +241,7 @@ function App() {
         <div key={mode} className={`route-view route-${mode}`}>
           {mode === "landing" && (
             <Landing
+              lang={lang}
               t={t}
               onDecision={() => navigate("decision")}
               onProfessional={() => navigate("professional")}
@@ -206,7 +253,7 @@ function App() {
       </main>
       <footer>
         <span>© 2026 {t.brand}</span>
-        <span>{apiLive ? "官方数据接口已连接" : t.demo} · 研究结果不构成投资建议</span>
+        <span>{apiLive ? tx(lang, "官方数据接口已连接", "Official data feed connected") : t.demo} · {tx(lang, "研究结果不构成投资建议", "Research output is not investment advice")}</span>
       </footer>
     </div>
   );
@@ -217,24 +264,32 @@ function Ambient() {
     <div className="ambient" aria-hidden="true">
       <div className="wash one" />
       <div className="wash two" />
-      <svg viewBox="0 0 1400 900" preserveAspectRatio="none">
+      <div className="ambient-grid" />
+      <div className="ambient-radar radar-one" />
+      <div className="ambient-radar radar-two" />
+      <svg className="ambient-lines" viewBox="0 0 1400 900" preserveAspectRatio="none">
         <path d="M-90 140C230 30 360 260 710 123s510-70 790 40" />
         <path d="M-120 320c290-140 520 45 770-60s520-180 890 30" />
         <path d="M-80 720c330-250 560 140 860-80s460-170 760-20" />
+        <path className="dash" d="M80 520C320 390 520 590 760 430s410-110 610-10" />
         <circle cx="230" cy="169" r="6" />
         <circle cx="1090" cy="214" r="8" />
         <circle cx="790" cy="640" r="5" />
       </svg>
+      <div className="ambient-coordinate coordinate-one">35°N · 51°E</div>
+      <div className="ambient-coordinate coordinate-two">FLOW / 07</div>
       <div className="grain" />
     </div>
   );
 }
 
 function Landing({
+  lang,
   t,
   onDecision,
   onProfessional,
 }: {
+  lang: Lang;
   t: typeof copy.zh | typeof copy.en;
   onDecision: () => void;
   onProfessional: () => void;
@@ -246,6 +301,7 @@ function Landing({
     wtiMove: 1.4,
     updated: "",
   });
+  const [riskScore, setRiskScore] = useState(63.4);
 
   useEffect(() => {
     let active = true;
@@ -276,6 +332,11 @@ function Landing({
         }));
       },
     );
+    void requestLiveAnalysis<{ riskScore: number }>("/api/models/risk", {})
+      .then((result) => {
+        if (active && Number.isFinite(result?.riskScore)) setRiskScore(result!.riskScore);
+      })
+      .catch(() => {});
     return () => {
       active = false;
     };
@@ -300,14 +361,14 @@ function Landing({
           </button>
         </div>
         <div className="trust-row">
-          <span>多源数据</span>
-          <span>多尺度归因</span>
-          <span>情景预测</span>
-          <span>企业套保</span>
+          <span>{tx(lang, "多源数据", "Multi-source data")}</span>
+          <span>{tx(lang, "多尺度归因", "Multi-scale attribution")}</span>
+          <span>{tx(lang, "情景预测", "Scenario forecasts")}</span>
+          <span>{tx(lang, "企业套保", "Enterprise hedging")}</span>
         </div>
       </div>
       <div className="signal-stage">
-        <EnergyGlobe />
+        <EnergyGlobe riskScore={riskScore} lang={lang} />
         <div className="metric-float mf-one">
           <small>BRENT</small>
           <strong>${quotes.brent.toFixed(2)}</strong>
@@ -320,11 +381,11 @@ function Landing({
         </div>
         <div className="metric-float mf-three">
           <small>MARKET RISK</small>
-          <strong>63.4</strong>
-          <em>中高</em>
+          <strong>{riskScore.toFixed(1)}</strong>
+          <em>{riskScore >= 60 ? tx(lang, "中高", "Elevated") : tx(lang, "较低", "Low")}</em>
         </div>
         <div className="pulse-line">
-          <span>{quotes.updated ? `数据更新至 ${quotes.updated}` : "正在同步官方市场数据"}</span>
+          <span>{quotes.updated ? tx(lang, `数据更新至 ${quotes.updated}`, `Data updated ${quotes.updated}`) : tx(lang, "正在同步官方市场数据", "Syncing official market data")}</span>
           <svg viewBox="0 0 500 160">
             <path d="M0 117 C30 105 45 132 80 110 S125 42 160 70 S214 122 250 82 S310 21 350 59 S405 119 500 42" />
           </svg>
@@ -334,14 +395,15 @@ function Landing({
   );
 }
 
-function EnergyGlobe() {
+function EnergyGlobe({ riskScore, lang }: { riskScore: number; lang: Lang }) {
+  const riskTone = riskScore >= 60 ? "risk-high" : "risk-low";
   return (
-    <div className="energy-globe" aria-label="持续转动的全球能源与市场数据网络">
+    <div className={`energy-globe ${riskTone}`} aria-label={tx(lang, "持续转动的全球能源与市场数据网络", "Rotating global energy and market data network")}>
       <div className="globe-halo" />
       <div className="globe-sphere">
         <div className="globe-grid" />
         <div className="world-belt">
-          <svg viewBox="0 0 1200 420" role="img" aria-label="世界能源市场地图">
+          <svg viewBox="0 0 1200 420" role="img" aria-label={tx(lang, "世界能源市场地图", "Global energy market map")}>
             <g className="land" transform="translate(0 2)">
               <path d="M82 94l48-32 72 9 40 31 53 11 27 39-22 37-49 13-18 45-45 31-21-52-43-22-18-49-39-19z" />
               <path d="M245 250l38 22 19 53-18 70-30-23-9-55-24-38z" />
@@ -367,7 +429,7 @@ function EnergyGlobe() {
       <div className="energy-orbit orbit-b"><i /></div>
       <div className="oil-signal" aria-hidden="true">
         <svg viewBox="0 0 32 42"><path d="M16 1C13 8 4 17 4 27a12 12 0 0 0 24 0C28 17 19 8 16 1Z" /></svg>
-        <span>ENERGY FLOW</span>
+        <span>{riskScore >= 60 ? "RISK PULSE" : "ENERGY FLOW"}</span>
       </div>
     </div>
   );
@@ -465,99 +527,99 @@ function Decision({
         }
       />
       <div className="kpi-grid">
-        <Kpi label="最新数据" value={liveUpdated || "2026-08-21"} />
+        <Kpi label={tx(lang, "最新数据", "Latest observation")} value={liveUpdated || "2026-08-21"} />
         <Kpi
           label="Brent"
           value={`$${latest.toFixed(2)}`}
-          delta="日变动 +1.8%"
+          delta={tx(lang, "日变动 +1.8%", "Daily move +1.8%")}
         />
-        <Kpi label="WTI" value={wti == null ? "同步中" : `$${wti.toFixed(2)}`} delta="美国原油现货" />
-        <Kpi label="30日中位路径" value="$96.18" delta="较现价 +1.9%" />
-        <Kpi label="95%决策区间" value="$81.3—112.7" />
+        <Kpi label="WTI" value={wti == null ? tx(lang, "同步中", "Syncing") : `$${wti.toFixed(2)}`} delta={tx(lang, "美国原油现货", "US crude spot")}/>
+        <Kpi label={tx(lang, "30日中位路径", "30-day median path")} value="$96.18" delta={tx(lang, "较现价 +1.9%", "+1.9% vs spot")} />
+        <Kpi label={tx(lang, "95%决策区间", "95% decision range")} value="$81.3—112.7" />
         <Kpi
-          label="风险温度"
+          label={tx(lang, "风险温度", "Risk temperature")}
           value="63.4"
-          delta="中高 · 较上周 +6.2"
+          delta={tx(lang, "中高 · 较上周 +6.2", "Elevated · +6.2 WoW")}
           tone="warm"
         />
       </div>
       <div className="story-rail">
-        <span>01 市场状态</span>
-        <span>02 影响因素</span>
-        <span>03 价格路径</span>
-        <span>04 风险预警</span>
-        <span>05 行动方案</span>
+        <span>{tx(lang, "01 市场状态", "01 Market state")}</span>
+        <span>{tx(lang, "02 影响因素", "02 Drivers")}</span>
+        <span>{tx(lang, "03 价格路径", "03 Price path")}</span>
+        <span>{tx(lang, "04 风险预警", "04 Risk alert")}</span>
+        <span>{tx(lang, "05 行动方案", "05 Action plan")}</span>
       </div>
       <Card
         title={t.drivers}
-        desc="净影响表示该因素与当前油价变动的方向和估计幅度，不代表单一因果关系。"
-        action={<span className="data-badge">研究基准结果</span>}
+        desc={tx(lang, "净影响表示该因素与当前油价变动的方向和估计幅度，不代表单一因果关系。", "Net impact estimates direction and magnitude; it does not claim a single causal relationship.")}
+        action={<span className="data-badge">{tx(lang, "研究基准结果", "Research baseline")}</span>}
       >
-        <DriverChart />
+        <DriverChart lang={lang} />
         <div className="insight-strip">
-          <b>当前判断</b>
+          <b>{tx(lang, "当前判断", "Current reading")}</b>
           <span>
-            供给约束与航运扰动合计推高约 <strong>6.2 美元/桶</strong>
-            ，美元和页岩油增产抵消约 <strong>3.8 美元/桶</strong>。
+            {tx(lang, "供给约束与航运扰动合计推高约", "Supply constraints and shipping disruption add about")} <strong>{tx(lang, "6.2 美元/桶", "$6.2/bbl")}</strong>
+            {tx(lang, "，美元和页岩油增产抵消约", ", while the dollar and shale growth offset about")} <strong>{tx(lang, "3.8 美元/桶", "$3.8/bbl")}</strong>{tx(lang, "。", ".")}
           </span>
         </div>
       </Card>
       <Card
         title={t.forecast}
-        desc="历史线与预测线在同一截点连接；颜色由浅到深分别表示95%、80%与50%区间。"
+        desc={tx(lang, "历史线与预测线在同一截点连接；颜色由浅到深分别表示95%、80%与50%区间。", "History and forecast meet at one cutoff; layered color bands show the 95%, 80% and 50% ranges.")}
         action={
           <Segment
             value={frequency}
             onChange={setFrequency}
             options={[
-              { v: "daily", l: "日度" },
-              { v: "monthly", l: "月度" },
+              { v: "daily", l: tx(lang, "日度", "Daily") },
+              { v: "monthly", l: tx(lang, "月度", "Monthly") },
             ]}
           />
         }
       >
-        <ForecastChart data={forecast} />
+        <ForecastChart data={forecast} lang={lang} />
       </Card>
       <div className="two-col">
         <Card
           title={t.risk}
-          desc="风险上升意味着需要更早准备保证金和采购预算，不等同于危机必然发生。"
+          desc={tx(lang, "风险上升意味着需要更早准备保证金和采购预算，不等同于危机必然发生。", "Rising risk calls for earlier margin and procurement planning; it does not mean a crisis is certain.")}
         >
-          <RiskChart />
+          <RiskChart lang={lang} />
           <div className="risk-summary">
             <Gauge />
             <div>
-              <b>未来30天：中高风险</b>
+              <b>{tx(lang, "未来30天：中高风险", "Next 30 days: elevated risk")}</b>
               <p>
-                航运扰动与隐含波动率同步走高，建议把追加保证金纳入现金安排。
+                {tx(lang, "航运扰动与隐含波动率同步走高，建议把追加保证金纳入现金安排。", "Shipping disruption and implied volatility are rising together; include potential margin calls in cash planning.")}
               </p>
             </div>
           </div>
         </Card>
-        <ScaleCard />
+        <ScaleCard lang={lang} />
       </div>
-      <HedgeCalculator />
+      <HedgeCalculator lang={lang} />
       <Card title={t.advice} className="advice">
         <div className="advice-grid">
           <Advice
             n="01"
-            title="采购节奏"
-            text="未来两周分三批锁定需求，避免在单日波动放大时集中成交。"
+            title={tx(lang, "采购节奏", "Procurement cadence")}
+            text={tx(lang, "未来两周分三批锁定需求，避免在单日波动放大时集中成交。", "Lock demand in three tranches over the next two weeks instead of concentrating execution on a volatile day.")}
           />
           <Advice
             n="02"
-            title="套保比例"
-            text="当前情景建议覆盖 64%，其中期货占 70%，保留部分敞口参与下行。"
+            title={tx(lang, "套保比例", "Hedge ratio")}
+            text={tx(lang, "当前情景建议覆盖 64%，其中期货占 70%，保留部分敞口参与下行。", "Cover 64% under the current scenario, with futures at 70% of the hedge and some exposure left for downside participation.")}
           />
           <Advice
             n="03"
-            title="资金准备"
-            text="把保证金与融资成本纳入预算，预留约 820 万元流动性缓冲。"
+            title={tx(lang, "资金准备", "Liquidity planning")}
+            text={tx(lang, "把保证金与融资成本纳入预算，预留约 820 万元流动性缓冲。", "Budget for margin and financing costs and retain an RMB 8.2 million liquidity buffer.")}
           />
           <Advice
             n="04"
-            title="触发条件"
-            text="Brent 突破 101 美元或风险温度高于 72 时，复核并上调覆盖比例。"
+            title={tx(lang, "触发条件", "Review triggers")}
+            text={tx(lang, "Brent 突破 101 美元或风险温度高于 72 时，复核并上调覆盖比例。", "Review and raise coverage if Brent crosses $101 or the risk temperature exceeds 72.")}
           />
         </div>
       </Card>
@@ -609,27 +671,31 @@ function Segment<T extends string>({
   );
 }
 
-function DriverChart() {
+function DriverChart({ lang }: { lang: Lang }) {
+  const localizedDrivers = drivers.map((driver) => ({
+    ...driver,
+    name: lang === "en" ? driverNamesEn[driver.name] || driver.name : driver.name,
+  }));
   return (
     <div className="chart medium">
       <ResponsiveContainer>
         <BarChart
-          data={drivers}
+          data={localizedDrivers}
           layout="vertical"
           margin={{ left: 28, right: 28 }}
         >
           <CartesianGrid horizontal={false} stroke="#dbe7e4" />
-          <XAxis type="number" tick={{ fontSize: 11 }} unit=" 美元" />
+          <XAxis type="number" tick={{ fontSize: 11 }} unit={tx(lang, " 美元", " USD")} />
           <YAxis
             type="category"
             dataKey="name"
             width={126}
             tick={{ fontSize: 11 }}
           />
-          <Tooltip formatter={(v) => [`${v} 美元/桶`, "估计净影响"]} />
+          <Tooltip formatter={(v) => [tx(lang, `${v} 美元/桶`, `$${v}/bbl`), tx(lang, "估计净影响", "Estimated net impact")]} />
           <ReferenceLine x={0} stroke="#78918c" />
           <Bar dataKey="value" radius={[0, 8, 8, 0]}>
-            {drivers.map((d, i) => (
+            {localizedDrivers.map((d, i) => (
               <Cell key={i} fill={d.value > 0 ? "#2e8176" : "#c27a4c"} />
             ))}
           </Bar>
@@ -639,7 +705,7 @@ function DriverChart() {
   );
 }
 
-function ForecastChart({ data }: { data: ReturnType<typeof makeForecast> }) {
+function ForecastChart({ data, lang }: { data: ReturnType<typeof makeForecast>; lang: Lang }) {
   const rows = data.map((r) => ({
     ...r,
     band95: r.lo95 == null ? undefined : [r.lo95, r.hi95],
@@ -665,35 +731,35 @@ function ForecastChart({ data }: { data: ReturnType<typeof makeForecast> }) {
           <Legend />
           <Area
             dataKey="band95"
-            name="95%区间"
+            name={tx(lang, "95%区间", "95% range")}
             stroke="#b8ced7"
             fill="#dbeaf0"
             fillOpacity={0.62}
           />
           <Area
             dataKey="band80"
-            name="80%区间"
+            name={tx(lang, "80%区间", "80% range")}
             stroke="#8bbdb4"
             fill="#bfe0da"
             fillOpacity={0.62}
           />
           <Area
             dataKey="band50"
-            name="50%区间"
+            name={tx(lang, "50%区间", "50% range")}
             stroke="#d29a72"
             fill="#efd1ba"
             fillOpacity={0.72}
           />
           <Line
             dataKey="actual"
-            name="实际价格"
+            name={tx(lang, "实际价格", "Actual price")}
             stroke="#243b4a"
             strokeWidth={2.4}
             dot={false}
           />
           <Line
             dataKey="forecast"
-            name="预测中位路径"
+            name={tx(lang, "预测中位路径", "Median forecast")}
             stroke="#176f66"
             strokeWidth={2.6}
             dot={false}
@@ -703,7 +769,7 @@ function ForecastChart({ data }: { data: ReturnType<typeof makeForecast> }) {
               x={cutoff}
               stroke="#78918c"
               strokeDasharray="4 4"
-              label={{ value: "预测起点", fontSize: 11, fill: "#526b67" }}
+              label={{ value: tx(lang, "预测起点", "Forecast start"), fontSize: 11, fill: "#526b67" }}
             />
           )}
         </ComposedChart>
@@ -712,7 +778,7 @@ function ForecastChart({ data }: { data: ReturnType<typeof makeForecast> }) {
   );
 }
 
-function RiskChart() {
+function RiskChart({ lang }: { lang: Lang }) {
   return (
     <div className="chart small">
       <ResponsiveContainer>
@@ -723,21 +789,21 @@ function RiskChart() {
           <Tooltip />
           <Area
             dataKey="stress"
-            name="压力情景"
+            name={tx(lang, "压力情景", "Stress scenario")}
             stroke="#bf7549"
             fill="#ebc9ae"
             fillOpacity={0.45}
           />
           <Area
             dataKey="baseline"
-            name="基准风险"
+            name={tx(lang, "基准风险", "Baseline risk")}
             stroke="#237a70"
             fill="#a8d8cf"
             fillOpacity={0.55}
           />
           <ReferenceLine
             y={70}
-            label="高风险"
+            label={tx(lang, "高风险", "High risk")}
             stroke="#b96c52"
             strokeDasharray="4 4"
           />
@@ -747,7 +813,7 @@ function RiskChart() {
   );
 }
 
-function ScaleCard() {
+function ScaleCard({ lang }: { lang: Lang }) {
   const rows = Array.from({ length: 48 }, (_, i) => ({
     i,
     short: Math.sin(i / 2.3) * 2.2,
@@ -756,21 +822,21 @@ function ScaleCard() {
   }));
   return (
     <Card
-      title="油价自身的三层波动"
-      desc="把复杂分量整理为可理解的短、中、长周期；专业模式保留全部中间分量。"
+      title={tx(lang, "油价自身的三层波动", "Three layers of oil-price movement")}
+      desc={tx(lang, "把复杂分量整理为可理解的短、中、长周期；专业模式保留全部中间分量。", "Complex components are grouped into intuitive short-, medium- and long-horizon movements; research mode keeps every component.")}
     >
       <div className="scale-legend">
         <span>
           <i className="s1" />
-          短期噪声 22%
+          {tx(lang, "短期噪声 22%", "Short-term noise 22%")}
         </span>
         <span>
           <i className="s2" />
-          中期库存周期 37%
+          {tx(lang, "中期库存周期 37%", "Inventory cycle 37%")}
         </span>
         <span>
           <i className="s3" />
-          长期供需趋势 41%
+          {tx(lang, "长期供需趋势 41%", "Long-run supply-demand trend 41%")}
         </span>
       </div>
       <div className="chart small">
@@ -792,7 +858,7 @@ function ScaleCard() {
         </ResponsiveContainer>
       </div>
       <p className="plain-note">
-        当前以长期供需趋势为主，中期库存周期正在转强；短期噪声较高，但还没有改变主方向。
+        {tx(lang, "当前以长期供需趋势为主，中期库存周期正在转强；短期噪声较高，但还没有改变主方向。", "The long-run supply-demand trend remains dominant. The inventory cycle is strengthening, while short-term noise has not changed the main direction.")}
       </p>
     </Card>
   );
@@ -811,7 +877,7 @@ type Hedge = {
   fee: number;
   horizon: number;
 };
-function HedgeCalculator() {
+function HedgeCalculator({ lang }: { lang: Lang }) {
   const [v, setV] = useState<Hedge>({
     volume: 300000,
     budget: 94.39,
@@ -849,99 +915,99 @@ function HedgeCalculator() {
   const marginReq = (protectedBarrels * v.budget * v.fx * v.margin) / 100;
   return (
     <Card
-      title="采购成本预警测算"
-      desc="把基差、汇率、保证金、融资和交易费用放进同一张账，不再只看期货盈亏。"
+      title={tx(lang, "采购成本预警测算", "Procurement cost stress test")}
+      desc={tx(lang, "把基差、汇率、保证金、融资和交易费用放进同一张账，不再只看期货盈亏。", "Combine basis, FX, margin, financing and transaction costs in one calculation—not just futures P&L.")}
     >
       <div className="calc-grid">
         <Field
-          label="采购量"
+          label={tx(lang, "采购量", "Purchase volume")}
           value={v.volume}
-          suffix="桶"
+          suffix={tx(lang, "桶", "bbl")}
           onChange={(n) => set("volume", n)}
         />
         <Field
-          label="预算单价"
+          label={tx(lang, "预算单价", "Budget price")}
           value={v.budget}
-          suffix="美元/桶"
+          suffix={tx(lang, "美元/桶", "USD/bbl")}
           onChange={(n) => set("budget", n)}
         />
         <Field
-          label="套保覆盖"
+          label={tx(lang, "套保覆盖", "Hedge coverage")}
           value={v.ratio}
           suffix="%"
           onChange={(n) => set("ratio", n)}
         />
         <Field
-          label="期货占比"
+          label={tx(lang, "期货占比", "Futures share")}
           value={v.futures}
           suffix="%"
           onChange={(n) => set("futures", n)}
         />
         <Field
-          label="预计基差"
+          label={tx(lang, "预计基差", "Expected basis")}
           value={v.basis}
-          suffix="美元/桶"
+          suffix={tx(lang, "美元/桶", "USD/bbl")}
           onChange={(n) => set("basis", n)}
         />
         <Field
-          label="美元兑人民币"
+          label={tx(lang, "美元兑人民币", "USD/CNY")}
           value={v.fx}
           suffix="CNY"
           step={0.01}
           onChange={(n) => set("fx", n)}
         />
         <Field
-          label="保证金比例"
+          label={tx(lang, "保证金比例", "Margin rate")}
           value={v.margin}
           suffix="%"
           onChange={(n) => set("margin", n)}
         />
         <Field
-          label="融资年利率"
+          label={tx(lang, "融资年利率", "Annual funding rate")}
           value={v.finance}
           suffix="%"
           step={0.1}
           onChange={(n) => set("finance", n)}
         />
         <Field
-          label="合约规模"
+          label={tx(lang, "合约规模", "Contract size")}
           value={v.contract}
-          suffix="桶"
+          suffix={tx(lang, "桶", "bbl")}
           onChange={(n) => set("contract", n)}
         />
         <Field
-          label="单边费用"
+          label={tx(lang, "单边费用", "One-way fee")}
           value={v.fee}
-          suffix="美元/桶"
+          suffix={tx(lang, "美元/桶", "USD/bbl")}
           step={0.005}
           onChange={(n) => set("fee", n)}
         />
         <Field
-          label="方案期限"
+          label={tx(lang, "方案期限", "Plan horizon")}
           value={v.horizon}
-          suffix="天"
+          suffix={tx(lang, "天", "days")}
           onChange={(n) => set("horizon", n)}
         />
       </div>
       <div className="result-grid">
         <Kpi
-          label="未套保成本"
-          value={`${(unhedged / 1e6).toFixed(1)} 百万元`}
+          label={tx(lang, "未套保成本", "Unhedged cost")}
+          value={tx(lang, `${(unhedged / 1e6).toFixed(1)} 百万元`, `RMB ${(unhedged / 1e6).toFixed(1)}m`)}
         />
         <Kpi
-          label="套保后净成本"
-          value={`${(hedged / 1e6).toFixed(1)} 百万元`}
-          delta={`节省 ${((unhedged - hedged) / 1e6).toFixed(1)} 百万元`}
+          label={tx(lang, "套保后净成本", "Net hedged cost")}
+          value={tx(lang, `${(hedged / 1e6).toFixed(1)} 百万元`, `RMB ${(hedged / 1e6).toFixed(1)}m`)}
+          delta={tx(lang, `节省 ${((unhedged - hedged) / 1e6).toFixed(1)} 百万元`, `Saving RMB ${((unhedged - hedged) / 1e6).toFixed(1)}m`)}
         />
         <Kpi
-          label="相对预算"
-          value={`${((hedged - budget) / 1e6).toFixed(1)} 百万元`}
+          label={tx(lang, "相对预算", "Versus budget")}
+          value={tx(lang, `${((hedged - budget) / 1e6).toFixed(1)} 百万元`, `RMB ${((hedged - budget) / 1e6).toFixed(1)}m`)}
           tone={hedged > budget ? "warm" : ""}
         />
         <Kpi
-          label="保证金需求"
-          value={`${(marginReq / 1e6).toFixed(1)} 百万元`}
-          delta={`融资成本 ${(finance / 1e4).toFixed(1)} 万元`}
+          label={tx(lang, "保证金需求", "Margin requirement")}
+          value={tx(lang, `${(marginReq / 1e6).toFixed(1)} 百万元`, `RMB ${(marginReq / 1e6).toFixed(1)}m`)}
+          delta={tx(lang, `融资成本 ${(finance / 1e4).toFixed(1)} 万元`, `Funding cost RMB ${(finance / 1e3).toFixed(0)}k`)}
         />
       </div>
     </Card>
@@ -1019,22 +1085,22 @@ function Professional({
       />
       <div className="pro-tabs" role="tablist">
         <Tab id="impact" active={tab} set={setTab} icon={<BarChart3 />}>
-          净影响分析
+          {tx(lang, "净影响分析", "Net-impact analysis")}
         </Tab>
         <Tab id="forecast" active={tab} set={setTab} icon={<TrendingUp />}>
-          价格预测
+          {tx(lang, "价格预测", "Price forecast")}
         </Tab>
         <Tab id="risk" active={tab} set={setTab} icon={<ShieldCheck />}>
-          危机预警
+          {tx(lang, "危机预警", "Risk warning")}
         </Tab>
         <Tab id="data" active={tab} set={setTab} icon={<Database />}>
           {t.source}
         </Tab>
       </div>
-      {tab === "impact" && <ImpactLab />}
-      {tab === "forecast" && <ForecastLab />}
-      {tab === "risk" && <RiskLab />}
-      {tab === "data" && <DataLab />}
+      {tab === "impact" && <ImpactLab lang={lang} />}
+      {tab === "forecast" && <ForecastLab lang={lang} />}
+      {tab === "risk" && <RiskLab lang={lang} />}
+      {tab === "data" && <DataLab lang={lang} />}
     </div>
   );
 }
@@ -1064,7 +1130,7 @@ function Tab({
   );
 }
 
-function ImpactLab() {
+function ImpactLab({ lang }: { lang: Lang }) {
   const [imf, setImf] = useState(5);
   const [window, setWindow] = useState(60);
   const [components, setComponents] = useState<Array<{ imf: string; channelZh: string; volatilityShare: number }>>([]);
@@ -1078,40 +1144,40 @@ function ImpactLab() {
   };
   return (
     <Card
-      title="多尺度净影响分析"
-      desc="默认载入最新样本；调整参数后立即刷新演示结果。"
-      action={<span className="data-badge">Demo · deterministic</span>}
+      title={tx(lang, "多尺度净影响分析", "Multi-scale net-impact analysis")}
+      desc={tx(lang, "默认载入最新样本；调整参数后立即刷新演示结果。", "The latest sample loads by default; adjust parameters and rerun the analysis.")}
+      action={<span className="data-badge">{tx(lang, "演示 · 确定性复现", "Demo · deterministic")}</span>}
     >
       <div className="lab-layout">
         <aside>
           <h3>
             <Settings2 />
-            分析参数
+            {tx(lang, "分析参数", "Analysis settings")}
           </h3>
-          <Field label="分量数量" value={imf} suffix="个" onChange={setImf} />
+          <Field label={tx(lang, "分量数量", "Component count")} value={imf} suffix={tx(lang, "个", "components")} onChange={setImf} />
           <Field
-            label="滚动窗口"
+            label={tx(lang, "滚动窗口", "Rolling window")}
             value={window}
-            suffix="月"
+            suffix={tx(lang, "月", "months")}
             onChange={setWindow}
           />
           <label className="field">
-            <span>估计区间</span>
+            <span>{tx(lang, "估计区间", "Estimation range")}</span>
             <div>
               <input type="date" defaultValue="2018-01-01" />
               <input type="date" defaultValue="2026-07-31" />
             </div>
           </label>
-          <button className="primary compact" onClick={() => void run()}>{running ? "正在计算…" : "重新计算"}</button>
+          <button className="primary compact" onClick={() => void run()}>{running ? tx(lang, "正在计算…", "Calculating…") : tx(lang, "重新计算", "Run analysis")}</button>
         </aside>
         <div>
-          <DriverChart />
-          {components.length > 0 && <div className="metric-table">{components.map((item) => <span key={item.imf}><b>{item.imf} · {item.channelZh}</b>{item.volatilityShare.toFixed(1)}%</span>)}</div>}
+          <DriverChart lang={lang} />
+          {components.length > 0 && <div className="metric-table">{components.map((item, index) => <span key={item.imf}><b>{item.imf} · {lang === "zh" ? item.channelZh : ["Short-term repricing", "Production policy", "Inventory adjustment", "Supply disruption", "Demand & long-run trend"][index] || "Long-run trend"}</b>{item.volatilityShare.toFixed(1)}%</span>)}</div>}
           <div className="method-steps">
-            <span>01 数据对齐</span>
-            <span>02 分解 {imf} 个分量</span>
-            <span>03 样本外估计</span>
-            <span>04 稳健性检查</span>
+            <span>{tx(lang, "01 数据对齐", "01 Data alignment")}</span>
+            <span>{tx(lang, `02 分解 ${imf} 个分量`, `02 Decompose ${imf} components`)}</span>
+            <span>{tx(lang, "03 样本外估计", "03 Out-of-sample estimate")}</span>
+            <span>{tx(lang, "04 稳健性检查", "04 Robustness checks")}</span>
           </div>
         </div>
       </div>
@@ -1119,7 +1185,7 @@ function ImpactLab() {
   );
 }
 
-function ForecastLab() {
+function ForecastLab({ lang }: { lang: Lang }) {
   const [freq, setFreq] = useState<Frequency>("monthly");
   const [h, setH] = useState(12);
   const [liveData, setLiveData] = useState<ReturnType<typeof makeForecast>>([]);
@@ -1141,40 +1207,40 @@ function ForecastLab() {
   const data = liveData.length ? liveData : makeForecast(freq, h);
   return (
     <Card
-      title="价格预测实验"
-      desc="可调整频率、预测期限与训练窗口，并查看三层概率区间。"
+      title={tx(lang, "价格预测实验", "Price forecasting lab")}
+      desc={tx(lang, "可调整频率、预测期限与训练窗口，并查看三层概率区间。", "Adjust frequency, forecast horizon and training window, then inspect three probability ranges.")}
       action={
         <Segment
           value={freq}
           onChange={setFreq}
           options={[
-            { v: "daily", l: "日度" },
-            { v: "monthly", l: "月度" },
+            { v: "daily", l: tx(lang, "日度", "Daily") },
+            { v: "monthly", l: tx(lang, "月度", "Monthly") },
           ]}
         />
       }
     >
       <div className="inline-fields">
         <Field
-          label="预测期限"
+          label={tx(lang, "预测期限", "Forecast horizon")}
           value={h}
-          suffix={freq === "daily" ? "天" : "月"}
+          suffix={freq === "daily" ? tx(lang, "天", "days") : tx(lang, "月", "months")}
           onChange={setH}
         />
-        <Field label="训练窗口" value={60} suffix="月" onChange={() => {}} />
+        <Field label={tx(lang, "训练窗口", "Training window")} value={60} suffix={tx(lang, "月", "months")} onChange={() => {}} />
         <label className="field">
-          <span>模型组合</span>
+          <span>{tx(lang, "模型组合", "Model ensemble")}</span>
           <div>
             <select defaultValue="ensemble">
-              <option value="ensemble">多尺度组合</option>
-              <option value="linear">线性基准</option>
-              <option value="tree">树模型</option>
+              <option value="ensemble">{tx(lang, "多尺度组合", "Multi-scale ensemble")}</option>
+              <option value="linear">{tx(lang, "线性基准", "Linear baseline")}</option>
+              <option value="tree">{tx(lang, "树模型", "Tree model")}</option>
             </select>
           </div>
         </label>
       </div>
-      <button className="primary compact" onClick={() => void run()}>{running ? "模型运行中…" : "用最新数据运行模型"}</button>
-      <ForecastChart data={data} />
+      <button className="primary compact" onClick={() => void run()}>{running ? tx(lang, "模型运行中…", "Model running…") : tx(lang, "用最新数据运行模型", "Run on latest data")}</button>
+      <ForecastChart data={data} lang={lang} />
       <div className="metric-table">
         <span>
           <b>MAE</b> {metrics.ValidationMAE?.toFixed?.(2) ?? "3.18"}
@@ -1183,17 +1249,17 @@ function ForecastLab() {
           <b>RMSE</b> {metrics.ValidationRMSE?.toFixed?.(2) ?? "4.72"}
         </span>
         <span>
-          <b>方向准确率</b> {metrics.DirectionalAccuracyPercent?.toFixed?.(1) ?? "61.7"}%
+          <b>{tx(lang, "方向准确率", "Directional accuracy")}</b> {metrics.DirectionalAccuracyPercent?.toFixed?.(1) ?? "61.7"}%
         </span>
         <span>
-          <b>区间覆盖率</b> 82.4%
+          <b>{tx(lang, "区间覆盖率", "Interval coverage")}</b> 82.4%
         </span>
       </div>
     </Card>
   );
 }
 
-function RiskLab() {
+function RiskLab({ lang }: { lang: Lang }) {
   const [threshold, setThreshold] = useState(70);
   const [liveRisk, setLiveRisk] = useState<number | null>(null);
   const [running, setRunning] = useState(false);
@@ -1206,39 +1272,39 @@ function RiskLab() {
   };
   return (
     <Card
-      title="危机风险预警"
-      desc="预警用于排序与触发复核，不把风险概率解释成确定事件。"
+      title={tx(lang, "危机风险预警", "Crisis-risk warning")}
+      desc={tx(lang, "预警用于排序与触发复核，不把风险概率解释成确定事件。", "Warnings rank risk and trigger review; they do not treat a probability as a certain event.")}
     >
       <div className="lab-layout">
         <aside>
           <h3>
             <Gauge />
-            预警设置
+            {tx(lang, "预警设置", "Warning settings")}
           </h3>
           <Field
-            label="高风险阈值"
+            label={tx(lang, "高风险阈值", "High-risk threshold")}
             value={threshold}
-            suffix="分"
+            suffix={tx(lang, "分", "points")}
             onChange={setThreshold}
           />
-          <button className="primary compact" onClick={() => void run()}>{running ? "模型运行中…" : "用最新数据运行预警"}</button>
+          <button className="primary compact" onClick={() => void run()}>{running ? tx(lang, "模型运行中…", "Model running…") : tx(lang, "用最新数据运行预警", "Run latest warning")}</button>
           <Field
-            label="前瞻窗口"
+            label={tx(lang, "前瞻窗口", "Forward window")}
             value={20}
-            suffix="交易日"
+            suffix={tx(lang, "交易日", "trading days")}
             onChange={() => {}}
           />
           <label className="check">
             <input type="checkbox" defaultChecked />
-            使用实时窗口分解
+            {tx(lang, "使用实时窗口分解", "Use live-window decomposition")}
           </label>
           <label className="check">
             <input type="checkbox" defaultChecked />
-            保留数据时间戳
+            {tx(lang, "保留数据时间戳", "Preserve data timestamps")}
           </label>
         </aside>
         <div>
-          <RiskChart />
+          <RiskChart lang={lang} />
           <div className="metric-table">
             <span>
               <b>ROC AUC</b> 0.845
@@ -1247,10 +1313,10 @@ function RiskLab() {
               <b>Brier</b> 0.137
             </span>
             <span>
-              <b>当前风险</b> {(liveRisk ?? 63.4).toFixed(1)}
+              <b>{tx(lang, "当前风险", "Current risk")}</b> {(liveRisk ?? 63.4).toFixed(1)}
             </span>
             <span>
-              <b>距离阈值</b> {Math.max(0, threshold - (liveRisk ?? 63.4)).toFixed(1)}
+              <b>{tx(lang, "距离阈值", "Distance to threshold")}</b> {Math.max(0, threshold - (liveRisk ?? 63.4)).toFixed(1)}
             </span>
           </div>
         </div>
@@ -1259,7 +1325,7 @@ function RiskLab() {
   );
 }
 
-function DataLab() {
+function DataLab({ lang }: { lang: Lang }) {
   const [q, setQ] = useState("");
   const [liveCatalog, setLiveCatalog] = useState<DataSeries[]>(catalog);
   const [sources, setSources] = useState(() => new Set(catalog.map((x) => x.source)));
@@ -1302,7 +1368,7 @@ function DataLab() {
   const found = liveCatalog.filter(
     (x) =>
       sources.has(x.source) &&
-      (x.name.toLowerCase().includes(q.toLowerCase()) ||
+      (seriesText(x, lang).name.toLowerCase().includes(q.toLowerCase()) ||
         x.id.toLowerCase().includes(q.toLowerCase())),
   );
   const toggle = (s: string) =>
@@ -1317,7 +1383,7 @@ function DataLab() {
     saveLocalRecord({
       id: selected,
       kind: "series",
-      label: item.name,
+      label: seriesText(item, lang).name,
       payload: { source: item.source, unit: item.unit, frequency: item.frequency },
     });
   };
@@ -1332,9 +1398,9 @@ function DataLab() {
   };
   return (
     <Card
-      title="搜索并连接数据"
-      desc="官方来源默认全选；选择序列后预览、下载或保存到研究库。"
-      action={<span className="data-badge">{loading ? "正在连接…" : `${liveCatalog.length} 个官方序列`}</span>}
+      title={tx(lang, "搜索并连接数据", "Search and connect data")}
+      desc={tx(lang, "官方来源默认全选；选择序列后预览、下载或保存到研究库。", "All official sources are selected by default. Preview, download or save any series to the research library.")}
+      action={<span className="data-badge">{loading ? tx(lang, "正在连接…", "Connecting…") : tx(lang, `${liveCatalog.length} 个官方序列`, `${liveCatalog.length} official series`)}</span>}
     >
       <div className="source-row">
         {[...new Set(liveCatalog.map((x) => x.source))].map((s) => (
@@ -1352,7 +1418,7 @@ function DataLab() {
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="输入 Brent、库存、美元、利率……"
+          placeholder={tx(lang, "输入 Brent、库存、美元、利率……", "Search Brent, inventories, dollar, rates…")}
         />
       </div>
       <div className="data-layout">
@@ -1365,9 +1431,9 @@ function DataLab() {
             >
               <i style={{ background: x.color }} />
               <span>
-                <b>{x.name}</b>
+                <b>{seriesText(x, lang).name}</b>
                 <small>
-                  {x.source} · {x.frequency} · {x.unit}
+                  {x.source} · {seriesText(x, lang).frequency} · {seriesText(x, lang).unit}
                 </small>
               </span>
               <em>{x.updated}</em>
@@ -1380,13 +1446,13 @@ function DataLab() {
               value={frequency}
               onChange={setFrequency}
               options={[
-                { v: "monthly", l: "月度" },
-                { v: "daily", l: "日度" },
+                { v: "monthly", l: tx(lang, "月度", "Monthly") },
+                { v: "daily", l: tx(lang, "日度", "Daily") },
               ]}
             />
             <button onClick={save}>
               <Save />
-              保存
+              {tx(lang, "保存", "Save")}
             </button>
             <button onClick={download}>
               <Download />
@@ -1415,7 +1481,7 @@ function DataLab() {
               <b>{liveCatalog.find((x) => x.id === selected)?.source}</b> ·{" "}
               {selected}
               <small>
-                {seriesLive ? "来自官方数据接口；密钥仅保存在 Vercel 服务端。" : "官方接口暂不可用，当前显示可复现备用序列。"}
+                {seriesLive ? tx(lang, "来自官方数据接口；密钥仅保存在 Vercel 服务端。", "Official data feed; credentials remain on the Vercel server.") : tx(lang, "官方接口暂不可用，当前显示可复现备用序列。", "Official feed unavailable; showing the reproducible fallback series.")}
               </small>
             </span>
           </div>
