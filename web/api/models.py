@@ -7,6 +7,7 @@ from urllib.parse import urlparse, urlencode
 from urllib.request import urlopen
 import numpy as np
 from scipy.stats import f as f_distribution
+from scipy.signal import hilbert
 from vmdpy import VMD
 
 CHANNELS_ZH = ["投机与短期重定价", "产量政策", "库存调整", "供给扰动", "需求与长期趋势"]
@@ -61,7 +62,13 @@ def prices(target="EIA-BRENT"):
 def decompose(values, count=5):
     modes, _, omega = VMD(values, 1000, 0, count, 0, 0, 1e-7)
     order = np.argsort(np.abs(omega[-1]))[::-1]
-    return modes[order], np.abs(omega[-1][order])
+    modes = modes[order]
+    if modes.shape[1] < len(values):
+        missing = len(values)-modes.shape[1]
+        modes = np.pad(modes, ((0,0),(missing,0)), mode="edge")
+    elif modes.shape[1] > len(values):
+        modes = modes[:,-len(values):]
+    return modes, np.abs(omega[-1][order])
 
 def ridge_forecast(values, horizon, index, lags=12):
     x = np.asarray([values[i-lags:i] for i in range(lags, len(values))]); y = values[lags:]
@@ -181,6 +188,33 @@ def generalized_fevd(data, horizon, max_lag):
     theta /= np.maximum(theta.sum(axis=1, keepdims=True), 1e-12)
     return lag, theta
 
+def orthogonal_fevd(data, horizon, max_lag):
+    """Cholesky-orthogonal FEVD used by the original professional workflow."""
+    lag, coefficients, covariance = select_var_lag(data, max_lag)
+    variables = data.shape[1]
+    ar = [coefficients[1+i*variables:1+(i+1)*variables].T for i in range(lag)]
+    phi = [np.eye(variables)]
+    for step in range(1, horizon):
+        value = np.zeros((variables, variables))
+        for offset in range(1, min(lag, step)+1):
+            value += phi[step-offset] @ ar[offset-1]
+        phi.append(value)
+    jitter = 1e-10
+    while True:
+        try:
+            impact = np.linalg.cholesky(covariance + np.eye(variables)*jitter)
+            break
+        except np.linalg.LinAlgError:
+            jitter *= 10
+            if jitter > 1e-2:
+                raise ValueError("VAR innovation covariance is not positive definite")
+    contributions = np.zeros((variables, variables))
+    for matrix in phi:
+        response = matrix @ impact
+        contributions += response**2
+    contributions /= np.maximum(contributions.sum(axis=1, keepdims=True), 1e-12)
+    return lag, contributions
+
 def segmented_break_test(values, dates):
     """Search interior break dates by comparing pooled and two-segment OLS RSS."""
     y = np.asarray(values, dtype=float); t = np.arange(len(y), dtype=float)
@@ -196,51 +230,93 @@ def segmented_break_test(values, dates):
         if best is None or rss < best[0]: best = (rss, row)
     return {"candidateCount": len(profile), "bestDate": best[1]["date"], "rssImprovementPercent": best[1]["improvementPercent"], "profile": profile}
 
+def fixed_break_test(values, dates, break_date):
+    y = np.asarray(values, dtype=float); t = np.arange(1, len(y)+1, dtype=float)
+    matches = [index for index, stamp in enumerate(dates) if stamp >= break_date]
+    if not matches: raise ValueError("Event start is outside the aligned data window")
+    split = matches[0]+1; indicator = (t >= split).astype(float); post = indicator*(t-split+1)
+    restricted = np.column_stack([np.ones(len(y)), t]); unrestricted = np.column_stack([np.ones(len(y)), t, indicator, post])
+    beta_r = np.linalg.lstsq(restricted, y, rcond=None)[0]; beta_u = np.linalg.lstsq(unrestricted, y, rcond=None)[0]
+    rss_r = ols_sse(restricted, y); rss_u = ols_sse(unrestricted, y); df1 = 2; df2 = len(y)-4
+    statistic = max(0.0, ((rss_r-rss_u)/df1)/max(rss_u/max(df2,1),1e-12)); p_value = float(f_distribution.sf(statistic,df1,max(df2,1)))
+    return {"breakDate": dates[matches[0]], "fStatistic": statistic, "pValue": p_value, "preSlope": float(beta_u[1]), "postSlope": float(beta_u[1]+beta_u[3]), "slopeChange": float(beta_u[3]), "levelShift": float(beta_u[2]), "significant": p_value < .1}
+
+def align_on_target_dates(target_rows, factor_rows, start, end):
+    dates = [stamp for stamp, _ in target_rows if start <= stamp <= end]
+    target_map = dict(target_rows); arrays = []
+    for rows in factor_rows:
+        stamps = np.asarray([stamp for stamp, _ in rows]); values = np.asarray([value for _, value in rows], dtype=float)
+        positions = np.searchsorted(stamps, np.asarray(dates), side="right")-1
+        arrays.append(np.asarray([values[position] if position >= 0 else np.nan for position in positions]))
+    keep = np.ones(len(dates), dtype=bool)
+    for values in arrays: keep &= np.isfinite(values)
+    clean_dates = [stamp for stamp, good in zip(dates, keep) if good]
+    target = np.asarray([target_map[stamp] for stamp in clean_dates], dtype=float)
+    factors = [values[keep] for values in arrays]
+    return clean_dates, target, factors
+
 def net_impact(payload):
-    target = payload.get("target", "EIA-BRENT"); selected = [x for x in payload.get("factors", []) if (x in SERIES or re.fullmatch(r"FRED-[A-Z0-9_]+", x)) and x != target]
+    target = payload.get("target", "EIA-BRENT"); custom_rows = {str(item.get("id")): [(str(point["date"]),float(point["value"])) for point in item.get("points",[]) if point.get("date") and np.isfinite(float(point.get("value",np.nan)))] for item in payload.get("customSeries",[]) if item.get("id")}
+    custom_meta = {str(item.get("id")): (str(item.get("id")),str(item.get("nameZh") or item.get("name") or item.get("id")),str(item.get("nameEn") or item.get("name") or item.get("id"))) for item in payload.get("customSeries",[]) if item.get("id")}
+    valid = lambda sid: sid in SERIES or re.fullmatch(r"FRED-[A-Z0-9_]+",sid) or sid in custom_rows
+    meta = lambda sid: custom_meta.get(sid,series_meta(sid))
+    selected = [x for x in payload.get("factors", []) if valid(x) and x != target]
     if not selected: selected = ["FRED-PETINV", "FRED-DTWEXBGS", "FRED-DGS10", "FRED-INDPRO", "FRED-T10YIE", "FRED-VIXCLS", "FRED-HENRYHUB"]
-    selected = selected[:12]; start = payload.get("start", "2005-01-01"); max_lag = min(max(int(payload.get("maxLag", 3)), 1), 6); count = min(max(int(payload.get("imf", 5)), 3), 8)
-    with ThreadPoolExecutor(max_workers=min(8, len(selected)+1)) as pool: loaded = list(pool.map(lambda sid: (sid, monthly(load_series(sid, start))), [target]+selected))
-    maps = dict(loaded); end = str(payload.get("end", "9999-12-31"))[:7]; common = [stamp for stamp in sorted(set.intersection(*(set(maps[sid]) for sid in [target]+selected))) if stamp <= end]
-    if len(common) < 72: raise ValueError(f"Only {len(common)} aligned monthly observations; at least 72 are required")
-    levels = {sid: np.asarray([maps[sid][d] for d in common], dtype=float) for sid in [target]+selected}; y_level = levels[target]; y = np.diff(y_level); factor_changes = []
-    for sid in selected:
-        arr = levels[sid]; factor_changes.append(np.diff(np.log(arr)) if np.all(arr > 0) else np.diff(arr))
+    selected = selected[:12]; estimation_start = str(payload.get("estimationStart") or payload.get("start") or "2018-11-07"); event_start = str(payload.get("eventStart") or "2020-01-01"); event_end = str(payload.get("eventEnd") or payload.get("end") or date.today()); max_lag = min(max(int(payload.get("maxLag", 3)), 1), 6); count = min(max(int(payload.get("imf", 5)), 3), 8)
+    ids = [target]+selected
+    def fetch(sid): return custom_rows[sid] if sid in custom_rows else load_series(sid,estimation_start)
+    with ThreadPoolExecutor(max_workers=min(8,len(ids))) as pool: loaded = list(pool.map(fetch,ids))
+    common,y_level,factor_levels = align_on_target_dates(loaded[0],loaded[1:],estimation_start,event_end)
+    if len(common) < 120: raise ValueError(f"Only {len(common)} aligned trading-day observations; at least 120 are required")
+    event_positions = [index for index,stamp in enumerate(common) if event_start <= stamp <= event_end]
+    if len(event_positions) < 5: raise ValueError("Event window has fewer than five aligned trading-day observations")
+    y = np.diff(y_level); factor_changes = []
+    for arr in factor_levels: factor_changes.append(np.diff(np.log(arr)) if np.all(arr > 0) else np.diff(arr))
     x_raw = np.column_stack(factor_changes); means, scales = x_raw.mean(0), x_raw.std(0); scales[scales == 0] = 1; x = (x_raw-means)/scales
     design = np.column_stack([np.ones(len(y)), x]); beta = np.linalg.lstsq(design, y, rcond=None)[0]; contributions = beta[1:]*x[-1]; fitted = design@beta; r2 = float(1-np.sum((y-fitted)**2)/max(np.sum((y-y.mean())**2), 1e-12))
     alpha = float(payload.get("alpha", .05)); granger = []
     for index, sid in enumerate(selected):
-        meta = series_meta(sid); _, lag, statistic, p_value = granger_test(y, x[:, index], max_lag); granger.append({"id": sid, "nameZh": meta[1], "nameEn": meta[2], "lag": lag, "fStatistic": statistic, "pValue": p_value, "significant": p_value < alpha})
-    modes, freq = decompose(y_level[-min(600, len(y_level)):], count); component_dates = common[-modes.shape[1]:]
+        item_meta = meta(sid); _, lag, statistic, p_value = granger_test(y, x[:, index], max_lag); granger.append({"id": sid, "nameZh": item_meta[1], "nameEn": item_meta[2], "lag": lag, "fStatistic": statistic, "pValue": p_value, "significant": p_value < alpha})
+    modes, freq = decompose(y_level,count); component_dates = common
     components = [{"imf": f"IMF{i+1}", "channelZh": CHANNELS_ZH[i] if i < 5 else "长期趋势", "channelEn": CHANNELS_EN[i] if i < 5 else "Long-run trend", "centerFrequency": float(freq[i]), "volatilityShare": float(np.var(modes[i])/max(np.var(y_level), 1e-12)*100), "points": [{"date": d, "value": float(v)} for d, v in zip(component_dates[-180:], modes[i, -180:])]} for i in range(count)]
-    # Multi-resolution Granger tests use decompositions of the same aligned monthly sample.
-    y_modes, _ = decompose(y, count); factor_modes = [decompose(x[:, index], count)[0] for index in range(len(selected))]
+    analytic = hilbert(modes[0]); phase = np.unwrap(np.angle(analytic)); instantaneous_frequency = np.abs(np.diff(phase))/(2*np.pi)
+    hht = [{"date": common[index+1], "frequency": float(value), "period": float(1/max(value,1e-9))} for index,value in enumerate(instantaneous_frequency) if np.isfinite(value)][-360:]
+    factor_standardized = [(arr-arr.mean())/max(arr.std(),1e-12) for arr in factor_levels]
+    factor_modes = [decompose(arr,count)[0] for arr in factor_standardized]
     scale_granger = []
     for factor_index, sid in enumerate(selected):
-        meta = series_meta(sid)
+        item_meta = meta(sid)
         for scale_index in range(count):
-            _, lag, statistic, p_value = granger_test(y_modes[scale_index], factor_modes[factor_index][scale_index], max_lag)
-            scale_granger.append({"id": sid, "nameZh": meta[1], "nameEn": meta[2], "imf": f"IMF{scale_index+1}", "lag": lag, "fStatistic": statistic, "pValue": p_value, "significant": p_value < alpha})
+            _, lag, statistic, p_value = granger_test(modes[scale_index],factor_modes[factor_index][scale_index],max_lag)
+            scale_granger.append({"id": sid, "nameZh": item_meta[1], "nameEn": item_meta[2], "imf": f"IMF{scale_index+1}", "lag": lag, "fStatistic": statistic, "pValue": p_value, "significant": p_value < alpha})
     selected_scales = []
     for sid in selected:
         candidates = [row for row in scale_granger if row["id"] == sid]
         chosen = min(candidates, key=lambda row: row["pValue"])
         selected_scales.append({"id": sid, "nameZh": chosen["nameZh"], "nameEn": chosen["nameEn"], "imf": chosen["imf"], "pValue": chosen["pValue"]})
-    horizon = min(max(int(payload.get("fevdHorizon", 12)), 2), 36)
-    var_data = np.column_stack([y, x])
-    var_lag, fevd_matrix = generalized_fevd(var_data, horizon, max_lag)
-    fevd = [{"id": sid, "nameZh": series_meta(sid)[1], "nameEn": series_meta(sid)[2], "share": float(fevd_matrix[0, index+1]*100)} for index, sid in enumerate(selected)]
+    event_ranges = np.asarray([np.ptp(mode[event_positions]) for mode in modes]); variances = np.asarray([np.var(mode,ddof=1) for mode in modes]); correlations = np.asarray([abs(np.corrcoef(y_level,mode)[0,1]) for mode in modes]); scores = variances/max(variances.sum(),1e-12)*100+event_ranges/max(event_ranges.sum(),1e-12)*100+correlations*100
+    selected_index = int(np.nanargmax(scores)); selected_scale = modes[selected_index]; event_scale = selected_scale[event_positions]; minimum_local = int(np.argmin(event_scale)); maximum_local = int(np.argmax(event_scale)); minimum_index = event_positions[minimum_local]; maximum_index = event_positions[maximum_local]; horizon = abs(maximum_index-minimum_index)
+    if horizon < 1: raise ValueError("Selected-scale extrema occur on the same trading day; FEVD h cannot be determined")
+    net_effect = float(event_scale[maximum_local]-event_scale[minimum_local]); original_event = y_level[event_positions]; original_response = float(original_event.max()-original_event.min()); response_share = net_effect/original_response*100 if abs(original_response)>1e-12 else float("nan")
+    selected_factor_modes = [factor_modes[index][selected_index] for index in range(len(selected))]
+    var_data = np.column_stack([np.diff(selected_scale)]+[np.diff(values) for values in selected_factor_modes])
+    var_lag, fevd_matrix = orthogonal_fevd(var_data, horizon, max_lag)
+    external_total = max(float(fevd_matrix[0,1:].sum()),1e-12)
+    fevd = [{"id": sid, "nameZh": meta(sid)[1], "nameEn": meta(sid)[2], "share": float(fevd_matrix[0,index+1]*100), "externalWeight": float(fevd_matrix[0,index+1]/external_total*100), "absoluteImpact": float(net_effect*fevd_matrix[0,index+1]/external_total)} for index,sid in enumerate(selected)]
     own_share = float(fevd_matrix[0, 0]*100)
-    window = min(max(int(payload.get("window", 60)), 24), len(y)); rolling = []; rolling_fevd = []
-    for end in range(window, len(y)+1):
+    window = min(max(int(payload.get("window", 120)), 48),len(y)); rolling = []; rolling_fevd = []; first_event_end = max(window,event_positions[0])
+    for end in range(first_event_end,len(y)+1):
         local_x, local_y = x[end-window:end], y[end-window:end]; local_design = np.column_stack([np.ones(window), local_x]); local_beta = np.linalg.lstsq(local_design, local_y, rcond=None)[0]
         rolling.append({"date": common[end], "observed": float(local_y[-1]), "fitted": float(local_design[-1]@local_beta)})
-        if (end-window) % 3 == 0 or end == len(y):
-            local_lag, local_fevd = generalized_fevd(np.column_stack([local_y, local_x]), horizon, min(max_lag, 3))
+        if (end-first_event_end) % 5 == 0 or end == len(y):
+            local_lag, local_fevd = orthogonal_fevd(np.column_stack([local_y, local_x]),horizon,min(max_lag,3))
             rolling_fevd.append({"date": common[end], "externalShare": float((1-local_fevd[0,0])*100), "ownShare": float(local_fevd[0,0]*100), "lag": local_lag})
-    drivers = [{"id": sid, "nameZh": series_meta(sid)[1], "nameEn": series_meta(sid)[2], "impact": float(contributions[i]), "coefficient": float(beta[i+1])} for i, sid in enumerate(selected)]; drivers.sort(key=lambda row: abs(row["impact"]), reverse=True)
-    break_test = segmented_break_test(y, common[1:])
-    return {"mode": "verified-live", "method": "Monthly aligned official series; VMD; multi-resolution Granger tests; generalized FEVD; rolling OLS and FEVD; segmented RSS break search", "asOf": common[-1], "target": target, "observations": len(common), "rSquared": r2, "drivers": drivers, "granger": granger, "scaleGranger": scale_granger, "selectedScales": selected_scales, "components": components, "fevd": fevd, "fevdOwnShare": own_share, "fevdHorizon": horizon, "varLag": var_lag, "rolling": rolling[-180:], "rollingFevd": rolling_fevd[-120:], "breakTest": break_test, "sources": [{"id": sid, "providerId": series_meta(sid)[0], "nameZh": series_meta(sid)[1], "nameEn": series_meta(sid)[2]} for sid in [target]+selected]}
+    drivers = [{"id":sid,"nameZh":meta(sid)[1],"nameEn":meta(sid)[2],"impact":float(contributions[i]),"coefficient":float(beta[i+1])} for i,sid in enumerate(selected)]; drivers.sort(key=lambda row: abs(row["impact"]),reverse=True)
+    optimal_break = segmented_break_test(selected_scale,common); fixed_break = fixed_break_test(selected_scale,common,event_start)
+    scale_effect = {"selectedScale":f"IMF{selected_index+1}","minimumDate":common[minimum_index],"minimumValue":float(selected_scale[minimum_index]),"maximumDate":common[maximum_index],"maximumValue":float(selected_scale[maximum_index]),"tradingDayInterval":horizon,"calendarDayInterval":abs((date.fromisoformat(common[maximum_index])-date.fromisoformat(common[minimum_index])).days),"netEffect":net_effect,"originalResponse":original_response,"shareInOriginalResponse":response_share}
+    estimation_candidates = [stamp for stamp in common if stamp < event_start]
+    if not estimation_candidates: raise ValueError("Estimation window must end before the event window begins")
+    return {"mode":"verified-live","method":"Target-calendar alignment; VMD and HHT; main-scale selection; multiresolution Granger tests; extrema-selected h; Cholesky-orthogonal rolling VAR-FEVD; fixed and optimal structural-break diagnostics","asOf":common[-1],"target":target,"observations":len(common),"estimationWindow":{"start":estimation_start,"end":max(estimation_candidates)},"eventWindow":{"start":event_start,"end":event_end},"rSquared":r2,"drivers":drivers,"granger":granger,"scaleGranger":scale_granger,"selectedScales":selected_scales,"components":components,"hht":hht,"scaleEffect":scale_effect,"fevd":fevd,"fevdOwnShare":own_share,"fevdHorizon":horizon,"varLag":var_lag,"rolling":rolling[-180:],"rollingFevd":rolling_fevd[-120:],"breakTest":{"fixed":fixed_break,"optimal":optimal_break},"sources":[{"id":sid,"providerId":meta(sid)[0],"nameZh":meta(sid)[1],"nameEn":meta(sid)[2]} for sid in ids]}
 
 class handler(BaseHTTPRequestHandler):
     def send_json(self, status, payload):

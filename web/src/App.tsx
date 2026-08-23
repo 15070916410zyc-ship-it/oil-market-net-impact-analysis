@@ -23,6 +23,7 @@ import {
   ShieldCheck,
   Sparkles,
   TrendingUp,
+  Upload,
   X,
   ZoomIn,
   ZoomOut,
@@ -61,7 +62,7 @@ type DriverResult = { id: string; nameZh: string; nameEn: string; impact: number
 type ComponentResult = { imf: string; channelZh: string; channelEn: string; centerFrequency: number; volatilityShare: number; points: Array<{ date: string; value: number }> };
 type GrangerResult = { id: string; nameZh: string; nameEn: string; lag: number; fStatistic: number; pValue: number; significant: boolean };
 type ScaleGrangerResult = GrangerResult & { imf: string };
-type NetImpactResult = { mode: string; method: string; asOf: string; observations: number; rSquared: number; drivers: DriverResult[]; granger: GrangerResult[]; scaleGranger: ScaleGrangerResult[]; selectedScales: Array<{id:string;nameZh:string;nameEn:string;imf:string;pValue:number}>; components: ComponentResult[]; fevd: Array<{id:string;nameZh:string;nameEn:string;share:number}>; fevdOwnShare:number; fevdHorizon:number; varLag:number; rolling: Array<{ date: string; observed: number; fitted: number }>; rollingFevd:Array<{date:string;externalShare:number;ownShare:number;lag:number}>; breakTest:{candidateCount:number;bestDate:string;rssImprovementPercent:number;profile:Array<{date:string;rss:number;improvementPercent:number}>}; sources: Array<{ id: string; providerId: string; nameZh: string; nameEn: string }> };
+type NetImpactResult = { mode: string; method: string; asOf: string; observations: number; estimationWindow:{start:string;end:string}; eventWindow:{start:string;end:string}; rSquared: number; drivers: DriverResult[]; granger: GrangerResult[]; scaleGranger: ScaleGrangerResult[]; selectedScales: Array<{id:string;nameZh:string;nameEn:string;imf:string;pValue:number}>; components: ComponentResult[]; hht:Array<{date:string;frequency:number;period:number}>; scaleEffect:{selectedScale:string;minimumDate:string;minimumValue:number;maximumDate:string;maximumValue:number;tradingDayInterval:number;calendarDayInterval:number;netEffect:number;originalResponse:number;shareInOriginalResponse:number}; fevd: Array<{id:string;nameZh:string;nameEn:string;share:number;externalWeight:number;absoluteImpact:number}>; fevdOwnShare:number; fevdHorizon:number; varLag:number; rolling: Array<{ date: string; observed: number; fitted: number }>; rollingFevd:Array<{date:string;externalShare:number;ownShare:number;lag:number}>; breakTest:{fixed:{breakDate:string;fStatistic:number;pValue:number;preSlope:number;postSlope:number;slopeChange:number;levelShift:number;significant:boolean};optimal:{candidateCount:number;bestDate:string;rssImprovementPercent:number;profile:Array<{date:string;rss:number;improvementPercent:number}>}}; sources: Array<{ id: string; providerId: string; nameZh: string; nameEn: string }> };
 type RiskResult = { mode: string; method: string; latestDate: string; riskScore: number; alertThreshold: number; alert: boolean; history: Array<{ date: string; score: number }> };
 type ForecastResult = { mode: string; method: string; asOf: string; latestPrice: number; history: Array<{ Date: string; Actual: number }>; forecast: Array<Record<string, number | string>>; metrics: Record<string, number>; components: Array<{ imf: string; channelZh: string; channelEn: string; centerFrequency: number; latestForecast: number }> };
 
@@ -729,13 +730,25 @@ function DriverChart({ lang, data }: { lang: Lang; data: DriverResult[] }) {
 }
 
 function ForecastChart({ data, lang }: { data: PriceRow[]; lang: Lang }) {
-  const rows = data.map((r) => ({
+  const cutoffIndex = data.map((r) => r.actual != null).lastIndexOf(true);
+  const rows = data.map((r, index) => ({
+    ...r,
+    forecast: index === cutoffIndex && r.actual != null ? r.actual : r.forecast,
+    lo95: index === cutoffIndex && r.actual != null ? r.actual : r.lo95,
+    hi95: index === cutoffIndex && r.actual != null ? r.actual : r.hi95,
+    lo80: index === cutoffIndex && r.actual != null ? r.actual : r.lo80,
+    hi80: index === cutoffIndex && r.actual != null ? r.actual : r.hi80,
+    lo50: index === cutoffIndex && r.actual != null ? r.actual : r.lo50,
+    hi50: index === cutoffIndex && r.actual != null ? r.actual : r.hi50,
+  })).map((r) => ({
     ...r,
     band95: r.lo95 == null ? undefined : [r.lo95, r.hi95],
     band80: r.lo80 == null ? undefined : [r.lo80, r.hi80],
     band50: r.lo50 == null ? undefined : [r.lo50, r.hi50],
   }));
   const cutoff = data.filter((r) => r.actual != null).at(-1)?.date;
+  const scalarValues = rows.flatMap((row) => [row.actual,row.forecast,row.lo50,row.hi50,row.lo80,row.hi80,row.lo95,row.hi95]).filter((value): value is number => Number.isFinite(value));
+  const minimum = Math.min(...scalarValues); const maximum = Math.max(...scalarValues); const padding = Math.max((maximum-minimum)*.06, 1);
   return (
     <ChartFrame label={tx(lang, "拖动底部范围条或缩放图表", "Drag the range selector or zoom the chart")}><div className="chart large">
       <ResponsiveContainer>
@@ -746,9 +759,9 @@ function ForecastChart({ data, lang }: { data: PriceRow[]; lang: Lang }) {
           <CartesianGrid vertical={false} stroke="#e6e0dc" />
           <XAxis dataKey="date" minTickGap={45} tick={{ fontSize: 11 }} />
           <YAxis
-            domain={["dataMin - 3", "dataMax + 3"]}
+            domain={[minimum-padding, maximum+padding]}
             tick={{ fontSize: 11 }}
-            unit="$"
+            tickFormatter={(value) => `$${Number(value).toFixed(0)}`}
           />
           <Tooltip />
           <Legend />
@@ -1061,7 +1074,11 @@ function RollingFevdChart({ lang, data }: { lang: Lang; data: NetImpactResult["r
   return <ChartFrame label={tx(lang,"拖动范围条查看冲击来源随时间的变化","Drag the range selector to inspect changing shock sources")}><div className="chart medium"><ResponsiveContainer><AreaChart data={data}><CartesianGrid vertical={false}/><XAxis dataKey="date" minTickGap={35} tick={{fontSize:10}}/><YAxis domain={[0,100]} unit="%"/><Tooltip formatter={(v)=>`${Number(v).toFixed(2)}%`}/><Legend/><Area dataKey="externalShare" name={tx(lang,"外部因素冲击","External-factor shocks")} stackId="1" stroke="#c47d59" fill="#ead0c1"/><Area dataKey="ownShare" name={tx(lang,"油价自身冲击","Oil-price own shocks")} stackId="1" stroke="#6f69a2" fill="#d9d5ea"/><Brush dataKey="date" height={22} stroke="#6f69a2"/></AreaChart></ResponsiveContainer></div></ChartFrame>;
 }
 
-function BreakChart({ lang, data }: { lang: Lang; data: NetImpactResult["breakTest"]["profile"] }) {
+function HhtChart({ lang, data }: { lang: Lang; data: NetImpactResult["hht"] }) {
+  return <ChartFrame label={tx(lang,"拖动范围条查看主频率随时间的变化","Drag the range selector to inspect changing instantaneous frequency")}><div className="chart medium"><ResponsiveContainer><LineChart data={data}><CartesianGrid vertical={false}/><XAxis dataKey="date" minTickGap={35} tick={{fontSize:10}}/><YAxis tick={{fontSize:10}} domain={[0,"auto"]}/><Tooltip formatter={(v,name)=>[Number(v).toFixed(4),name === "frequency" ? tx(lang,"瞬时频率","Instantaneous frequency") : String(name)]}/><Line dataKey="frequency" name={tx(lang,"HHT瞬时频率","HHT instantaneous frequency")} stroke="#9b6d51" strokeWidth={2} dot={false}/><Brush dataKey="date" height={22} stroke="#756fa5"/></LineChart></ResponsiveContainer></div></ChartFrame>;
+}
+
+function BreakChart({ lang, data }: { lang: Lang; data: NetImpactResult["breakTest"]["optimal"]["profile"] }) {
   return <ChartFrame label={tx(lang,"拖动范围条检查候选结构变化日期","Drag the range selector to inspect candidate break dates")}><div className="chart medium"><ResponsiveContainer><LineChart data={data}><CartesianGrid vertical={false}/><XAxis dataKey="date" minTickGap={35} tick={{fontSize:10}}/><YAxis unit="%"/><Tooltip formatter={(v)=>[`${Number(v).toFixed(2)}%`,tx(lang,"分段拟合改善","Segmented-fit improvement")]}/><Line dataKey="improvementPercent" stroke="#587a9a" dot={false}/><Brush dataKey="date" height={22} stroke="#587a9a"/></LineChart></ResponsiveContainer></div></ChartFrame>;
 }
 
@@ -1163,12 +1180,13 @@ function Tab({
 
 function ImpactLab({ lang }: { lang: Lang }) {
   const [imf, setImf] = useState(5);
-  const [window, setWindow] = useState(60);
+  const [window, setWindow] = useState(120);
   const [maxLag, setMaxLag] = useState(5);
-  const [fevdHorizon, setFevdHorizon] = useState(12);
   const [alpha, setAlpha] = useState(.1);
-  const [start, setStart] = useState("2005-01-01");
-  const [end, setEnd] = useState(new Date().toISOString().slice(0, 10));
+  const today = new Date().toISOString().slice(0,10);
+  const [estimationStart, setEstimationStart] = useState("2018-11-07");
+  const [eventStart, setEventStart] = useState("2020-01-01");
+  const [eventEnd, setEventEnd] = useState(today);
   const [target, setTarget] = useState("EIA-BRENT");
   const [available, setAvailable] = useState<DataSeries[]>([]);
   const [factors, setFactors] = useState<Set<string>>(new Set());
@@ -1189,7 +1207,9 @@ function ImpactLab({ lang }: { lang: Lang }) {
   const run = async () => {
     setRunning(true); setError(""); setResult(null);
     try {
-      const payload = await requestLiveAnalysis<NetImpactResult>("/api/models/net-impact", { imf, window, maxLag, fevdHorizon, alpha, start, end, target, factors: [...factors] });
+      const records = readLocalRecords().filter((record)=>record.kind==="series" && factors.has(record.id) && Array.isArray(record.payload.points));
+      const customSeries = records.map((record)=>({id:record.id,nameZh:String(record.payload.name||record.label),nameEn:String(record.payload.nameEn||record.label),points:record.payload.points}));
+      const payload = await requestLiveAnalysis<NetImpactResult>("/api/models/net-impact", { imf, window, maxLag, alpha, estimationStart, eventStart, eventEnd, target, factors: [...factors], customSeries });
       if (payload) setResult(payload);
     } catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)); }
     finally { setRunning(false); }
@@ -1213,16 +1233,17 @@ function ImpactLab({ lang }: { lang: Lang }) {
           <Field
             label={tx(lang, "滚动窗口", "Rolling window")}
             value={window}
-            suffix={tx(lang, "月", "months")}
-            min={24}
-            max={180}
+            suffix={tx(lang, "个交易日", "trading days")}
+            min={48}
+            max={500}
             onChange={setWindow}
           />
           <Field label={tx(lang, "最大格兰杰滞后", "Maximum Granger lag")} value={maxLag} suffix={tx(lang, "阶", "lags")} min={1} max={6} onChange={setMaxLag} />
-          <Field label={tx(lang, "FEVD预测期", "FEVD horizon")} value={fevdHorizon} suffix={tx(lang, "期", "steps")} min={2} max={36} onChange={setFevdHorizon} />
           <Field label={tx(lang, "显著性阈值", "Significance level")} value={alpha} suffix="α" step={.01} min={.01} max={.2} onChange={setAlpha} />
-          <DateField lang={lang} label={tx(lang, "估计开始", "Estimation start")} value={start} onChange={setStart} />
-          <DateField lang={lang} label={tx(lang, "估计结束", "Estimation end")} value={end} onChange={setEnd} />
+          <DateField lang={lang} label={tx(lang, "事件期开始", "Event start")} value={eventStart} onChange={setEventStart} />
+          <DateField lang={lang} label={tx(lang, "事件期结束", "Event end")} value={eventEnd} onChange={setEventEnd} />
+          <DateField lang={lang} label={tx(lang, "估计期开始", "Estimation start")} value={estimationStart} onChange={setEstimationStart} />
+          <p className="plain-note">{tx(lang,"估计期结束自动设为事件期开始前一个交易日。FEVD 的 h 自动取主模态最高点与最低点之间的交易日数。","The estimation period ends on the trading day before the event. FEVD h is determined automatically from the trading-day interval between the selected-scale extrema.")}</p>
           <button className="primary compact" disabled={running || factors.size === 0} onClick={() => void run()}>{running ? tx(lang, "正在获取并计算…", "Fetching and calculating…") : tx(lang, "运行完整分析", "Run full analysis")}</button>
         </aside>
         <div>
@@ -1231,28 +1252,30 @@ function ImpactLab({ lang }: { lang: Lang }) {
           {error && <StatusPanel error text={tx(lang, `分析未完成：${error}`, `Analysis did not complete: ${error}`)} />}
           {!result && !error && <StatusPanel text={tx(lang, "设置参数后运行；结果区只接受真实接口返回。", "Configure and run the model. The result area accepts verified API output only.")} />}
           {result && <>
-            <div className="metric-table"><span><b>{tx(lang,"共同样本","Aligned observations")}</b>{result.observations}</span><span><b>R²</b>{result.rSquared.toFixed(3)}</span><span><b>{tx(lang,"数据截止","As of")}</b>{result.asOf}</span></div>
-            <h3 className="result-title">A · {tx(lang,"最新一期因素贡献","Latest factor contributions")}</h3><DriverChart lang={lang} data={result.drivers} />
-            <h3 className="result-title">B · VMD</h3><ScaleCard lang={lang} components={result.components} />
-            <h3 className="result-title">C · {tx(lang,"格兰杰检验","Granger tests")}</h3><GrangerChart lang={lang} data={result.granger} alpha={alpha} />
-            <div className="granger-table">{result.granger.map((row) => <div key={row.id}><b>{lang === "zh" ? row.nameZh : row.nameEn}</b><span>lag {row.lag}</span><span>F {row.fStatistic.toFixed(3)}</span><span>p {row.pValue.toFixed(4)}</span><em className={row.significant ? "yes" : ""}>{row.significant ? tx(lang,"通过","Pass") : tx(lang,"未通过","Not significant")}</em></div>)}</div>
-            <h3 className="result-title">D · {tx(lang,"逐分量格兰杰检验","Granger tests by IMF")}</h3>
+            <h3 className="result-title">A · {tx(lang,"方法、样本与事件窗口","Method, sample and event window")}</h3>
+            <div className="metric-table"><span><b>{tx(lang,"共同样本","Aligned observations")}</b>{result.observations}</span><span><b>{tx(lang,"估计期","Estimation window")}</b>{result.estimationWindow.start} — {result.estimationWindow.end}</span><span><b>{tx(lang,"事件期","Event window")}</b>{result.eventWindow.start} — {result.eventWindow.end}</span><span><b>R²</b>{result.rSquared.toFixed(3)}</span><span><b>{tx(lang,"数据截止","As of")}</b>{result.asOf}</span></div>
+            <p className="plain-note">{tx(lang,"估计期用于建立基准关系，事件期用于识别主模态极值和净影响；两者不会混用。","The estimation window establishes the baseline; the event window identifies selected-scale extrema and net impact. They are kept separate.")}</p>
+            <h3 className="result-title">B · {tx(lang,"VMD 分解与 HHT 时频诊断","VMD decomposition and HHT time-frequency diagnostics")}</h3><ScaleCard lang={lang} components={result.components} /><HhtChart lang={lang} data={result.hht}/>
+            <h3 className="result-title">C · {tx(lang,"主模态选择与事件期净影响","Selected-scale choice and event-window net impact")}</h3>
+            <div className="metric-table"><span><b>{tx(lang,"主模态","Selected scale")}</b>{result.scaleEffect.selectedScale}</span><span><b>{tx(lang,"最低点","Minimum")}</b>{result.scaleEffect.minimumDate} · {result.scaleEffect.minimumValue.toFixed(3)}</span><span><b>{tx(lang,"最高点","Maximum")}</b>{result.scaleEffect.maximumDate} · {result.scaleEffect.maximumValue.toFixed(3)}</span><span><b>FEVD h</b>{result.scaleEffect.tradingDayInterval} {tx(lang,"个交易日","trading days")}</span><span><b>{tx(lang,"原始油价波幅","Original oil-price range")}</b>{result.scaleEffect.originalResponse.toFixed(3)} USD/bbl</span><span><b>{tx(lang,"净影响值","Net impact value")}</b>{result.scaleEffect.netEffect.toFixed(3)} USD/bbl</span><span><b>{tx(lang,"净影响占比","Net-impact share")}</b>{result.scaleEffect.shareInOriginalResponse.toFixed(2)}%</span></div>
+            <h3 className="result-title">D · {tx(lang,"多分辨率格兰杰检验","Multiresolution Granger tests")}</h3>
             <ScaleGrangerMatrix lang={lang} data={result.scaleGranger}/>
-            <h3 className="result-title">E · {tx(lang,`广义FEVD（${result.fevdHorizon}期，VAR(${result.varLag})）`,`Generalized FEVD (${result.fevdHorizon} steps, VAR(${result.varLag}))`)}</h3><FevdChart lang={lang} data={result.fevd}/>
+            <details className="diagnostic"><summary>{tx(lang,"查看全样本格兰杰与当期 OLS 辅助诊断（不作为净影响主结果）","View full-sample Granger and current OLS diagnostics (not the net-impact result)")}</summary><GrangerChart lang={lang} data={result.granger} alpha={alpha} /><div className="granger-table">{result.granger.map((row) => <div key={row.id}><b>{lang === "zh" ? row.nameZh : row.nameEn}</b><span>lag {row.lag}</span><span>F {row.fStatistic.toFixed(3)}</span><span>p {row.pValue.toFixed(4)}</span><em className={row.significant ? "yes" : ""}>{row.significant ? tx(lang,"通过","Pass") : tx(lang,"未通过","Not significant")}</em></div>)}</div><DriverChart lang={lang} data={result.drivers}/></details>
+            <h3 className="result-title">E · {tx(lang,`正交 VAR-FEVD 贡献与滚动冲击来源（自动 h=${result.fevdHorizon}）`,`Orthogonal VAR-FEVD contributions and rolling shock sources (automatic h=${result.fevdHorizon})`)}</h3><FevdChart lang={lang} data={result.fevd}/>
             <div className="metric-table"><span><b>{tx(lang,"油价自身冲击份额","Oil-price own-shock share")}</b>{result.fevdOwnShare.toFixed(2)}%</span><span><b>{tx(lang,"外部因素冲击份额","External-factor shock share")}</b>{(100-result.fevdOwnShare).toFixed(2)}%</span></div>
-            <h3 className="result-title">F · {tx(lang,"滚动FEVD","Rolling FEVD")}</h3><RollingFevdChart lang={lang} data={result.rollingFevd}/>
-            <h3 className="result-title">G · {tx(lang,"滚动样本拟合","Rolling-window fit")}</h3><RollingImpactChart lang={lang} data={result.rolling} />
-            <h3 className="result-title">H · {tx(lang,"结构变化候选检验","Candidate structural-break test")}</h3><BreakChart lang={lang} data={result.breakTest.profile}/>
-            <div className="metric-table"><span><b>{tx(lang,"最优候选日期","Best candidate date")}</b>{result.breakTest.bestDate}</span><span><b>{tx(lang,"分段RSS改善","Segmented RSS improvement")}</b>{result.breakTest.rssImprovementPercent.toFixed(2)}%</span><span><b>{tx(lang,"检验候选数","Candidates tested")}</b>{result.breakTest.candidateCount}</span></div>
+            <div className="impact-values">{result.fevd.map((row)=><span key={row.id}><b>{lang==="zh"?row.nameZh:row.nameEn}</b><em>{row.absoluteImpact>=0?"+":""}{row.absoluteImpact.toFixed(3)} USD/bbl</em><small>{row.externalWeight.toFixed(2)}% {tx(lang,"的外部净影响","of external net impact")}</small></span>)}</div>
+            <RollingFevdChart lang={lang} data={result.rollingFevd}/>
+            <h3 className="result-title">F · {tx(lang,"结构断点诊断：事件起点检验与最优断点复核","Structural-break diagnostics: event-start test and optimal-break review")}</h3><BreakChart lang={lang} data={result.breakTest.optimal.profile}/>
+            <div className="metric-table"><span><b>{tx(lang,"指定断点","Specified break")}</b>{result.breakTest.fixed.breakDate}</span><span><b>F / p</b>{result.breakTest.fixed.fStatistic.toFixed(3)} / {result.breakTest.fixed.pValue.toFixed(4)}</span><span><b>{tx(lang,"水平突变","Level shift")}</b>{result.breakTest.fixed.levelShift.toFixed(3)}</span><span><b>{tx(lang,"趋势变化","Slope change")}</b>{result.breakTest.fixed.slopeChange.toFixed(3)}</span><span><b>{tx(lang,"最优候选断点","Best candidate break")}</b>{result.breakTest.optimal.bestDate}</span><span><b>{tx(lang,"分段RSS改善","Segmented RSS improvement")}</b>{result.breakTest.optimal.rssImprovementPercent.toFixed(2)}%</span></div>
             <div className="provenance"><Database/><span><b>{tx(lang,"本次数据血缘","Data provenance")}</b><small>{result.sources.map((s) => `${lang === "zh" ? s.nameZh : s.nameEn} [FRED:${s.providerId}]`).join(" · ")}</small></span></div>
           </>}
           <div className="method-steps">
-            <span>{tx(lang, "01 数据对齐", "01 Data alignment")}</span>
-            <span>{tx(lang, `02 分解 ${imf} 个分量`, `02 Decompose ${imf} components`)}</span>
-            <span>{tx(lang, "03 BIC选择滞后与格兰杰检验", "03 BIC lag selection and Granger tests")}</span>
-            <span>{tx(lang, "04 逐分量检验与尺度筛选", "04 IMF-level tests and scale selection")}</span>
-            <span>{tx(lang, "05 广义FEVD与滚动冲击份额", "05 Generalized and rolling FEVD")}</span>
-            <span>{tx(lang, "06 滚动拟合与结构变化检验", "06 Rolling fit and structural-break search")}</span>
+            <span>{tx(lang, "A 方法、样本与事件窗口", "A Method, sample and event window")}</span>
+            <span>{tx(lang, `B VMD 与 HHT（${imf} 个分量）`, `B VMD and HHT (${imf} components)`)}</span>
+            <span>{tx(lang, "C 主模态选择、极值与净影响", "C Selected scale, extrema and net impact")}</span>
+            <span>{tx(lang, "D 多分辨率格兰杰检验", "D Multiresolution Granger tests")}</span>
+            <span>{tx(lang, "E 正交 VAR-FEVD 贡献", "E Orthogonal VAR-FEVD contributions")}</span>
+            <span>{tx(lang, "F 结构断点诊断", "F Structural-break diagnostics")}</span>
           </div>
         </div>
       </div>
@@ -1396,6 +1419,41 @@ function RiskLab({ lang }: { lang: Lang }) {
   );
 }
 
+function parseUploadDate(value: unknown): string | null {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) return value.toISOString().slice(0,10);
+  if (typeof value === "number") {
+    const stamp = new Date(Date.UTC(1899,11,30) + Math.round(value)*86400000);
+    return Number.isNaN(stamp.getTime()) ? null : stamp.toISOString().slice(0,10);
+  }
+  const stamp = new Date(String(value ?? "").trim());
+  return Number.isNaN(stamp.getTime()) ? null : stamp.toISOString().slice(0,10);
+}
+
+function parseUploadNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  const raw = String(value ?? "").trim(); if (!raw) return null;
+  const percent = raw.endsWith("%"); const parsed = Number(raw.replace(/[%,$¥\s]/g,""));
+  return Number.isFinite(parsed) ? (percent ? parsed/100 : parsed) : null;
+}
+
+async function readUploadedSeries(file: File) {
+  let rows: unknown[][] = [];
+  if (file.name.toLowerCase().endsWith(".csv")) {
+    rows = (await file.text()).split(/\r?\n/).map((line)=>line.split(/,(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)/).map((cell)=>cell.replace(/^\"|\"$/g,"").replace(/\"\"/g,"\"")));
+  } else {
+    const { default: ExcelJS } = await import("exceljs");
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(await file.arrayBuffer());
+    const sheet = workbook.worksheets[0];
+    if (!sheet) throw new Error(`${file.name}: workbook has no worksheet`);
+    sheet.eachRow({includeEmpty:false},(row)=>rows.push([row.getCell(1).value,row.getCell(2).value]));
+  }
+  const points = rows.flatMap((row)=>{const dateValue=parseUploadDate(row[0]); const numberValue=parseUploadNumber(row[1]); return dateValue&&numberValue!=null?[{date:dateValue,value:numberValue}]:[]}).sort((a,b)=>a.date.localeCompare(b.date));
+  if (points.length < 5) throw new Error(`${file.name}: fewer than five valid Date/Value rows`);
+  const base=file.name.replace(/\.[^.]+$/,"").replace(/[^A-Za-z0-9_\u4e00-\u9fff]+/g,"_").replace(/^_+|_+$/g,"")||"UploadedSeries";
+  return {id:`UPLOAD-${base}-${file.size}`,name:base,points};
+}
+
 function DataLab({ lang }: { lang: Lang }) {
   const [q, setQ] = useState("");
   const [liveCatalog, setLiveCatalog] = useState<DataSeries[]>([]);
@@ -1406,12 +1464,17 @@ function DataLab({ lang }: { lang: Lang }) {
   const [seriesLive, setSeriesLive] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [uploadStatus, setUploadStatus] = useState("");
+  const [discovery, setDiscovery] = useState<"idle"|"searching"|"ready"|"error">("idle");
+  const [discoveredIds, setDiscoveredIds] = useState<Set<string>>(new Set());
   useEffect(() => {
     let active = true;
     void fetchCatalog()
       .then((items) => {
         if (!active || !items.length) return;
-        const next = items as unknown as DataSeries[];
+        const base = items as unknown as DataSeries[];
+        const saved = readLocalRecords().filter((record)=>record.kind==="series").map((record)=>({id:record.id,name:String(record.payload.name||record.label),nameEn:String(record.payload.nameEn||record.label),category:String(record.payload.category||""),source:String(record.payload.source||"Manual upload"),unit:String(record.payload.unit||""),frequency:String(record.payload.frequency||""),updated:String(record.payload.updated||record.savedAt.slice(0,10)),color:String(record.payload.color||"#756fa5")}));
+        const next = [...saved,...base.filter((item)=>!saved.some((record)=>record.id===item.id))];
         setLiveCatalog(next);
         setSources(new Set(next.map((item) => item.source)));
         setSelected((current) => next.some((item) => item.id === current) ? current : next[0].id);
@@ -1421,13 +1484,18 @@ function DataLab({ lang }: { lang: Lang }) {
     return () => { active = false; };
   }, []);
   useEffect(() => {
-    if (q.trim().length < 2) return;
+    if (q.trim().length < 2) { setDiscovery("idle"); setDiscoveredIds(new Set()); return; }
     const timer = window.setTimeout(() => {
-      void fetchCatalog(q).then((items) => {
+      const aliases:Record<string,string>={"石油":"oil","原油":"crude oil","库存":"inventory","美元":"dollar","利率":"interest rate","产量":"production","天然气":"natural gas","汽油":"gasoline","通胀":"inflation","就业":"employment","黄金":"gold"};
+      const remoteQuery=Object.entries(aliases).reduce((value,[zh,en])=>value.replaceAll(zh,en),q.trim());
+      setDiscovery("searching");
+      void fetchCatalog(remoteQuery).then((items) => {
         const discovered = items as unknown as DataSeries[];
+        setDiscoveredIds(new Set(discovered.map((item)=>item.id)));
         setLiveCatalog((current) => [...current, ...discovered.filter((item) => !current.some((existing) => existing.id === item.id))]);
         setSources((current) => new Set([...current, ...discovered.map((item) => item.source)]));
-      }).catch(() => {});
+        setDiscovery("ready");
+      }).catch(() => setDiscovery("error"));
     }, 350);
     return () => window.clearTimeout(timer);
   }, [q]);
@@ -1435,6 +1503,12 @@ function DataLab({ lang }: { lang: Lang }) {
     if (!selected) return;
     let active = true;
     setLoading(true); setError(""); setLiveSeries([]); setSeriesLive(false);
+    const saved = readLocalRecords().find((record)=>record.id===selected && Array.isArray(record.payload.points));
+    if (saved) {
+      const points = saved.payload.points as Array<{date:string;value:number}>;
+      setLiveSeries(frequency==="monthly" ? [...new Map(points.map((point)=>[point.date.slice(0,7),point])).values()] : points); setSeriesLive(true); setLoading(false);
+      return () => { active=false; };
+    }
     void fetchSeries(selected, frequency)
       .then((result) => {
         if (!active) return;
@@ -1457,7 +1531,7 @@ function DataLab({ lang }: { lang: Lang }) {
         .filter(Boolean)
         .join(" ")
         .toLowerCase();
-      return sources.has(x.source) && haystack.includes(needle);
+      return sources.has(x.source) && (haystack.includes(needle) || discoveredIds.has(x.id));
     },
   );
   const toggle = (s: string) =>
@@ -1472,8 +1546,19 @@ function DataLab({ lang }: { lang: Lang }) {
       id: selected,
       kind: "series",
       label: seriesText(item, lang).name,
-      payload: { source: item.source, unit: item.unit, frequency: item.frequency, name: item.name, nameEn: item.nameEn || item.name, color: item.color },
+      payload: { source: item.source, unit: item.unit, frequency: item.frequency, name: item.name, nameEn: item.nameEn || item.name, color: item.color, points: liveSeries },
     });
+  };
+  const uploadFiles = async (files: FileList | null) => {
+    if (!files?.length) return; setUploadStatus(""); setError("");
+    try {
+      const parsed = await Promise.all([...files].map(readUploadedSeries));
+      const added = parsed.map((item,index)=>({id:item.id,name:item.name,nameEn:item.name,category:tx(lang,"手动上传","Manual upload"),source:tx(lang,"手动上传","Manual upload"),unit:"",frequency:tx(lang,"用户提供","User supplied"),updated:item.points.at(-1)!.date,color:["#9b6d51","#5f7895","#756fa5"][index%3]}));
+      parsed.forEach((item,index)=>saveLocalRecord({id:item.id,kind:"series",label:item.name,payload:{...added[index],points:item.points}}));
+      setLiveCatalog((current)=>[...added,...current.filter((row)=>!added.some((item)=>item.id===row.id))]);
+      setSources((current)=>new Set([...current,...added.map((item)=>item.source)])); setSelected(added[0].id); setLiveSeries(parsed[0].points); setSeriesLive(true);
+      setUploadStatus(tx(lang,`已校验并加入研究库：${added.map((item)=>item.name).join("、")}`,`Validated and added to the research library: ${added.map((item)=>item.name).join(", ")}`));
+    } catch (reason) { setError(reason instanceof Error?reason.message:String(reason)); }
   };
   const download = () => {
     if (!liveSeries.length) return;
@@ -1502,6 +1587,8 @@ function DataLab({ lang }: { lang: Lang }) {
           </button>
         ))}
       </div>
+      <div className="upload-row"><label className="upload-button"><Upload/>{tx(lang,"上传 CSV / XLSX 变量","Upload CSV / XLSX variables")}<input type="file" accept=".csv,.xlsx" multiple onChange={(event)=>void uploadFiles(event.target.files)}/></label><span>{tx(lang,"前两列必须为日期和值；允许标题或备注行。上传后可直接加入净影响分析。","The first two columns must be Date and Value; title rows are allowed. Uploaded series can be used directly in net-impact analysis.")}</span></div>
+      {uploadStatus && <div className="upload-success">{uploadStatus}</div>}
       <div className="search">
         <Search />
         <input
@@ -1510,6 +1597,7 @@ function DataLab({ lang }: { lang: Lang }) {
           placeholder={tx(lang, "输入 Brent、库存、美元、利率……", "Search Brent, inventories, dollar, rates…")}
         />
       </div>
+      {q.trim().length >= 2 && <div className="search-state">{discovery === "searching" ? tx(lang,"正在检索 FRED 官方目录…","Searching the official FRED directory…") : discovery === "error" ? tx(lang,"官方目录暂时没有响应，请稍后重试。","The official directory did not respond. Please retry shortly.") : discovery === "ready" ? tx(lang,`找到 ${found.length} 个可用序列；选中并保存后会出现在净影响分析中。`,`${found.length} available series found. Select and save one to use it in net-impact analysis.`) : ""}</div>}
       <div className="data-layout">
         <div className="series-list">
           {found.map((x) => (
@@ -1528,6 +1616,7 @@ function DataLab({ lang }: { lang: Lang }) {
               <em>{x.updated}</em>
             </button>
           ))}
+          {!loading && found.length === 0 && <div className="empty-search">{tx(lang,"没有匹配项。可以换用英文缩写或更宽泛的关键词，例如 inventory、dollar、rate。","No matches. Try an English abbreviation or a broader term such as inventory, dollar or rate.")}</div>}
         </div>
         <div className="preview">
           <div className="preview-actions">
