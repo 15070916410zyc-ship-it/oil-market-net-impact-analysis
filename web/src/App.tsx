@@ -379,17 +379,17 @@ function Landing({
         <EnergyGlobe riskScore={riskScore} lang={lang} />
         <div className="metric-float mf-one">
           <small>BRENT</small>
-          <strong>{quotes.brent == null ? "—" : `$${quotes.brent.toFixed(2)}`}</strong>
-          <em>{quotes.brentMove == null ? tx(lang,"等待官方数据","Awaiting official data") : `${quotes.brentMove >= 0 ? "+" : ""}${quotes.brentMove.toFixed(1)}%`}</em>
+          <strong>{quotes.brent == null ? "—" : `$${quotes.brent.toFixed(3)}`}</strong>
+          <em>{quotes.brentMove == null ? tx(lang,"等待官方数据","Awaiting official data") : `${quotes.brentMove >= 0 ? "+" : ""}${quotes.brentMove.toFixed(3)}%`}</em>
         </div>
         <div className="metric-float mf-two">
           <small>WTI</small>
-          <strong>{quotes.wti == null ? "—" : `$${quotes.wti.toFixed(2)}`}</strong>
-          <em>{quotes.wtiMove == null ? tx(lang,"等待官方数据","Awaiting official data") : `${quotes.wtiMove >= 0 ? "+" : ""}${quotes.wtiMove.toFixed(1)}%`}</em>
+          <strong>{quotes.wti == null ? "—" : `$${quotes.wti.toFixed(3)}`}</strong>
+          <em>{quotes.wtiMove == null ? tx(lang,"等待官方数据","Awaiting official data") : `${quotes.wtiMove >= 0 ? "+" : ""}${quotes.wtiMove.toFixed(3)}%`}</em>
         </div>
         <div className="metric-float mf-three">
           <small>MARKET RISK</small>
-          <strong>{riskScore == null ? "—" : riskScore.toFixed(1)}</strong>
+          <strong>{riskScore == null ? "—" : riskScore.toFixed(3)}</strong>
           <em>{riskScore == null ? tx(lang,"等待模型","Awaiting model") : riskScore >= 60 ? tx(lang, "中高", "Elevated") : tx(lang, "较低", "Low")}</em>
         </div>
         <div className="pulse-line">
@@ -543,15 +543,15 @@ function Decision({
         <Kpi label={tx(lang, "最新数据", "Latest observation")} value={forecastResult.asOf} />
         <Kpi
           label="Brent"
-          value={`$${latest.toFixed(2)}`}
+          value={`$${latest.toFixed(3)}`}
           delta={tx(lang, "官方现货序列", "Official spot series")}
         />
-        <Kpi label="WTI" value={wti == null ? tx(lang, "同步中", "Syncing") : `$${wti.toFixed(2)}`} delta={tx(lang, "美国原油现货", "US crude spot")}/>
-        <Kpi label={tx(lang, "预测期末中位路径", "End-of-horizon median")} value={`$${Number(median).toFixed(2)}`} delta={`${((Number(median) / latest - 1) * 100).toFixed(1)}%`} />
-        <Kpi label={tx(lang, "95%决策区间", "95% decision range")} value={`$${low.toFixed(1)}—${high.toFixed(1)}`} />
+        <Kpi label="WTI" value={wti == null ? tx(lang, "同步中", "Syncing") : `$${wti.toFixed(3)}`} delta={tx(lang, "美国原油现货", "US crude spot")}/>
+        <Kpi label={tx(lang, "预测期末中位路径", "End-of-horizon median")} value={`$${Number(median).toFixed(3)}`} delta={`${((Number(median) / latest - 1) * 100).toFixed(3)}%`} />
+        <Kpi label={tx(lang, "95%决策区间", "95% decision range")} value={`$${low.toFixed(3)}—${high.toFixed(3)}`} />
         <Kpi
           label={tx(lang, "风险温度", "Risk temperature")}
-          value={risk.riskScore.toFixed(1)}
+          value={risk.riskScore.toFixed(3)}
           delta={risk.alert ? tx(lang, "已超过历史触发阈值", "Above historical review threshold") : tx(lang, "未超过历史触发阈值", "Below historical review threshold")}
           tone="warm"
         />
@@ -599,9 +599,9 @@ function Decision({
           <div className="risk-summary">
             <Gauge />
             <div>
-              <b>{tx(lang, `当前历史风险分位：${risk.riskScore.toFixed(1)}`, `Current historical risk percentile: ${risk.riskScore.toFixed(1)}`)}</b>
+              <b>{tx(lang, `当前历史风险分位：${risk.riskScore.toFixed(3)}`, `Current historical risk percentile: ${risk.riskScore.toFixed(3)}`)}</b>
               <p>
-                {tx(lang, `复核阈值为 ${risk.alertThreshold.toFixed(1)}；该指标用于排序和触发复核，并非危机发生概率。`, `The review threshold is ${risk.alertThreshold.toFixed(1)}. This is a ranking signal, not a crisis probability.`)}
+                {tx(lang, `复核阈值为 ${risk.alertThreshold.toFixed(3)}；该指标用于排序和触发复核，并非危机发生概率。`, `The review threshold is ${risk.alertThreshold.toFixed(3)}. This is a ranking signal, not a crisis probability.`)}
               </p>
             </div>
           </div>
@@ -629,7 +629,7 @@ function Decision({
           <Advice
             n="04"
             title={tx(lang, "触发条件", "Review triggers")}
-            text={tx(lang, `风险分位超过 ${risk.alertThreshold.toFixed(1)} 或价格超出95%区间时立即复核，不使用固定人为阈值。`, `Review immediately if risk exceeds ${risk.alertThreshold.toFixed(1)} or price leaves the 95% interval; no arbitrary fixed trigger is used.`)}
+            text={tx(lang, `风险分位超过 ${risk.alertThreshold.toFixed(3)} 或价格超出95%区间时立即复核，不使用固定人为阈值。`, `Review immediately if risk exceeds ${risk.alertThreshold.toFixed(3)} or price leaves the 95% interval; no arbitrary fixed trigger is used.`)}
           />
         </div>
       </Card>
@@ -716,7 +716,7 @@ function DriverChart({ lang, data }: { lang: Lang; data: DriverResult[] }) {
             width={126}
             tick={{ fontSize: 11 }}
           />
-          <Tooltip formatter={(v) => [tx(lang, `${v} 美元/桶`, `$${v}/bbl`), tx(lang, "估计净影响", "Estimated net impact")]} />
+          <Tooltip formatter={(v) => [tx(lang, `${Number(v).toFixed(3)} 美元/桶`, `$${Number(v).toFixed(3)}/bbl`), tx(lang, "估计净影响", "Estimated net impact")]} />
           <ReferenceLine x={0} stroke="#968d87" />
           <Bar dataKey="value" radius={[0, 8, 8, 0]}>
             {localizedDrivers.map((d, i) => (
@@ -761,9 +761,9 @@ function ForecastChart({ data, lang }: { data: PriceRow[]; lang: Lang }) {
           <YAxis
             domain={[minimum-padding, maximum+padding]}
             tick={{ fontSize: 11 }}
-            tickFormatter={(value) => `$${Number(value).toFixed(0)}`}
+            tickFormatter={(value) => `$${Number(value).toFixed(3)}`}
           />
-          <Tooltip />
+          <Tooltip formatter={(value)=>Array.isArray(value) ? value.map((item)=>Number(item).toFixed(3)).join(" — ") : Number(value).toFixed(3)} />
           <Legend />
           <Area
             dataKey="band95"
@@ -823,7 +823,7 @@ function RiskChart({ lang, data, threshold }: { lang: Lang; data: Array<{ date: 
           <CartesianGrid vertical={false} stroke="#e6e0dc" />
           <XAxis dataKey="date" minTickGap={35} tick={{ fontSize: 10 }} />
           <YAxis domain={[0, 100]} tick={{ fontSize: 10 }} />
-          <Tooltip />
+          <Tooltip formatter={(value)=>Number(value).toFixed(3)} />
           <Area
             dataKey="score"
             name={tx(lang, "历史风险分位", "Historical risk percentile")}
@@ -852,14 +852,14 @@ function ScaleCard({ lang, components }: { lang: Lang; components: ComponentResu
       title={tx(lang, "油价自身的三层波动", "Three layers of oil-price movement")}
       desc={tx(lang, "把复杂分量整理为可理解的短、中、长周期；专业模式保留全部中间分量。", "Complex components are grouped into intuitive short-, medium- and long-horizon movements; research mode keeps every component.")}
     >
-      <div className="scale-legend">{components.map((component, index) => <span key={component.imf}><i style={{background:["#c47d59","#587a9a","#756fa5","#4f8b7d","#b49958","#8b6e78","#527f91","#9a7454"][index]}} />{component.imf} · {(lang === "zh" ? component.channelZh : component.channelEn)} · {component.volatilityShare.toFixed(1)}%</span>)}</div>
+      <div className="scale-legend">{components.map((component, index) => <span key={component.imf}><i style={{background:["#c47d59","#587a9a","#756fa5","#4f8b7d","#b49958","#8b6e78","#527f91","#9a7454"][index]}} />{component.imf} · {(lang === "zh" ? component.channelZh : component.channelEn)} · {component.volatilityShare.toFixed(3)}%</span>)}</div>
       <ChartFrame label={tx(lang, "缩放并左右浏览分量", "Zoom and scroll through components")}><div className="chart small">
         <ResponsiveContainer>
           <LineChart data={rows}>
             <CartesianGrid vertical={false} stroke="#e6e0dc" />
             <XAxis dataKey="date" minTickGap={35} tick={{fontSize:10}} />
             <YAxis tick={{ fontSize: 10 }} />
-            <Tooltip />
+            <Tooltip formatter={(value)=>Number(value).toFixed(3)} />
             {components.map((component, index) => <Line key={component.imf} dataKey={component.imf} name={component.imf} stroke={["#c47d59","#587a9a","#756fa5","#4f8b7d","#b49958","#8b6e78","#527f91","#9a7454"][index]} strokeWidth={index === components.length - 1 ? 2.4 : 1.4} dot={false} />)}
             <Brush dataKey="date" height={18} stroke="#756fa5" />
           </LineChart>
@@ -992,22 +992,22 @@ function HedgeCalculator({ lang, market, suggestedRatio }: { lang: Lang; market:
       <div className="result-grid">
         <Kpi
           label={tx(lang, "未套保成本", "Unhedged cost")}
-          value={tx(lang, `${(unhedged / 1e6).toFixed(1)} 百万元`, `RMB ${(unhedged / 1e6).toFixed(1)}m`)}
+          value={tx(lang, `${(unhedged / 1e6).toFixed(3)} 百万元`, `RMB ${(unhedged / 1e6).toFixed(3)}m`)}
         />
         <Kpi
           label={tx(lang, "套保后净成本", "Net hedged cost")}
-          value={tx(lang, `${(hedged / 1e6).toFixed(1)} 百万元`, `RMB ${(hedged / 1e6).toFixed(1)}m`)}
-          delta={tx(lang, `节省 ${((unhedged - hedged) / 1e6).toFixed(1)} 百万元`, `Saving RMB ${((unhedged - hedged) / 1e6).toFixed(1)}m`)}
+          value={tx(lang, `${(hedged / 1e6).toFixed(3)} 百万元`, `RMB ${(hedged / 1e6).toFixed(3)}m`)}
+          delta={tx(lang, `节省 ${((unhedged - hedged) / 1e6).toFixed(3)} 百万元`, `Saving RMB ${((unhedged - hedged) / 1e6).toFixed(3)}m`)}
         />
         <Kpi
           label={tx(lang, "相对预算", "Versus budget")}
-          value={tx(lang, `${((hedged - budget) / 1e6).toFixed(1)} 百万元`, `RMB ${((hedged - budget) / 1e6).toFixed(1)}m`)}
+          value={tx(lang, `${((hedged - budget) / 1e6).toFixed(3)} 百万元`, `RMB ${((hedged - budget) / 1e6).toFixed(3)}m`)}
           tone={hedged > budget ? "warm" : ""}
         />
         <Kpi
           label={tx(lang, "保证金需求", "Margin requirement")}
-          value={tx(lang, `${(marginReq / 1e6).toFixed(1)} 百万元`, `RMB ${(marginReq / 1e6).toFixed(1)}m`)}
-          delta={tx(lang, `融资成本 ${(finance / 1e4).toFixed(1)} 万元`, `Funding cost RMB ${(finance / 1e3).toFixed(0)}k`)}
+          value={tx(lang, `${(marginReq / 1e6).toFixed(3)} 百万元`, `RMB ${(marginReq / 1e6).toFixed(3)}m`)}
+          delta={tx(lang, `融资成本 ${(finance / 1e4).toFixed(3)} 万元`, `Funding cost RMB ${(finance / 1e3).toFixed(3)}k`)}
         />
       </div>
     </Card>
@@ -1062,24 +1062,24 @@ function GrangerChart({ lang, data, alpha }: { lang: Lang; data: GrangerResult[]
 }
 
 function RollingImpactChart({ lang, data }: { lang: Lang; data: NetImpactResult["rolling"] }) {
-  return <ChartFrame label={tx(lang,"拖动底部范围条查看滚动结果","Drag the range selector to inspect the rolling result")}><div className="chart medium"><ResponsiveContainer><LineChart data={data}><CartesianGrid vertical={false}/><XAxis dataKey="date" minTickGap={35} tick={{fontSize:10}}/><YAxis tick={{fontSize:10}}/><Tooltip/><Legend/><Line dataKey="observed" name={tx(lang,"实际变动","Observed change")} stroke="#30343d" dot={false}/><Line dataKey="fitted" name={tx(lang,"模型拟合","Model fit")} stroke="#6f69a2" dot={false}/><Brush dataKey="date" height={22} stroke="#6f69a2"/></LineChart></ResponsiveContainer></div></ChartFrame>;
+  return <ChartFrame label={tx(lang,"拖动底部范围条查看滚动结果","Drag the range selector to inspect the rolling result")}><div className="chart medium"><ResponsiveContainer><LineChart data={data}><CartesianGrid vertical={false}/><XAxis dataKey="date" minTickGap={35} tick={{fontSize:10}}/><YAxis tick={{fontSize:10}}/><Tooltip formatter={(v)=>Number(v).toFixed(3)}/><Legend/><Line dataKey="observed" name={tx(lang,"实际变动","Observed change")} stroke="#30343d" dot={false}/><Line dataKey="fitted" name={tx(lang,"模型拟合","Model fit")} stroke="#6f69a2" dot={false}/><Brush dataKey="date" height={22} stroke="#6f69a2"/></LineChart></ResponsiveContainer></div></ChartFrame>;
 }
 
 function FevdChart({ lang, data }: { lang: Lang; data: NetImpactResult["fevd"] }) {
   const rows = data.map((row) => ({ name: lang === "zh" ? row.nameZh : row.nameEn, share: row.share }));
-  return <ChartFrame label={tx(lang,"缩放查看各因素对油价预测误差的解释份额","Zoom to inspect factor shares of oil-price forecast error variance")}><div className="chart medium"><ResponsiveContainer><BarChart data={rows} layout="vertical" margin={{left:35,right:30}}><CartesianGrid horizontal={false}/><XAxis type="number" unit="%"/><YAxis type="category" dataKey="name" width={150} tick={{fontSize:10}}/><Tooltip formatter={(v)=>[`${Number(v).toFixed(2)}%`,tx(lang,"份额","Share")]}/><Bar dataKey="share" fill="#c47d59" radius={[0,8,8,0]}/></BarChart></ResponsiveContainer></div></ChartFrame>;
+  return <ChartFrame label={tx(lang,"缩放查看各因素对油价预测误差的解释份额","Zoom to inspect factor shares of oil-price forecast error variance")}><div className="chart medium"><ResponsiveContainer><BarChart data={rows} layout="vertical" margin={{left:35,right:30}}><CartesianGrid horizontal={false}/><XAxis type="number" unit="%"/><YAxis type="category" dataKey="name" width={150} tick={{fontSize:10}}/><Tooltip formatter={(v)=>[`${Number(v).toFixed(3)}%`,tx(lang,"份额","Share")]}/><Bar dataKey="share" fill="#c47d59" radius={[0,8,8,0]}/></BarChart></ResponsiveContainer></div></ChartFrame>;
 }
 
 function RollingFevdChart({ lang, data }: { lang: Lang; data: NetImpactResult["rollingFevd"] }) {
-  return <ChartFrame label={tx(lang,"拖动范围条查看冲击来源随时间的变化","Drag the range selector to inspect changing shock sources")}><div className="chart medium"><ResponsiveContainer><AreaChart data={data}><CartesianGrid vertical={false}/><XAxis dataKey="date" minTickGap={35} tick={{fontSize:10}}/><YAxis domain={[0,100]} unit="%"/><Tooltip formatter={(v)=>`${Number(v).toFixed(2)}%`}/><Legend/><Area dataKey="externalShare" name={tx(lang,"外部因素冲击","External-factor shocks")} stackId="1" stroke="#c47d59" fill="#ead0c1"/><Area dataKey="ownShare" name={tx(lang,"油价自身冲击","Oil-price own shocks")} stackId="1" stroke="#6f69a2" fill="#d9d5ea"/><Brush dataKey="date" height={22} stroke="#6f69a2"/></AreaChart></ResponsiveContainer></div></ChartFrame>;
+  return <ChartFrame label={tx(lang,"拖动范围条查看冲击来源随时间的变化","Drag the range selector to inspect changing shock sources")}><div className="chart medium"><ResponsiveContainer><AreaChart data={data}><CartesianGrid vertical={false}/><XAxis dataKey="date" minTickGap={35} tick={{fontSize:10}}/><YAxis domain={[0,100]} unit="%"/><Tooltip formatter={(v)=>`${Number(v).toFixed(3)}%`}/><Legend/><Area dataKey="externalShare" name={tx(lang,"外部因素冲击","External-factor shocks")} stackId="1" stroke="#c47d59" fill="#ead0c1"/><Area dataKey="ownShare" name={tx(lang,"油价自身冲击","Oil-price own shocks")} stackId="1" stroke="#6f69a2" fill="#d9d5ea"/><Brush dataKey="date" height={22} stroke="#6f69a2"/></AreaChart></ResponsiveContainer></div></ChartFrame>;
 }
 
 function HhtChart({ lang, data }: { lang: Lang; data: NetImpactResult["hht"] }) {
-  return <ChartFrame label={tx(lang,"拖动范围条查看主频率随时间的变化","Drag the range selector to inspect changing instantaneous frequency")}><div className="chart medium"><ResponsiveContainer><LineChart data={data}><CartesianGrid vertical={false}/><XAxis dataKey="date" minTickGap={35} tick={{fontSize:10}}/><YAxis tick={{fontSize:10}} domain={[0,"auto"]}/><Tooltip formatter={(v,name)=>[Number(v).toFixed(4),name === "frequency" ? tx(lang,"瞬时频率","Instantaneous frequency") : String(name)]}/><Line dataKey="frequency" name={tx(lang,"HHT瞬时频率","HHT instantaneous frequency")} stroke="#9b6d51" strokeWidth={2} dot={false}/><Brush dataKey="date" height={22} stroke="#756fa5"/></LineChart></ResponsiveContainer></div></ChartFrame>;
+  return <ChartFrame label={tx(lang,"拖动范围条查看主频率随时间的变化","Drag the range selector to inspect changing instantaneous frequency")}><div className="chart medium"><ResponsiveContainer><LineChart data={data}><CartesianGrid vertical={false}/><XAxis dataKey="date" minTickGap={35} tick={{fontSize:10}}/><YAxis tick={{fontSize:10}} domain={[0,"auto"]}/><Tooltip formatter={(v,name)=>[Number(v).toFixed(3),name === "frequency" ? tx(lang,"瞬时频率","HHT instantaneous frequency") : String(name)]}/><Line dataKey="frequency" name={tx(lang,"HHT瞬时频率","HHT instantaneous frequency")} stroke="#9b6d51" strokeWidth={2} dot={false}/><Brush dataKey="date" height={22} stroke="#756fa5"/></LineChart></ResponsiveContainer></div></ChartFrame>;
 }
 
 function BreakChart({ lang, data }: { lang: Lang; data: NetImpactResult["breakTest"]["optimal"]["profile"] }) {
-  return <ChartFrame label={tx(lang,"拖动范围条检查候选结构变化日期","Drag the range selector to inspect candidate break dates")}><div className="chart medium"><ResponsiveContainer><LineChart data={data}><CartesianGrid vertical={false}/><XAxis dataKey="date" minTickGap={35} tick={{fontSize:10}}/><YAxis unit="%"/><Tooltip formatter={(v)=>[`${Number(v).toFixed(2)}%`,tx(lang,"分段拟合改善","Segmented-fit improvement")]}/><Line dataKey="improvementPercent" stroke="#587a9a" dot={false}/><Brush dataKey="date" height={22} stroke="#587a9a"/></LineChart></ResponsiveContainer></div></ChartFrame>;
+  return <ChartFrame label={tx(lang,"拖动范围条检查候选结构变化日期","Drag the range selector to inspect candidate break dates")}><div className="chart medium"><ResponsiveContainer><LineChart data={data}><CartesianGrid vertical={false}/><XAxis dataKey="date" minTickGap={35} tick={{fontSize:10}}/><YAxis unit="%"/><Tooltip formatter={(v)=>[`${Number(v).toFixed(3)}%`,tx(lang,"分段拟合改善","Segmented-fit improvement")]}/><Line dataKey="improvementPercent" stroke="#587a9a" dot={false}/><Brush dataKey="date" height={22} stroke="#587a9a"/></LineChart></ResponsiveContainer></div></ChartFrame>;
 }
 
 function ScaleGrangerMatrix({ lang, data }: { lang: Lang; data: ScaleGrangerResult[] }) {
@@ -1087,7 +1087,7 @@ function ScaleGrangerMatrix({ lang, data }: { lang: Lang; data: ScaleGrangerResu
   const factors = [...new Map(data.map((row) => [row.id, { id: row.id, name: lang === "zh" ? row.nameZh : row.nameEn }])).values()];
   return <div className="scale-matrix" style={{"--imf-count":imfs.length} as React.CSSProperties}>
     <div className="matrix-head"><b>{tx(lang,"解释变量","Factor")}</b>{imfs.map((imf)=><b key={imf}>{imf}</b>)}</div>
-    {factors.map((factor)=><div className="matrix-row" key={factor.id}><strong>{factor.name}</strong>{imfs.map((imf)=>{const row=data.find((item)=>item.id===factor.id&&item.imf===imf)!; const intensity=Math.min(1,Math.max(0,-Math.log10(Math.max(row.pValue,1e-12))/4)); return <span key={imf} className={row.significant?"significant":""} style={{"--strength":intensity} as React.CSSProperties} title={`${factor.name} · ${imf} · lag ${row.lag} · F ${row.fStatistic.toFixed(3)} · p ${row.pValue.toFixed(4)}`}>{row.pValue.toFixed(3)}</span>})}</div>)}
+    {factors.map((factor)=><div className="matrix-row" key={factor.id}><strong>{factor.name}</strong>{imfs.map((imf)=>{const row=data.find((item)=>item.id===factor.id&&item.imf===imf)!; const intensity=Math.min(1,Math.max(0,-Math.log10(Math.max(row.pValue,1e-12))/4)); return <span key={imf} className={row.significant?"significant":""} style={{"--strength":intensity} as React.CSSProperties} title={`${factor.name} · ${imf} · lag ${row.lag} · F ${row.fStatistic.toFixed(3)} · p ${row.pValue.toFixed(3)}`}>{row.pValue.toFixed(3)}</span>})}</div>)}
   </div>;
 }
 function Advice({
@@ -1257,16 +1257,16 @@ function ImpactLab({ lang }: { lang: Lang }) {
             <p className="plain-note">{tx(lang,"估计期用于建立基准关系，事件期用于识别主模态极值和净影响；两者不会混用。","The estimation window establishes the baseline; the event window identifies selected-scale extrema and net impact. They are kept separate.")}</p>
             <h3 className="result-title">B · {tx(lang,"VMD 分解与 HHT 时频诊断","VMD decomposition and HHT time-frequency diagnostics")}</h3><ScaleCard lang={lang} components={result.components} /><HhtChart lang={lang} data={result.hht}/>
             <h3 className="result-title">C · {tx(lang,"主模态选择与事件期净影响","Selected-scale choice and event-window net impact")}</h3>
-            <div className="metric-table"><span><b>{tx(lang,"主模态","Selected scale")}</b>{result.scaleEffect.selectedScale}</span><span><b>{tx(lang,"最低点","Minimum")}</b>{result.scaleEffect.minimumDate} · {result.scaleEffect.minimumValue.toFixed(3)}</span><span><b>{tx(lang,"最高点","Maximum")}</b>{result.scaleEffect.maximumDate} · {result.scaleEffect.maximumValue.toFixed(3)}</span><span><b>FEVD h</b>{result.scaleEffect.tradingDayInterval} {tx(lang,"个交易日","trading days")}</span><span><b>{tx(lang,"原始油价波幅","Original oil-price range")}</b>{result.scaleEffect.originalResponse.toFixed(3)} USD/bbl</span><span><b>{tx(lang,"净影响值","Net impact value")}</b>{result.scaleEffect.netEffect.toFixed(3)} USD/bbl</span><span><b>{tx(lang,"净影响占比","Net-impact share")}</b>{result.scaleEffect.shareInOriginalResponse.toFixed(2)}%</span></div>
+            <div className="metric-table"><span><b>{tx(lang,"主模态","Selected scale")}</b>{result.scaleEffect.selectedScale}</span><span><b>{tx(lang,"最低点","Minimum")}</b>{result.scaleEffect.minimumDate} · {result.scaleEffect.minimumValue.toFixed(3)}</span><span><b>{tx(lang,"最高点","Maximum")}</b>{result.scaleEffect.maximumDate} · {result.scaleEffect.maximumValue.toFixed(3)}</span><span><b>FEVD h</b>{result.scaleEffect.tradingDayInterval} {tx(lang,"个交易日","trading days")}</span><span><b>{tx(lang,"原始油价波幅","Original oil-price range")}</b>{result.scaleEffect.originalResponse.toFixed(3)} USD/bbl</span><span><b>{tx(lang,"净影响值","Net impact value")}</b>{result.scaleEffect.netEffect.toFixed(3)} USD/bbl</span><span><b>{tx(lang,"净影响占比","Net-impact share")}</b>{result.scaleEffect.shareInOriginalResponse.toFixed(3)}%</span></div>
             <h3 className="result-title">D · {tx(lang,"多分辨率格兰杰检验","Multiresolution Granger tests")}</h3>
             <ScaleGrangerMatrix lang={lang} data={result.scaleGranger}/>
-            <details className="diagnostic"><summary>{tx(lang,"查看全样本格兰杰与当期 OLS 辅助诊断（不作为净影响主结果）","View full-sample Granger and current OLS diagnostics (not the net-impact result)")}</summary><GrangerChart lang={lang} data={result.granger} alpha={alpha} /><div className="granger-table">{result.granger.map((row) => <div key={row.id}><b>{lang === "zh" ? row.nameZh : row.nameEn}</b><span>lag {row.lag}</span><span>F {row.fStatistic.toFixed(3)}</span><span>p {row.pValue.toFixed(4)}</span><em className={row.significant ? "yes" : ""}>{row.significant ? tx(lang,"通过","Pass") : tx(lang,"未通过","Not significant")}</em></div>)}</div><DriverChart lang={lang} data={result.drivers}/></details>
+            <details className="diagnostic"><summary>{tx(lang,"查看全样本格兰杰与当期 OLS 辅助诊断（不作为净影响主结果）","View full-sample Granger and current OLS diagnostics (not the net-impact result)")}</summary><GrangerChart lang={lang} data={result.granger} alpha={alpha} /><div className="granger-table">{result.granger.map((row) => <div key={row.id}><b>{lang === "zh" ? row.nameZh : row.nameEn}</b><span>lag {row.lag}</span><span>F {row.fStatistic.toFixed(3)}</span><span>p {row.pValue.toFixed(3)}</span><em className={row.significant ? "yes" : ""}>{row.significant ? tx(lang,"通过","Pass") : tx(lang,"未通过","Not significant")}</em></div>)}</div><DriverChart lang={lang} data={result.drivers}/></details>
             <h3 className="result-title">E · {tx(lang,`正交 VAR-FEVD 贡献与滚动冲击来源（自动 h=${result.fevdHorizon}）`,`Orthogonal VAR-FEVD contributions and rolling shock sources (automatic h=${result.fevdHorizon})`)}</h3><FevdChart lang={lang} data={result.fevd}/>
-            <div className="metric-table"><span><b>{tx(lang,"油价自身冲击份额","Oil-price own-shock share")}</b>{result.fevdOwnShare.toFixed(2)}%</span><span><b>{tx(lang,"外部因素冲击份额","External-factor shock share")}</b>{(100-result.fevdOwnShare).toFixed(2)}%</span></div>
-            <div className="impact-values">{result.fevd.map((row)=><span key={row.id}><b>{lang==="zh"?row.nameZh:row.nameEn}</b><em>{row.absoluteImpact>=0?"+":""}{row.absoluteImpact.toFixed(3)} USD/bbl</em><small>{row.externalWeight.toFixed(2)}% {tx(lang,"的外部净影响","of external net impact")}</small></span>)}</div>
+            <div className="metric-table"><span><b>{tx(lang,"油价自身冲击份额","Oil-price own-shock share")}</b>{result.fevdOwnShare.toFixed(3)}%</span><span><b>{tx(lang,"外部因素冲击份额","External-factor shock share")}</b>{(100-result.fevdOwnShare).toFixed(3)}%</span></div>
+            <div className="impact-values">{result.fevd.map((row)=><span key={row.id}><b>{lang==="zh"?row.nameZh:row.nameEn}</b><em>{row.absoluteImpact>=0?"+":""}{row.absoluteImpact.toFixed(3)} USD/bbl</em><small>{row.externalWeight.toFixed(3)}% {tx(lang,"的外部净影响","of external net impact")}</small></span>)}</div>
             <RollingFevdChart lang={lang} data={result.rollingFevd}/>
             <h3 className="result-title">F · {tx(lang,"结构断点诊断：事件起点检验与最优断点复核","Structural-break diagnostics: event-start test and optimal-break review")}</h3><BreakChart lang={lang} data={result.breakTest.optimal.profile}/>
-            <div className="metric-table"><span><b>{tx(lang,"指定断点","Specified break")}</b>{result.breakTest.fixed.breakDate}</span><span><b>F / p</b>{result.breakTest.fixed.fStatistic.toFixed(3)} / {result.breakTest.fixed.pValue.toFixed(4)}</span><span><b>{tx(lang,"水平突变","Level shift")}</b>{result.breakTest.fixed.levelShift.toFixed(3)}</span><span><b>{tx(lang,"趋势变化","Slope change")}</b>{result.breakTest.fixed.slopeChange.toFixed(3)}</span><span><b>{tx(lang,"最优候选断点","Best candidate break")}</b>{result.breakTest.optimal.bestDate}</span><span><b>{tx(lang,"分段RSS改善","Segmented RSS improvement")}</b>{result.breakTest.optimal.rssImprovementPercent.toFixed(2)}%</span></div>
+            <div className="metric-table"><span><b>{tx(lang,"指定断点","Specified break")}</b>{result.breakTest.fixed.breakDate}</span><span><b>F / p</b>{result.breakTest.fixed.fStatistic.toFixed(3)} / {result.breakTest.fixed.pValue.toFixed(3)}</span><span><b>{tx(lang,"水平突变","Level shift")}</b>{result.breakTest.fixed.levelShift.toFixed(3)}</span><span><b>{tx(lang,"趋势变化","Slope change")}</b>{result.breakTest.fixed.slopeChange.toFixed(3)}</span><span><b>{tx(lang,"最优候选断点","Best candidate break")}</b>{result.breakTest.optimal.bestDate}</span><span><b>{tx(lang,"分段RSS改善","Segmented RSS improvement")}</b>{result.breakTest.optimal.rssImprovementPercent.toFixed(3)}%</span></div>
             <div className="provenance"><Database/><span><b>{tx(lang,"本次数据血缘","Data provenance")}</b><small>{result.sources.map((s) => `${lang === "zh" ? s.nameZh : s.nameEn} [FRED:${s.providerId}]`).join(" · ")}</small></span></div>
           </>}
           <div className="method-steps">
@@ -1405,12 +1405,12 @@ function RiskLab({ lang }: { lang: Lang }) {
           {error && <StatusPanel error text={tx(lang,`预警未完成：${error}`,`Warning run did not complete: ${error}`)}/>} {!liveRisk && !error && <StatusPanel text={tx(lang,"运行后展示基于真实价格序列计算的历史风险分位。","Run the model to display historical risk percentiles calculated from the official price series.")}/>} {liveRisk && <><RiskChart lang={lang} data={liveRisk.history} threshold={threshold} />
           <div className="metric-table">
             <span>
-              <b>{tx(lang, "当前风险分位", "Current risk percentile")}</b> {liveRisk.riskScore.toFixed(1)}
+              <b>{tx(lang, "当前风险分位", "Current risk percentile")}</b> {liveRisk.riskScore.toFixed(3)}
             </span>
             <span>
-              <b>{tx(lang, "距离用户阈值", "Distance to user threshold")}</b> {(liveRisk.riskScore-threshold).toFixed(1)}
+              <b>{tx(lang, "距离用户阈值", "Distance to user threshold")}</b> {(liveRisk.riskScore-threshold).toFixed(3)}
             </span>
-            <span><b>{tx(lang,"历史90%触发阈值","Historical 90% trigger")}</b>{liveRisk.alertThreshold.toFixed(1)}</span>
+            <span><b>{tx(lang,"历史90%触发阈值","Historical 90% trigger")}</b>{liveRisk.alertThreshold.toFixed(3)}</span>
             <span><b>{tx(lang,"数据截止","As of")}</b>{liveRisk.latestDate}</span>
           </div></>}
         </div>
@@ -1643,7 +1643,7 @@ function DataLab({ lang }: { lang: Lang }) {
                 <CartesianGrid vertical={false} stroke="#e6e0dc" />
                 <XAxis dataKey="date" minTickGap={30} tick={{ fontSize: 10 }} />
                 <YAxis tick={{ fontSize: 10 }} />
-                <Tooltip />
+                <Tooltip formatter={(value)=>Number(value).toFixed(3)} />
                 <Line
                   dataKey="value"
                   stroke="#6f69a2"

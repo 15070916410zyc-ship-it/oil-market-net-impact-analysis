@@ -1,9 +1,10 @@
 import { catalog } from "./_catalog.js";
 
 export default async function handler(request, response) {
-  const q = String(request.query?.q || "").trim().toLowerCase();
+  const normalize = (value) => String(value || "").trim().toLowerCase().replace(/\binventories\b/g, "inventory").replace(/\bprices\b/g, "price").replace(/\brates\b/g, "rate");
+  const q = normalize(request.query?.q);
   let rows = q
-    ? catalog.filter((item) => `${item.id} ${item.name} ${item.nameEn} ${item.category} ${item.source}`.toLowerCase().includes(q))
+    ? catalog.filter((item) => normalize(`${item.id} ${item.name} ${item.nameEn} ${item.category} ${item.source}`).includes(q))
     : catalog;
   const key = process.env.FRED_API_KEY;
   if (q.length >= 2 && key) {
