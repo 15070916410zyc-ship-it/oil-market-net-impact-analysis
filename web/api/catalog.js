@@ -13,6 +13,15 @@ const commonMisspellings = {
   prodction:"production", consumtion:"consumption", interst:"interest", infltion:"inflation",
   natral:"natural", gass:"gas", petrolium:"petroleum", unemployement:"unemployment",
 };
+const semanticAliases = {
+  gold:["gold","bullion","precious metal"], silver:["silver","precious metal"], copper:["copper","industrial metal"],
+  dxy:["broad dollar index","trade weighted dollar"], gdp:["gross domestic product"], cpi:["consumer price index","inflation"],
+  ppi:["producer price index"], pce:["personal consumption expenditures","inflation"], vix:["volatility index"],
+  spread:["spread","yield spread","credit spread"], shipping:["shipping","freight","transportation"],
+  geopolitical:["geopolitical risk","geopolitical uncertainty"], inventory:["inventory","inventories","stocks"],
+  黄金:["gold","bullion"], 白银:["silver"], 铜:["copper"], 国内生产总值:["gross domestic product","gdp"],
+  利差:["yield spread","credit spread"], 航运:["shipping","freight"], 运价:["freight","shipping"],
+};
 const normalize = (value) => {
   let text = String(value || "").trim().toLowerCase();
   for (const [zh,en] of Object.entries(aliases)) text = text.replaceAll(zh,` ${en} `);
@@ -27,9 +36,13 @@ const encodeEia = (route,facet,series) => Buffer.from(JSON.stringify({route,face
 
 async function fredSearch(query,key){
   if(!key||query.length<2)return [];
-  const candidates=[...new Set([normalize(query),...words(query).filter((word)=>word.length>2)])].slice(0,4);
-  const batches=await Promise.all(candidates.map(async(candidate)=>{ const url=new URL("https://api.stlouisfed.org/fred/series/search"); url.searchParams.set("api_key",key);url.searchParams.set("file_type","json");url.searchParams.set("search_text",candidate);url.searchParams.set("limit","100");url.searchParams.set("order_by","search_rank"); const response=await fetch(url,{headers:{accept:"application/json"}}); if(!response.ok)return[]; const payload=await response.json(); return(payload.seriess||[]).map((item)=>({id:`FRED-${item.id}`,name:item.title,nameEn:item.title,category:"FRED full-text catalog",source:"FRED",unit:item.units_short||item.units,frequency:item.frequency_short||item.frequency,updated:item.last_updated?.slice(0,10)||"",color:"#587a9a"})); }));
-  return unique(batches.flat()).map((row)=>({...row,_score:score(query,row)})).filter((row)=>row._score>.32).sort((a,b)=>b._score-a._score).slice(0,80);
+  const rawWords=String(query).trim().toLowerCase().split(/[^a-z0-9\u4e00-\u9fff]+/).filter(Boolean);
+  const expansions=rawWords.flatMap((word)=>semanticAliases[word]||[]);
+  const candidates=[...new Set([normalize(query),...words(query).filter((word)=>word.length>1),...expansions])].filter(Boolean).slice(0,8);
+  const batches=await Promise.all(candidates.map(async(candidate)=>{ try{const url=new URL("https://api.stlouisfed.org/fred/series/search"); url.searchParams.set("api_key",key);url.searchParams.set("file_type","json");url.searchParams.set("search_text",candidate);url.searchParams.set("limit","100");url.searchParams.set("order_by","search_rank"); const response=await fetch(url,{headers:{accept:"application/json"}}); if(!response.ok)return[]; const payload=await response.json(); return(payload.seriess||[]).map((item,index)=>({id:`FRED-${item.id}`,name:item.title,nameEn:item.title,category:"FRED full-text catalog",source:"FRED",unit:item.units_short||item.units,frequency:item.frequency_short||item.frequency,updated:item.last_updated?.slice(0,10)||"",color:"#587a9a",_apiRank:index}));}catch{return[];} }));
+  // FRED already ranks these rows for the submitted search. Local similarity only
+  // reorders them; it must not silently discard valid official results.
+  return unique(batches.flat()).map((row)=>({...row,_score:score(query,row)})).sort((a,b)=>(b._score-a._score)||(a._apiRank-b._apiRank)).slice(0,100);
 }
 const branchHints={petroleum:"oil crude brent wti gasoline diesel jet fuel inventory stocks refinery imports exports futures price production consumption","natural-gas":"natural gas lng henry hub storage price production consumption pipeline",electricity:"electricity power generation price demand capacity renewable solar wind",coal:"coal production consumption price stocks",international:"international country energy oil gas production consumption imports exports",steo:"forecast projection outlook oil gas price production demand","total-energy":"total energy emissions production consumption price",seds:"state energy price production consumption expenditure emissions","crude-oil-imports":"crude oil imports company country grade quantity"};
 const directRouteHints={
@@ -52,5 +65,5 @@ async function eiaSearch(query,key){
 export default async function handler(request,response){
   const raw=String(request.query?.q||"").trim(),q=normalize(raw);const builtIn=q?catalog.map((item)=>({...item,_score:score(q,item)})).filter((item)=>item._score>.35).sort((a,b)=>b._score-a._score):catalog;let fred=[],eia=[];const warnings=[];
   if(q.length>=2){const [fr,er]=await Promise.allSettled([fredSearch(raw,process.env.FRED_API_KEY),eiaSearch(raw,process.env.EIA_API_KEY||"DEMO_KEY")]);if(fr.status==="fulfilled")fred=fr.value;else warnings.push("FRED catalog search unavailable");if(er.status==="fulfilled")eia=er.value;else warnings.push("EIA catalog search unavailable");}
-  const rows=unique([...builtIn,...fred,...eia]).map(({providerId:_providerId,_score,...item})=>item);response.setHeader("Cache-Control",q.length>=2&&!eia.length?"private, no-store":"public, s-maxage=1800, stale-while-revalidate=21600");response.status(200).json({items:rows,coverage:{FRED:Boolean(process.env.FRED_API_KEY),EIA:true},warnings});
+  const rows=unique([...builtIn,...fred,...eia]).map(({providerId:_providerId,_score,_apiRank,...item})=>item);response.setHeader("Cache-Control",q.length>=2&&!eia.length?"private, no-store":"public, s-maxage=1800, stale-while-revalidate=21600");response.status(200).json({items:rows,coverage:{FRED:Boolean(process.env.FRED_API_KEY),EIA:true},warnings});
 }
