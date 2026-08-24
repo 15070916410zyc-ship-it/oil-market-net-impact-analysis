@@ -24,7 +24,10 @@ test("number steppers and mode switching respond immediately", async ({ page }) 
 
 test("decision accounting, advanced variables and multiple real-product plans render together", async ({ page }) => {
   await page.addInitScript(() => {
-    if (!localStorage.getItem("opi.savedRecords.v1")) localStorage.setItem("opi.savedRecords.v1", JSON.stringify([{id:"CUSTOM-GOLD",kind:"series",label:"自定义黄金因子",savedAt:"2026-08-24T00:00:00.000Z",payload:{name:"自定义黄金因子",nameEn:"Custom gold factor",source:"Manual upload",category:"Saved variable",unit:"USD",frequency:"Daily",color:"#b58a42",points:[{date:"2026-08-20",value:3324.625}]}}]));
+    if (!localStorage.getItem("opi.savedRecords.v1")) localStorage.setItem("opi.savedRecords.v1", JSON.stringify([
+      {id:"CUSTOM-GOLD",kind:"series",label:"自定义黄金因子",savedAt:"2026-08-24T00:00:00.000Z",payload:{name:"自定义黄金因子",nameEn:"Custom gold factor",source:"Manual upload",category:"Saved variable",unit:"USD",frequency:"Daily",color:"#b58a42",points:[{date:"2026-08-20",value:3324.625}]}},
+      {id:"CUSTOM-COPPER",kind:"series",label:"自定义铜价因子",savedAt:"2026-08-24T00:00:00.000Z",payload:{name:"自定义铜价因子",nameEn:"Custom copper factor",source:"Manual upload",category:"Saved variable",unit:"USD",frequency:"Daily",color:"#b0714f",points:[{date:"2026-08-20",value:4.375}]}},
+    ]));
   });
   await page.route("**/api/**", async (route) => {
     const url = new URL(route.request().url());
@@ -142,6 +145,18 @@ test("decision accounting, advanced variables and multiple real-product plans re
   await mobileMixed.scrollIntoViewIfNeeded();
   expect(await mobileMixed.evaluate((element)=>element.scrollWidth<=element.clientWidth+1)).toBeTruthy();
   await mobileMixed.screenshot({path:"test-results/multi-asset-portfolio-mobile.png"});
+  await page.setViewportSize({width:1440,height:1000});
+  const goldOption=page.locator(".factor-option").filter({hasText:"自定义黄金因子"});
+  await expect(goldOption.getByRole("button",{name:/删除 自定义黄金因子/})).toBeVisible();
+  await goldOption.getByRole("button",{name:/删除 自定义黄金因子/}).click();
+  await expect(goldOption).toHaveCount(0);
+  await expect(page.locator(".factor-option").filter({hasText:"地缘政治风险指数"}).locator(".factor-remove")).toHaveCount(0);
+  await page.getByRole("button",{name:"专业模式"}).click();
+  const copperOption=page.locator(".factor-option").filter({hasText:"自定义铜价因子"});
+  await expect(copperOption.getByRole("button",{name:/删除 自定义铜价因子/})).toBeVisible();
+  await copperOption.screenshot({path:"test-results/professional-added-variable-delete.png"});
+  await copperOption.getByRole("button",{name:/删除 自定义铜价因子/}).click();
+  await expect(copperOption).toHaveCount(0);
 });
 
 test("data center is independent and searches GPRD plus financial products", async ({ page }) => {
@@ -153,7 +168,7 @@ test("data center is independent and searches GPRD plus financial products", asy
   await page.route("**/api/**", async (route) => {
     const url=new URL(route.request().url());
     if(url.pathname.endsWith("/health"))return route.fulfill({json:{ok:true}});
-    if(url.pathname.endsWith("/catalog"))return route.fulfill({json:{items:[{id:"GPRD",name:"地缘政治风险指数（传统日度 GPR）",nameEn:"Geopolitical Risk Index (traditional daily GPR)",category:"地缘政治与事件风险",source:"Caldara-Iacoviello GPR",unit:"指数",frequency:"日度",updated:"2026-08-17",color:"#c47d59"},{id:"FRED-DGS10",name:"美国10年期国债收益率",nameEn:"US 10-Year Treasury Yield",category:"金融条件",source:"FRED",unit:"%",frequency:"Daily",updated:"2026-08-20",color:"#587a9a"},{id:"FRED-NASDAQXAU",name:"PHLX黄金与白银行业指数",nameEn:"PHLX Gold/Silver Sector Index",category:"金融资产与避险",source:"FRED / official source",unit:"指数",frequency:"日度",updated:"2026-08-20",color:"#b58a42"},{id:"FRED-GOLDAMGBD228NLBM",name:"伦敦黄金上午定盘价",nameEn:"London Gold AM Fixing Price",category:"金融资产与避险",source:"FRED / official source",unit:"美元/盎司",frequency:"日度",updated:"2026-08-20",color:"#b58a42"}]}});
+    if(url.pathname.endsWith("/catalog"))return route.fulfill({json:{items:[{id:"GPRD",name:"地缘政治风险指数（传统日度 GPR）",nameEn:"Geopolitical Risk Index (traditional daily GPR)",category:"地缘政治与事件风险",source:"Caldara-Iacoviello GPR",unit:"指数",frequency:"日度",updated:"2026-08-17",color:"#c47d59"},{id:"FRED-DGS10",name:"美国10年期国债收益率",nameEn:"US 10-Year Treasury Yield",category:"金融条件",source:"FRED",unit:"%",frequency:"Daily",updated:"2026-08-20",color:"#587a9a"},{id:"FRED-NASDAQXAU",name:"PHLX黄金与白银行业指数",nameEn:"PHLX Gold/Silver Sector Index",category:"金融资产与避险",source:"FRED / official source",unit:"指数",frequency:"日度",updated:"2026-08-20",color:"#b58a42"},{id:"FRED-GOLDAMGBD228NLBM",name:"伦敦黄金上午定盘价",nameEn:"London Gold AM Fixing Price",category:"金融资产与避险",source:"FRED / official source",unit:"美元/盎司",frequency:"日度",updated:"2026-08-20",color:"#b58a42"},{id:"YAHOO-R0M9Rg",name:"Gold Dec 26",nameEn:"Gold Dec 26",category:"市场期货",source:"Yahoo Finance / supplementary",unit:"USD",frequency:"日度",updated:"Live catalog",color:"#477c8d"}],warnings:[]}});
     if(url.pathname.endsWith("/gprd"))return route.fulfill({json:{updated:"2026-08-17",points:[{date:"2026-08-16",value:120.123},{date:"2026-08-17",value:144.473}]}});
     if(url.pathname.endsWith("/series"))return route.fulfill({json:{updated:"2026-08-20",points:[{date:"2026-08-18",value:366.600},{date:"2026-08-19",value:399.020},{date:"2026-08-20",value:408.950}]}});
     if(url.pathname.endsWith("/instruments"))return route.fulfill({json:{asOf:"2026-08-24",benchmark:"All",quoteMethod:"AKShare / Sina",broker:{connected:false,name:"IBKR",message:"not connected"},executionEnabled:false,disclaimer:"indicative",products:[{id:"CME-CL",benchmark:"WTI",exchange:"NYMEX / CME Group",kind:"future",code:"CL",name:"WTI Crude Oil futures",nameZh:"WTI 原油期货",size:1000,settlement:"Physical",url:"https://www.cmegroup.com/",contracts:1,coveredBarrels:1000,roundingError:0,verification:"official",quote:{last:85.2,bid:85.19,ask:85.21,time:"12:00:00",date:"2026-08-24",name:"纽约原油",provider:"Sina"}}]}});
@@ -169,6 +184,7 @@ test("data center is independent and searches GPRD plus financial products", asy
   await page.getByPlaceholder(/Brent/).fill("gold");
   await expect(page.getByText("PHLX黄金与白银行业指数")).toBeVisible();
   await expect(page.getByText("伦敦黄金上午定盘价")).toBeVisible();
+  await expect(page.getByText("Gold Dec 26")).toBeVisible();
   await page.getByText("伦敦黄金上午定盘价").click();
   await expect(page.getByRole("button",{name:"加入变量池"})).toBeVisible();
   expect(await page.locator(".data-layout").evaluate((element)=>element.scrollWidth<=element.clientWidth+1)).toBeTruthy();

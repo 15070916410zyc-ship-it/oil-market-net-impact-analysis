@@ -65,12 +65,21 @@ export async function checkApiHealth(): Promise<boolean> {
   }
 }
 
-export async function fetchCatalog(q = ""): Promise<Array<Record<string, string>>> {
+export type CatalogResponse = {
+  items: Array<Record<string, string>>;
+  coverage?: Record<string, unknown>;
+  warnings?: string[];
+};
+
+export async function fetchCatalogResponse(q = ""): Promise<CatalogResponse> {
   const suffix = q.trim() ? `?${new URLSearchParams({ q: q.trim() })}` : "";
   const response = await fetch(apiUrl(`/api/catalog${suffix}`), { headers: { accept: "application/json" } });
   if (!response.ok) throw new Error(`Catalog API returned ${response.status}`);
-  const payload = await response.json();
-  return payload.items;
+  return response.json() as Promise<CatalogResponse>;
+}
+
+export async function fetchCatalog(q = ""): Promise<Array<Record<string, string>>> {
+  return (await fetchCatalogResponse(q)).items;
 }
 
 export async function fetchSeries(id: string, frequency: "daily" | "monthly") {

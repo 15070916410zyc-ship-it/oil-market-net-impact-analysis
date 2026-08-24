@@ -1,0 +1,143 @@
+openapi: 3.1.0
+info:
+  title: Oil Price Intelligence API
+  version: 1.1.0
+  description: Live research-data, market-product and model endpoints used by the web application. Yahoo Finance is a supplementary market feed, not an official public API.
+servers:
+  - url: /
+paths:
+  /api/health:
+    get:
+      summary: Check API and configured official providers
+      responses:
+        "200":
+          description: Service status
+  /api/catalog:
+    get:
+      summary: Search the variable catalog
+      description: Searches the curated catalog, FRED full text, the EIA hierarchy and a supplementary Yahoo Finance market catalog. Provider failures are returned in warnings instead of being silently hidden.
+      parameters:
+        - in: query
+          name: q
+          schema: { type: string, minLength: 2 }
+          example: gold
+      responses:
+        "200":
+          description: Matching series and provider coverage
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, coverage, warnings]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/CatalogItem" }
+                  coverage: { type: object, additionalProperties: true }
+                  warnings: { type: array, items: { type: string } }
+  /api/series:
+    get:
+      summary: Retrieve a FRED, EIA or Yahoo series
+      parameters:
+        - in: query
+          name: id
+          required: true
+          schema: { type: string }
+          examples:
+            fred: { value: FRED-DGS10 }
+            eia: { value: EIA2-eyJyb3V0ZSI6Ii4uLiJ9 }
+            yahoo: { value: YAHOO-R0M9Rg }
+        - in: query
+          name: frequency
+          schema: { type: string, enum: [daily, monthly], default: daily }
+        - in: query
+          name: start
+          schema: { type: string, format: date }
+        - in: query
+          name: end
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: Provider observations without demo substitution
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SeriesResponse" }
+        "404": { description: Unknown series identifier }
+        "502": { description: Upstream data provider unavailable }
+  /api/gprd:
+    get:
+      summary: Retrieve the Caldara-Iacoviello daily GPR series
+      parameters:
+        - in: query
+          name: frequency
+          schema: { type: string, enum: [daily, monthly], default: daily }
+      responses:
+        "200":
+          description: GPR observations
+  /api/instruments:
+    get:
+      summary: Search exchange-traded futures and options
+      parameters:
+        - in: query
+          name: q
+          schema: { type: string }
+        - in: query
+          name: benchmark
+          schema: { type: string, default: All }
+        - in: query
+          name: directory
+          schema: { type: integer, enum: [0, 1], default: 1 }
+      responses:
+        "200":
+          description: Product specifications and any available indicative quote
+  /api/models:
+    post:
+      summary: Run a live analytical workflow
+      description: Runs forecast, risk, decomposition or net-impact analysis from retrieved observations. It does not return demo charts.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action]
+              properties:
+                action: { type: string, enum: [forecast, risk, decomposition, net-impact] }
+                target: { type: string, example: EIA-BRENT }
+                factors: { type: array, items: { type: string } }
+                imf: { type: integer, minimum: 3, maximum: 8, default: 5 }
+                maxLag: { type: integer, minimum: 1, maximum: 6, default: 5 }
+      responses:
+        "200": { description: Verified computation result }
+        "500": { description: Data retrieval or model execution failed }
+components:
+  schemas:
+    CatalogItem:
+      type: object
+      required: [id, name, source, unit, frequency]
+      properties:
+        id: { type: string }
+        providerId: { type: string }
+        name: { type: string }
+        nameEn: { type: string }
+        category: { type: string }
+        source: { type: string }
+        unit: { type: string }
+        frequency: { type: string }
+        updated: { type: string }
+        color: { type: string }
+    SeriesPoint:
+      type: object
+      required: [date, value]
+      properties:
+        date: { type: string }
+        value: { type: number }
+    SeriesResponse:
+      allOf:
+        - $ref: "#/components/schemas/CatalogItem"
+        - type: object
+          required: [points]
+          properties:
+            points:
+              type: array
+              items: { $ref: "#/components/schemas/SeriesPoint" }

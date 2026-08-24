@@ -44,3 +44,18 @@ def test_main_scale_selection_prioritises_gprd_supported_imfs():
     selected = models.select_main_scale_indices([200.0, 90.0, 80.0], rows, ratio=0.5)
 
     assert selected == [1, 2]
+
+
+def test_all_default_economic_factor_groups_have_live_provider_mappings():
+    models = _load_models()
+    default_ids = {
+        "GPRD", "FRED-USEPUINDXD", "FRED-CRUDEPROD", "FRED-CRUDESTOCKS",
+        "FRED-REFINERYUTIL", "FRED-GASOLINE", "FRED-HENRYHUB", "FRED-COPPER",
+        "FRED-DTWEXBGS", "FRED-DEXCHUS", "FRED-DGS10", "FRED-DFF",
+        "FRED-T10YIE", "FRED-HYSPREAD", "FRED-STLFSI4", "FRED-VIXCLS",
+        "FRED-OVXCLS", "FRED-SP500", "FRED-CPIAUCSL", "FRED-PPI",
+        "FRED-INDPRO", "FRED-UNRATE", "FRED-RSAFS",
+    }
+
+    assert default_ids <= models.SERIES.keys()
+    assert all(models.SERIES[series_id][0] for series_id in default_ids)

@@ -53,7 +53,7 @@ import {
   type Frequency,
   type PriceRow,
 } from "./data";
-import { checkApiHealth, deleteLocalSeries, fetchCatalog, fetchInstruments, fetchSeries, readLocalRecords, requestLiveAnalysis, saveLocalRecord } from "./storage";
+import { checkApiHealth, deleteLocalSeries, fetchCatalog, fetchCatalogResponse, fetchInstruments, fetchSeries, readLocalRecords, requestLiveAnalysis, saveLocalRecord } from "./storage";
 
 type Lang = "zh" | "en";
 type Mode = "landing" | "decision" | "professional" | "data";
@@ -100,19 +100,55 @@ const seriesNamesEn: Record<string, string> = {
   "OECD-CLI": "OECD composite leading indicator",
 };
 
-const representativeDecisionFactors = [
-  "GPRD", "FRED-USEPUINDXD",
-  "FRED-PETINV", "FRED-HENRYHUB",
-  "FRED-DTWEXBGS", "FRED-DGS10", "FRED-STLFSI4",
-  "FRED-VIXCLS", "FRED-SP500", "FRED-NASDAQXAU",
-  "FRED-CPIAUCSL", "FRED-INDPRO",
-];
+const defaultVariableGroups = [
+  { zh:"地缘政治与政策不确定性", en:"Geopolitics & policy uncertainty", ids:["GPRD","FRED-USEPUINDXD"] },
+  { zh:"原油供给与产能", en:"Oil supply & production capacity", ids:["FRED-CRUDEPROD"] },
+  { zh:"库存、炼化与供应缓冲", en:"Inventories, refining & supply buffers", ids:["FRED-CRUDESTOCKS","FRED-REFINERYUTIL"] },
+  { zh:"成品油需求与终端价格", en:"Refined-product demand & end prices", ids:["FRED-GASOLINE"] },
+  { zh:"替代能源与工业原料", en:"Substitute energy & industrial inputs", ids:["FRED-HENRYHUB","FRED-COPPER"] },
+  { zh:"美元与跨境汇率", en:"US dollar & cross-border FX", ids:["FRED-DTWEXBGS","FRED-DEXCHUS"] },
+  { zh:"利率与通胀预期", en:"Interest rates & inflation expectations", ids:["FRED-DGS10","FRED-DFF","FRED-T10YIE"] },
+  { zh:"信用、流动性与金融压力", en:"Credit, liquidity & financial stress", ids:["FRED-HYSPREAD","FRED-STLFSI4"] },
+  { zh:"市场波动率与风险偏好", en:"Market volatility & risk appetite", ids:["FRED-VIXCLS","FRED-OVXCLS","FRED-SP500"] },
+  { zh:"实体需求、就业与成本压力", en:"Real demand, employment & cost pressure", ids:["FRED-CPIAUCSL","FRED-PPI","FRED-INDPRO","FRED-UNRATE","FRED-RSAFS"] },
+] as const;
+
+const representativeDecisionFactors: string[] = defaultVariableGroups.flatMap((group) => [...group.ids]);
 
 const protectedDefaultVariableIds = new Set([
   "EIA-BRENT", "FRED-DCOILWTICO",
   ...representativeDecisionFactors,
-  "FRED-T10YIE",
 ]);
+
+const defaultVariableGroup = (id: string, lang: Lang) => {
+  const group = defaultVariableGroups.find((candidate) => candidate.ids.some((item) => item === id));
+  return group ? (lang === "zh" ? group.zh : group.en) : tx(lang,"系统基准","System benchmark");
+};
+
+function variablePoolRows(baseRows: DataSeries[]) {
+  const records = readLocalRecords().filter((record) => record.kind === "series");
+  const savedRows = records.map((record) => {
+    const base = baseRows.find((item) => item.id === record.id);
+    return {
+      ...base,
+      id:record.id,
+      name:String(record.payload.name || base?.name || record.label),
+      nameEn:String(record.payload.nameEn || base?.nameEn || record.label),
+      category:String(record.payload.category || base?.category || "Saved variable"),
+      source:String(record.payload.source || base?.source || "Saved variable"),
+      unit:String(record.payload.unit || base?.unit || ""),
+      frequency:String(record.payload.frequency || base?.frequency || ""),
+      updated:String(record.payload.updated || base?.updated || record.savedAt.slice(0,10)),
+      color:String(record.payload.color || base?.color || "#756fa5"),
+    } satisfies DataSeries;
+  });
+  const defaultRows = baseRows.filter((item) => protectedDefaultVariableIds.has(item.id));
+  const customRows = savedRows.filter((item) => !protectedDefaultVariableIds.has(item.id));
+  return {
+    rows:[...defaultRows,...customRows.filter((item,index,rows)=>rows.findIndex((candidate)=>candidate.id===item.id)===index)],
+    userAddedIds:new Set(customRows.map((item)=>item.id)),
+  };
+}
 
 const seriesText = (item: DataSeries, lang: Lang) => ({
   name: lang === "en" ? item.nameEn || seriesNamesEn[item.id] || item.name : item.name,
@@ -528,6 +564,29 @@ function Card({
   );
 }
 
+function FactorOption({ item, lang, checked, removable, onToggle, onRemove }: {
+  item:DataSeries;
+  lang:Lang;
+  checked:boolean;
+  removable:boolean;
+  onToggle:()=>void;
+  onRemove?:()=>void;
+}) {
+  return <div className={`factor-option ${checked ? "active" : ""}`}>
+    <label>
+      <input type="checkbox" checked={checked} onChange={onToggle}/>
+      <span>
+        <b>{seriesText(item,lang).name}</b>
+        <small>{item.source} · {item.id}</small>
+        <small className={`factor-origin ${removable ? "added" : "default"}`}>
+          {removable ? tx(lang,"新增变量","Added variable") : `${tx(lang,"默认","Default")} · ${defaultVariableGroup(item.id,lang)}`}
+        </small>
+      </span>
+    </label>
+    {removable && <button type="button" className="factor-remove" aria-label={tx(lang,`删除 ${seriesText(item,lang).name}`,`Delete ${seriesText(item,lang).name}`)} title={tx(lang,"从变量池删除","Delete from variable pool")} onClick={onRemove}><X/></button>}
+  </div>;
+}
+
 function Decision({
   lang,
   t,
@@ -551,6 +610,7 @@ function Decision({
   const [eventEndMode, setEventEndMode] = useState<"latest"|"fixed">(initialEventEndMode);
   const [defaultNotice, setDefaultNotice] = useState("");
   const [available, setAvailable] = useState<DataSeries[]>([]);
+  const [userAddedIds, setUserAddedIds] = useState<Set<string>>(new Set());
   const [factors, setFactors] = useState<Set<string>>(new Set());
   const [advanced, setAdvanced] = useState(false);
   const [runVersion, setRunVersion] = useState(0);
@@ -562,7 +622,14 @@ function Decision({
   const [wti, setWti] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  useEffect(()=>{ void fetchCatalog().then((items)=>{const base=items as unknown as DataSeries[];const saved=readLocalRecords().filter((r)=>r.kind==="series").map((record)=>({id:record.id,name:String(record.payload.name||record.label),nameEn:String(record.payload.nameEn||record.label),category:String(record.payload.category||"Saved variable"),source:String(record.payload.source||"Saved variable"),unit:String(record.payload.unit||""),frequency:String(record.payload.frequency||""),updated:record.savedAt.slice(0,10),color:String(record.payload.color||"#587a9a")}));const rows=[...saved,...base.filter((item)=>!saved.some((row)=>row.id===item.id))];setAvailable(rows);const storedFactors=Array.isArray(savedDecisionDefaults?.payload.factorIds)?savedDecisionDefaults.payload.factorIds.map(String):null;const validIds=new Set(rows.map((item)=>item.id));setFactors(new Set((storedFactors||representativeDecisionFactors).filter((id)=>validIds.has(id)&&id!==settings.target)));}).catch(()=>{});},[]);
+  useEffect(()=>{ void fetchCatalog().then((items)=>{
+    const pool=variablePoolRows(items as unknown as DataSeries[]);
+    setAvailable(pool.rows);
+    setUserAddedIds(pool.userAddedIds);
+    const storedFactors=Array.isArray(savedDecisionDefaults?.payload.factorIds)?savedDecisionDefaults.payload.factorIds.map(String):null;
+    const validIds=new Set(pool.rows.map((item)=>item.id));
+    setFactors(new Set((storedFactors||representativeDecisionFactors).filter((id)=>validIds.has(id)&&id!==settings.target)));
+  }).catch(()=>{});},[]);
   useEffect(() => {
     let active = true; setLoading(true); setError("");
     const records=readLocalRecords().filter((record)=>record.kind==="series"&&factors.has(record.id)&&Array.isArray(record.payload.points));
@@ -598,6 +665,13 @@ function Decision({
       payload:{ settings, factorIds:[...factors], eventEndMode },
     });
     setDefaultNotice(tx(lang,"已保存为决策模式默认设置","Saved as Decision mode defaults"));
+  };
+  const removeAddedFactor = (id:string) => {
+    if (!userAddedIds.has(id) || protectedDefaultVariableIds.has(id) || !deleteLocalSeries(id)) return;
+    setUserAddedIds((current)=>{const next=new Set(current);next.delete(id);return next;});
+    setAvailable((current)=>current.filter((item)=>item.id!==id));
+    setFactors((current)=>{const next=new Set(current);next.delete(id);return next;});
+    setDefaultNotice(tx(lang,"已删除新增变量，并从已保存的分析选择中移除。","Added variable deleted and removed from saved analysis selections."));
   };
   return (
     <div className="page">
@@ -657,7 +731,7 @@ function Decision({
             <DateField lang={lang} label={tx(lang,"套保需求结束","Hedge need ends")} value={settings.hedgeEnd} onChange={(hedgeEnd)=>setSettings((s)=>({...s,hedgeEnd}))}/>
           </div>
           <div className="factor-head"><b>{tx(lang,`考虑变量（${factors.size}）`,`Included variables (${factors.size})`)}</b><div><button onClick={()=>setFactors(new Set(available.filter((item)=>item.id!==settings.target).map((item)=>item.id)))}>{tx(lang,"全选","Select all")}</button><button onClick={()=>setFactors(new Set())}>{tx(lang,"清空","Clear")}</button></div></div>
-          <div className="factor-grid compact-factors">{available.filter((item)=>item.id!==settings.target).map((item)=><label key={item.id} className={factors.has(item.id)?"active":""}><input type="checkbox" checked={factors.has(item.id)} onChange={()=>setFactors((current)=>{const next=new Set(current);next.has(item.id)?next.delete(item.id):next.add(item.id);return next;})}/><span><b>{seriesText(item,lang).name}</b><small>{item.source} · {item.id}</small></span></label>)}</div>
+          <div className="factor-grid compact-factors">{available.filter((item)=>item.id!==settings.target).map((item)=><FactorOption key={item.id} item={item} lang={lang} checked={factors.has(item.id)} removable={userAddedIds.has(item.id)} onToggle={()=>setFactors((current)=>{const next=new Set(current);next.has(item.id)?next.delete(item.id):next.add(item.id);return next;})} onRemove={()=>removeAddedFactor(item.id)}/>)}</div>
           <div className="decision-default-actions">
             <button className="soft-button" onClick={saveDecisionDefaults}><Save/>{tx(lang,"保存并设为默认","Save as defaults")}</button>
             <button className="primary compact" onClick={()=>setRunVersion((value)=>value+1)}>{tx(lang,"按以上设置重新计算","Rerun with these settings")}</button>
@@ -1517,18 +1591,18 @@ function ImpactLab({ lang }: { lang: Lang }) {
   const [eventEnd, setEventEnd] = useState(today);
   const [target, setTarget] = useState("EIA-BRENT");
   const [available, setAvailable] = useState<DataSeries[]>([]);
+  const [userAddedIds, setUserAddedIds] = useState<Set<string>>(new Set());
   const [factors, setFactors] = useState<Set<string>>(new Set());
   const [result, setResult] = useState<NetImpactResult | null>(null);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState("");
   useEffect(() => {
     void fetchCatalog().then((items) => {
-      const baseRows = items as unknown as DataSeries[];
-      const records = readLocalRecords().filter((r) => r.kind === "series");
-      const savedRows = records.filter((record) => !baseRows.some((item) => item.id === record.id)).map((record) => ({ id: record.id, name: String(record.payload.name || record.label), nameEn: String(record.payload.nameEn || record.label), source: String(record.payload.source || "FRED"), unit: String(record.payload.unit || ""), frequency: String(record.payload.frequency || ""), updated: record.savedAt.slice(0,10), color: String(record.payload.color || "#587a9a") }));
-      const rows = [...baseRows, ...savedRows]; setAvailable(rows);
-      const saved = new Set(records.map((r) => r.id));
-      const defaults = rows.filter((item) => item.id !== target && (saved.has(item.id) || ["GPRD","FRED-PETINV","FRED-DTWEXBGS","FRED-DGS10","FRED-INDPRO","FRED-T10YIE","FRED-VIXCLS","FRED-HENRYHUB"].includes(item.id))).map((item) => item.id);
+      const pool=variablePoolRows(items as unknown as DataSeries[]);
+      const rows=pool.rows;
+      setAvailable(rows);
+      setUserAddedIds(pool.userAddedIds);
+      const defaults = rows.filter((item) => item.id !== target && (pool.userAddedIds.has(item.id) || representativeDecisionFactors.includes(item.id))).map((item) => item.id);
       setFactors(new Set(defaults));
     }).catch((reason) => setError(reason instanceof Error ? reason.message : String(reason)));
   }, [target]);
@@ -1544,6 +1618,12 @@ function ImpactLab({ lang }: { lang: Lang }) {
   };
   const eligible = available.filter((item) => item.id !== target);
   const toggleFactor = (id: string) => setFactors((current) => { const next = new Set(current); next.has(id) ? next.delete(id) : next.add(id); return next; });
+  const removeAddedFactor = (id:string) => {
+    if (!userAddedIds.has(id) || protectedDefaultVariableIds.has(id) || !deleteLocalSeries(id)) return;
+    setUserAddedIds((current)=>{const next=new Set(current);next.delete(id);return next;});
+    setAvailable((current)=>current.filter((item)=>item.id!==id));
+    setFactors((current)=>{const next=new Set(current);next.delete(id);return next;});
+  };
   return (
     <Card
       title={tx(lang, "多尺度净影响分析", "Multi-scale net-impact analysis")}
@@ -1576,7 +1656,7 @@ function ImpactLab({ lang }: { lang: Lang }) {
         </aside>
         <div>
           <div className="factor-head"><b>{tx(lang, `解释变量（已选 ${factors.size}）`, `Explanatory variables (${factors.size} selected)`)}</b><div><button onClick={() => setFactors(new Set(eligible.map((item) => item.id)))}>{tx(lang, "全选", "Select all")}</button><button onClick={() => setFactors(new Set())}>{tx(lang, "清空", "Clear")}</button></div></div>
-          <div className="factor-grid">{eligible.map((item) => <label key={item.id} className={factors.has(item.id) ? "active" : ""}><input type="checkbox" checked={factors.has(item.id)} onChange={() => toggleFactor(item.id)} /><span><b>{seriesText(item, lang).name}</b><small>{item.source} · {item.id}</small></span></label>)}</div>
+          <div className="factor-grid">{eligible.map((item) => <FactorOption key={item.id} item={item} lang={lang} checked={factors.has(item.id)} removable={userAddedIds.has(item.id)} onToggle={()=>toggleFactor(item.id)} onRemove={()=>removeAddedFactor(item.id)}/>)}</div>
           {error && <StatusPanel error text={tx(lang, `分析未完成：${error}`, `Analysis did not complete: ${error}`)} />}
           {!result && !error && <StatusPanel text={tx(lang, "设置参数后运行；结果区只接受真实接口返回。", "Configure and run the model. The result area accepts verified API output only.")} />}
           {result && <>
@@ -1831,6 +1911,7 @@ function DataLab({ lang }: { lang: Lang }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [uploadStatus, setUploadStatus] = useState("");
+  const [catalogWarnings, setCatalogWarnings] = useState<string[]>([]);
   const [discovery, setDiscovery] = useState<"idle"|"searching"|"ready"|"error">("idle");
   const [discoveredIds, setDiscoveredIds] = useState<Set<string>>(new Set());
   const [officialIds, setOfficialIds] = useState<Set<string>>(new Set());
@@ -1855,11 +1936,12 @@ function DataLab({ lang }: { lang: Lang }) {
     return () => { active = false; };
   }, []);
   useEffect(() => {
-    if (q.trim().length < 2) { setDiscovery("idle"); setDiscoveredIds(new Set()); return; }
+    if (q.trim().length < 2) { setDiscovery("idle"); setDiscoveredIds(new Set()); setCatalogWarnings([]); return; }
     const timer = window.setTimeout(() => {
       setDiscovery("searching");
-      void fetchCatalog(q.trim()).then((items) => {
-        const discovered = items as unknown as DataSeries[];
+      void fetchCatalogResponse(q.trim()).then((payload) => {
+        const discovered = payload.items as unknown as DataSeries[];
+        setCatalogWarnings(payload.warnings || []);
         setDiscoveredIds(new Set(discovered.map((item)=>item.id)));
         setOfficialIds((current) => new Set([...current, ...discovered.map((item) => item.id)]));
         setLiveCatalog((current) => [...current, ...discovered.filter((item) => !current.some((existing) => existing.id === item.id))]);
@@ -1967,8 +2049,8 @@ function DataLab({ lang }: { lang: Lang }) {
   return (
     <Card
       title={tx(lang, "变量因素查询", "Factor & variable search")}
-      desc={tx(lang, "FRED、EIA 与 Caldara-Iacoviello GPRD 默认全选；选择序列后可预览、下载或加入变量池。", "FRED, EIA and Caldara-Iacoviello GPRD are enabled by default. Preview, download or add any series to the variable pool.")}
-      action={<span className="data-badge">{loading ? tx(lang, "正在连接…", "Connecting…") : tx(lang, `${liveCatalog.length} 个官方序列`, `${liveCatalog.length} official series`)}</span>}
+      desc={tx(lang, "FRED、EIA 与 Caldara-Iacoviello GPRD 提供研究变量；Yahoo Finance 用作补充市场检索。选择序列后可预览、下载或加入变量池。", "FRED, EIA and Caldara-Iacoviello GPRD provide research variables; Yahoo Finance supplements market discovery. Preview, download or add a series to the variable pool.")}
+      action={<span className="data-badge">{loading ? tx(lang, "正在连接…", "Connecting…") : tx(lang, `${liveCatalog.length} 条已加载序列`, `${liveCatalog.length} loaded series`)}</span>}
     >
       <div className="source-row">
         {[...new Set(liveCatalog.map((x) => x.source))].map((s) => (
@@ -1991,7 +2073,8 @@ function DataLab({ lang }: { lang: Lang }) {
           placeholder={tx(lang, "输入 Brent、库存、美元、利率……", "Search Brent, inventories, dollar, rates…")}
         />
       </div>
-      {q.trim().length >= 2 && <div className="search-state">{discovery === "searching" ? tx(lang,"正在对 FRED 全文目录、EIA 分层目录与官方 GPRD 做模糊检索…","Fuzzy-searching the FRED catalog, EIA hierarchy and official GPRD…") : discovery === "error" ? tx(lang,"官方目录暂时没有响应，请稍后重试。","The official directories did not respond. Please retry shortly.") : discovery === "ready" ? tx(lang,`找到 ${found.length} 个可用序列；选中并加入变量池后，会出现在净影响分析和决策高级设置中。`,`${found.length} available series found. Add one to the variable pool to use it in net-impact analysis and Decision advanced settings.`) : ""}</div>}
+      {q.trim().length >= 2 && <div className="search-state">{discovery === "searching" ? tx(lang,"正在检索 FRED 全文目录、EIA 分层目录、GPRD 与 Yahoo 补充市场目录…","Searching FRED full text, the EIA hierarchy, GPRD and the supplementary Yahoo market catalog…") : discovery === "error" ? tx(lang,"数据目录暂时没有响应，请稍后重试。","The data catalogs did not respond. Please retry shortly.") : discovery === "ready" ? tx(lang,`找到 ${found.length} 个可用序列；加入变量池后会出现在专业分析和决策高级设置中。`,`${found.length} available series found. Add one to the variable pool to use it in Research and Decision settings.`) : ""}</div>}
+      {catalogWarnings.length>0 && <div className="search-warning" role="status">{tx(lang,"部分数据源未响应：","Some providers did not respond: ")}{catalogWarnings.join(" · ")}</div>}
       <div className="data-layout">
         <div className="series-list">
           {found.map((x) => (
@@ -2035,7 +2118,7 @@ function DataLab({ lang }: { lang: Lang }) {
               Excel/CSV
             </button>
           </div>
-          {error && <StatusPanel error text={tx(lang,`官方数据不可用：${error}`,`Official data unavailable: ${error}`)}/>} {!error && loading && <StatusPanel text={tx(lang,"正在读取官方序列…","Loading the official series…")}/>} {seriesLive && <ChartFrame label={tx(lang,"拖动底部范围条或缩放图表","Drag the range selector or zoom the chart")}><div className="chart small">
+          {error && <StatusPanel error text={tx(lang,`数据源不可用：${error}`,`Data provider unavailable: ${error}`)}/>} {!error && loading && <StatusPanel text={tx(lang,"正在读取数据序列…","Loading the data series…")}/>} {seriesLive && <ChartFrame label={tx(lang,"拖动底部范围条或缩放图表","Drag the range selector or zoom the chart")}><div className="chart small">
             <ResponsiveContainer>
               <LineChart data={liveSeries}>
                 <CartesianGrid vertical={false} stroke="#e6e0dc" />
@@ -2058,8 +2141,9 @@ function DataLab({ lang }: { lang: Lang }) {
             <span>
               <b>{liveCatalog.find((x) => x.id === selected)?.source}</b> ·{" "}
               <span className="series-identifier" title={selected}>{selected.length > 58 ? `${selected.slice(0, 34)}…${selected.slice(-14)}` : selected}</span>
-              <small>
-                {seriesLive ? tx(lang, "来自官方数据接口；密钥仅保存在 Vercel 服务端。", "Official data feed; credentials remain on the Vercel server.") : tx(lang, "没有显示备用序列；请恢复官方接口后重试。", "No fallback series is displayed; restore the official feed and retry.")}
+              <small>{liveCatalog.find((x)=>x.id===selected)?.source.includes("Yahoo")
+                ? tx(lang,"来自 Yahoo Finance 补充市场接口（非官方开放 API）；用于研究预览，正式使用前请向交易所或经纪商复核。","Yahoo Finance supplementary market feed (not an official public API). Use for research preview and verify with an exchange or broker before action.")
+                : seriesLive ? tx(lang, "来自官方数据接口；密钥仅保存在 Vercel 服务端。", "Official data feed; credentials remain on the Vercel server.") : tx(lang, "没有显示备用序列；请恢复数据接口后重试。", "No fallback series is displayed; restore the data feed and retry.")}
               </small>
             </span>
           </div>

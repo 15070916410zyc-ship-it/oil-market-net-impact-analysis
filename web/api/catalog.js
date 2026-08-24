@@ -35,14 +35,35 @@ const unique = (rows) => [...new Map(rows.map((row)=>[row.id,row])).values()];
 const encodeEia = (route,facet,series) => Buffer.from(JSON.stringify({route,facet,series})).toString("base64url");
 
 async function fredSearch(query,key){
-  if(!key||query.length<2)return [];
+  if(!key||query.length<2)return {rows:[],warning:key?null:"FRED full-text search is not configured"};
   const rawWords=String(query).trim().toLowerCase().split(/[^a-z0-9\u4e00-\u9fff]+/).filter(Boolean);
   const expansions=rawWords.flatMap((word)=>semanticAliases[word]||[]);
   const candidates=[...new Set([normalize(query),...words(query).filter((word)=>word.length>1),...expansions])].filter(Boolean).slice(0,8);
-  const batches=await Promise.all(candidates.map(async(candidate)=>{ try{const url=new URL("https://api.stlouisfed.org/fred/series/search"); url.searchParams.set("api_key",key);url.searchParams.set("file_type","json");url.searchParams.set("search_text",candidate);url.searchParams.set("limit","100");url.searchParams.set("order_by","search_rank"); const response=await fetch(url,{headers:{accept:"application/json"}}); if(!response.ok)return[]; const payload=await response.json(); return(payload.seriess||[]).map((item,index)=>({id:`FRED-${item.id}`,name:item.title,nameEn:item.title,category:"FRED full-text catalog",source:"FRED",unit:item.units_short||item.units,frequency:item.frequency_short||item.frequency,updated:item.last_updated?.slice(0,10)||"",color:"#587a9a",_apiRank:index}));}catch{return[];} }));
+  const batches=await Promise.all(candidates.map(async(candidate)=>{ try{const url=new URL("https://api.stlouisfed.org/fred/series/search"); url.searchParams.set("api_key",key);url.searchParams.set("file_type","json");url.searchParams.set("search_text",candidate);url.searchParams.set("search_type","full_text");url.searchParams.set("limit","100");url.searchParams.set("order_by","search_rank"); const response=await fetch(url,{headers:{accept:"application/json"}}); if(!response.ok)return{rows:[],error:`HTTP ${response.status}`}; const payload=await response.json(); return{rows:(payload.seriess||[]).map((item,index)=>({id:`FRED-${item.id}`,name:item.title,nameEn:item.title,category:"FRED full-text catalog",source:"FRED",unit:item.units_short||item.units,frequency:item.frequency_short||item.frequency,updated:item.last_updated?.slice(0,10)||"",color:"#587a9a",_apiRank:index})),error:null};}catch(error){return{rows:[],error:error instanceof Error?error.message:"network error"};} }));
   // FRED already ranks these rows for the submitted search. Local similarity only
   // reorders them; it must not silently discard valid official results.
-  return unique(batches.flat()).map((row)=>({...row,_score:score(query,row)})).sort((a,b)=>(b._score-a._score)||(a._apiRank-b._apiRank)).slice(0,100);
+  const rows=unique(batches.flatMap((batch)=>batch.rows)).map((row)=>({...row,_score:score(query,row)})).sort((a,b)=>(b._score-a._score)||(a._apiRank-b._apiRank)).slice(0,100);
+  const errors=[...new Set(batches.map((batch)=>batch.error).filter(Boolean))];
+  return {rows,warning:rows.length?null:errors.length?`FRED full-text search unavailable (${errors.join(", ")})`:null};
+}
+const encodeYahoo=(symbol)=>Buffer.from(symbol).toString("base64url");
+const yahooTypes=new Set(["FUTURE","ETF","INDEX","CURRENCY","CRYPTOCURRENCY","EQUITY","MUTUALFUND"]);
+const yahooCategory=(quoteType)=>({FUTURE:"市场期货",ETF:"交易型基金",INDEX:"市场指数",CURRENCY:"汇率",CRYPTOCURRENCY:"数字资产",EQUITY:"上市公司",MUTUALFUND:"共同基金"}[quoteType]||"市场资产");
+async function yahooSearch(query){
+  if(query.length<2)return {rows:[],warning:null};
+  try{
+    const expanded=(semanticAliases[String(query).trim().toLowerCase()]||[])[0]||normalize(query);
+    const url=new URL("https://query2.finance.yahoo.com/v1/finance/search");
+    url.searchParams.set("q",expanded);url.searchParams.set("quotesCount","60");url.searchParams.set("newsCount","0");url.searchParams.set("enableFuzzyQuery","true");
+    const response=await fetch(url,{headers:{accept:"application/json","user-agent":"Mozilla/5.0 (compatible; OilPriceIntelligence/1.0)"}});
+    if(!response.ok)return {rows:[],warning:`Yahoo supplementary search unavailable (HTTP ${response.status})`};
+    const payload=await response.json();
+    const rows=(payload.quotes||[]).filter((item)=>item.symbol&&yahooTypes.has(item.quoteType)).map((item,index)=>({
+      id:`YAHOO-${encodeYahoo(item.symbol)}`,providerId:item.symbol,name:item.shortname||item.longname||item.symbol,nameEn:item.longname||item.shortname||item.symbol,
+      category:yahooCategory(item.quoteType),source:"Yahoo Finance / supplementary",unit:item.currency||"See market metadata",frequency:"日度",updated:"Live catalog",color:"#477c8d",_apiRank:index,_score:score(query,{id:item.symbol,name:`${item.shortname||""} ${item.longname||""}`,source:item.exchDisp||item.exchange||""}),
+    }));
+    return {rows:unique(rows).sort((a,b)=>(b._score-a._score)||(a._apiRank-b._apiRank)).slice(0,60),warning:null};
+  }catch(error){return {rows:[],warning:`Yahoo supplementary search unavailable (${error instanceof Error?error.message:"network error"})`};}
 }
 const branchHints={petroleum:"oil crude brent wti gasoline diesel jet fuel inventory stocks refinery imports exports futures price production consumption","natural-gas":"natural gas lng henry hub storage price production consumption pipeline",electricity:"electricity power generation price demand capacity renewable solar wind",coal:"coal production consumption price stocks",international:"international country energy oil gas production consumption imports exports",steo:"forecast projection outlook oil gas price production demand","total-energy":"total energy emissions production consumption price",seds:"state energy price production consumption expenditure emissions","crude-oil-imports":"crude oil imports company country grade quantity"};
 const directRouteHints={
@@ -63,7 +84,7 @@ async function eiaSearch(query,key){
   return unique(batches.flat()).filter((row)=>row._score>.3).sort((a,b)=>b._score-a._score).slice(0,80);
 }
 export default async function handler(request,response){
-  const raw=String(request.query?.q||"").trim(),q=normalize(raw);const builtIn=q?catalog.map((item)=>({...item,_score:score(q,item)})).filter((item)=>item._score>.35).sort((a,b)=>b._score-a._score):catalog;let fred=[],eia=[];const warnings=[];
-  if(q.length>=2){const [fr,er]=await Promise.allSettled([fredSearch(raw,process.env.FRED_API_KEY),eiaSearch(raw,process.env.EIA_API_KEY||"DEMO_KEY")]);if(fr.status==="fulfilled")fred=fr.value;else warnings.push("FRED catalog search unavailable");if(er.status==="fulfilled")eia=er.value;else warnings.push("EIA catalog search unavailable");}
-  const rows=unique([...builtIn,...fred,...eia]).map(({providerId:_providerId,_score,_apiRank,...item})=>item);response.setHeader("Cache-Control",q.length>=2&&!eia.length?"private, no-store":"public, s-maxage=1800, stale-while-revalidate=21600");response.status(200).json({items:rows,coverage:{FRED:Boolean(process.env.FRED_API_KEY),EIA:true},warnings});
+  const raw=String(request.query?.q||"").trim(),q=normalize(raw);const builtIn=q?catalog.map((item)=>({...item,_score:score(q,item)})).filter((item)=>item._score>.35).sort((a,b)=>b._score-a._score):catalog;let fred=[],eia=[],yahoo=[];const warnings=[];
+  if(q.length>=2){const [fr,er,yr]=await Promise.allSettled([fredSearch(raw,process.env.FRED_API_KEY),eiaSearch(raw,process.env.EIA_API_KEY||"DEMO_KEY"),yahooSearch(raw)]);if(fr.status==="fulfilled"){fred=fr.value.rows;if(fr.value.warning)warnings.push(fr.value.warning);}else warnings.push("FRED full-text search unavailable");if(er.status==="fulfilled")eia=er.value;else warnings.push("EIA catalog search unavailable");if(yr.status==="fulfilled"){yahoo=yr.value.rows;if(yr.value.warning)warnings.push(yr.value.warning);}else warnings.push("Yahoo supplementary search unavailable");}
+  const rows=unique([...builtIn,...fred,...eia,...yahoo]).map(({_score,_apiRank,...item})=>item);response.setHeader("Cache-Control",q.length>=2&&!eia.length?"private, no-store":"public, s-maxage=900, stale-while-revalidate=7200");response.status(200).json({items:rows,coverage:{FRED:{configured:Boolean(process.env.FRED_API_KEY),available:fred.length>0},EIA:{available:true},Yahoo:{official:false,available:yahoo.length>0}},warnings});
 }
