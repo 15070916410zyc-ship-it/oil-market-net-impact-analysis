@@ -43,10 +43,40 @@ test("decision accounting, advanced variables and multiple real-product plans re
   await expect(page.getByRole("heading", { name: "采购成本预警测算" })).toBeVisible();
   await expect(page.getByText("口径已校正")).toBeVisible();
   await expect(page.getByText(/相对未套保节省|保险与机会成本/)).toBeVisible();
-  await expect(page.locator(".portfolio-grid>.portfolio-card")).toHaveCount(6);
+  await expect(page.locator(".portfolio-grid>.portfolio-card")).toHaveCount(10);
+  for (const card of await page.locator(".portfolio-card").all()) expect(await card.locator(".order-lines article").count()).toBeGreaterThanOrEqual(3);
+  for(let index=0;index<10;index+=1){
+    await page.locator(".portfolio-card summary").nth(index).click();
+    await expect(page.locator(".portfolio-card").nth(index).locator(".strategy-payoff-chart svg.recharts-surface").first()).toBeVisible();
+    await page.locator(".portfolio-card summary").nth(index).click();
+  }
   await page.locator(".portfolio-card summary").first().click();
+  await expect(page.locator(".portfolio-card").first().locator(".order-lines article")).toHaveCount(3);
   await expect(page.locator(".portfolio-card").first().getByText(/BUY \/ LONG|买入/).first()).toBeVisible();
-  await expect(page.locator(".portfolio-card").first().getByText(/Initial margin|初始保证金/).first()).toBeVisible();
+  await expect(page.locator(".portfolio-card").first().getByText(/20\d\d-\d\d/).first()).toBeVisible();
+  await page.locator(".portfolio-card summary").nth(4).click();
+  await expect(page.locator(".portfolio-card").nth(4).locator(".order-lines article")).toHaveCount(4);
+  await expect(page.locator(".portfolio-card").nth(4).getByText(/SELL \/ SHORT|卖出/).first()).toBeVisible();
+  await expect(page.locator(".portfolio-card").nth(4).getByText(/1:−2:1|1:-2:1/).first()).toBeVisible();
+  await expect(page.locator(".portfolio-card").nth(4).getByText(/Margin estimate|保证金估算/).first()).toBeVisible();
+  await expect(page.locator(".portfolio-card").nth(4).locator(".strategy-payoff-chart")).toBeVisible();
+  await expect(page.locator(".portfolio-card").nth(4).locator(".strategy-payoff-chart svg.recharts-surface").first()).toBeVisible();
+  await page.locator(".portfolio-card").nth(4).screenshot({ path:"test-results/multi-leg-butterfly.png" });
+  await page.locator(".portfolio-card summary").nth(6).click();
+  await expect(page.locator(".portfolio-card").nth(6).locator(".order-lines article")).toHaveCount(6);
+  await page.locator(".portfolio-card summary").nth(7).click();
+  await expect(page.locator(".portfolio-card").nth(7).locator(".order-lines article")).toHaveCount(5);
+  await expect(page.locator(".portfolio-card").nth(7).getByText(/1:−1:−1:1|1:-1:-1:1/).first()).toBeVisible();
+  await expect(page.locator(".portfolio-card").nth(7).locator(".strategy-payoff-chart svg.recharts-surface").first()).toBeVisible();
+  for(const path of await page.locator(".portfolio-card").nth(7).locator(".recharts-line-curve").all()){
+    const d=await path.getAttribute("d")||"";
+    expect(new Set([...d.matchAll(/[ML]([0-9.]+),/g)].map((match)=>match[1])).size).toBe(5);
+  }
+  await page.locator(".portfolio-card").nth(7).screenshot({ path:"test-results/multi-leg-condor.png" });
+  await page.locator(".portfolio-card summary").nth(8).click();
+  await expect(page.locator(".portfolio-card").nth(8).locator(".order-lines article")).toHaveCount(3);
+  await page.locator(".portfolio-card summary").nth(9).click();
+  await expect(page.locator(".portfolio-card").nth(9).locator(".order-lines article")).toHaveCount(6);
   await expect(page.locator(".product-grid")).toHaveCount(0);
   await page.getByRole("button", { name: /展开/ }).click();
   await expect(page.getByText("美国10年期国债收益率").first()).toBeVisible();

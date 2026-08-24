@@ -922,9 +922,12 @@ type Hedge = {
   fee: number;
   premium: number;
   strike: number;
+  strikeGap: number;
   horizon: number;
 };
 function HedgeCalculator({ lang, market, suggestedRatio, forecast, instruments }: { lang: Lang; market: number; suggestedRatio: number; forecast: ForecastResult; instruments: InstrumentResponse | null }) {
+  const terminalForecast=forecast.forecast.at(-1);
+  const forecastImpliedAtmPremium=Math.max(.001,(Number(terminalForecast?.Upper95??market)-Number(terminalForecast?.Lower95??market))/(2*1.96)*.3989423);
   const [v, setV] = useState<Hedge>({
     volume: 300000,
     budget: market,
@@ -939,43 +942,98 @@ function HedgeCalculator({ lang, market, suggestedRatio, forecast, instruments }
     finance: 3.4,
     contract: 1000,
     fee: 0.035,
-    premium: 2.1,
+    premium: forecastImpliedAtmPremium,
     strike: market * 1.03,
+    strikeGap: Math.max(2, market * 0.05),
     horizon: 90,
   });
+  const [openPlans,setOpenPlans]=useState<Set<string>>(()=>new Set());
   const set = (k: keyof Hedge, n: number) => setV((s) => ({ ...s, [k]: n }));
   const endings=forecast.forecast; const pick=(key:string,fallback:number)=>Number(endings.at(-1)?.[key]??fallback);
   const scenarioPrices=[{scenario:tx(lang,"95%下界","95% lower"),price:pick("Lower95",market*.8)},{scenario:tx(lang,"80%下界","80% lower"),price:pick("Lower80",market*.9)},{scenario:tx(lang,"中位路径","Median path"),price:pick("PointForecast",market)},{scenario:tx(lang,"80%上界","80% upper"),price:pick("Upper80",market*1.1)},{scenario:tx(lang,"95%上界","95% upper"),price:pick("Upper95",market*1.2)}];
   const calculate=(price:number,coverage=v.ratio,futuresShare=v.futures)=>{const protectedBarrels=v.volume*coverage/100;const targetFutures=protectedBarrels*futuresShare/100;const contracts=Math.round(targetFutures/Math.max(v.contract,1));const futuresBarrels=contracts*v.contract;const optionBarrels=Math.max(0,protectedBarrels-futuresBarrels);const physical=v.volume*(price+v.purchaseBasis)*v.fx;const futuresPnl=futuresBarrels*(price-v.entry)*v.fx;const optionPnl=optionBarrels*Math.max(price-v.strike,0)*v.fx;const premium=optionBarrels*v.premium*v.budgetFx;const marginReq=futuresBarrels*v.entry*v.budgetFx*v.margin/100;const funding=marginReq*v.finance/100*v.horizon/365;const fees=(futuresBarrels+optionBarrels)*v.fee*v.budgetFx*2;const hedged=physical-futuresPnl-optionPnl+premium+funding+fees;return{physical,hedged,saving:physical-hedged,marginReq,funding,fees,futuresBarrels,optionBarrels,contracts};};
-  const scenarioRows=scenarioPrices.map((row)=>({...row,...calculate(row.price),unhedged:calculate(row.price).physical}));
+  const scenarioRows=scenarioPrices.map((row)=>{const result=calculate(row.price);return{...row,...result,unhedged:result.physical};});
   const base=scenarioRows[2]; const budget=v.volume*(v.budget+v.budgetBasis)*v.budgetFx; const delta=base.physical-base.hedged;
-  const planDefinitions=[
-    {id:"lock",name:tx(lang,"预算锁定型","Budget lock"),desc:tx(lang,"期货为主，优先压缩上行成本波动；需要准备保证金。","Futures-led plan prioritizing upper-cost stability; margin liquidity is required."),coverage:Math.min(90,v.ratio+10),futures:100},
-    {id:"balanced",name:tx(lang,"均衡套保型","Balanced hedge"),desc:tx(lang,"期货与看涨期权组合，兼顾锁价与价格下跌时的参与空间。","Mixes futures and calls to balance price certainty with downside participation."),coverage:v.ratio,futures:70},
-    {id:"cap",name:tx(lang,"期权封顶型","Option cost cap"),desc:tx(lang,"使用看涨期权限定极端上涨成本，不产生期货追加保证金，但需支付权利金。","Uses calls to cap extreme upside cost without futures variation margin, at the cost of premium."),coverage:Math.max(35,v.ratio-10),futures:0},
-    {id:"staged",name:tx(lang,"分批执行型","Staged execution"),desc:tx(lang,"先覆盖一半风险敞口，其余在风险阈值或价格区间被触发后再分批增加。","Covers half initially and adds tranches only when risk or price-band triggers are reached."),coverage:Math.max(30,Math.round(v.ratio*.65)),futures:50},
-    {id:"liquidity",name:tx(lang,"现金流优先型","Liquidity-first"),desc:tx(lang,"降低首期保证金占用，以看涨期权承担主要上行保护，适合现金约束较强的采购方。","Reduces initial margin usage and relies mainly on calls for upside protection when operating cash is constrained."),coverage:Math.max(30,v.ratio-20),futures:25},
-    {id:"trigger",name:tx(lang,"动态触发型","Trigger-based overlay"),desc:tx(lang,"先建立基础覆盖，待风险温度或价格突破区间后再补足目标比例，保留更多调整空间。","Starts with a base overlay and adds protection only after a risk-score or price-band trigger, preserving adjustment capacity."),coverage:Math.max(30,Math.round(v.ratio*.8)),futures:60},
+  type ExpiryKey="near"|"target"|"deferred";
+  type LegTemplate={id:string;kind:"future"|"option";side:1|-1;weight:number;expiry:ExpiryKey;right?:"call"|"put";strikeOffset?:number;purposeZh:string;purposeEn:string;futureVenue?:"delivery"|"financial"};
+  const planDefinitions:Array<{id:string;name:string;structure:string;desc:string;coverage:number;educationUrl:string;legs:LegTemplate[]}>= [
+    {id:"ladder",name:tx(lang,"三期限期货阶梯","Three-expiry futures ladder"),structure:"40% / 35% / 25%",desc:tx(lang,"把覆盖量分散到近月、采购目标月和递延月，降低一次换月和单一到期日的集中风险。","Distributes the hedge across near, target and deferred expiries to reduce roll and expiry concentration."),coverage:Math.min(90,v.ratio+10),educationUrl:"https://www.cmegroup.com/education/courses/understanding-futures-spreads/futures-spread-overview",legs:[
+      {id:"near-future",kind:"future",side:1,weight:.40,expiry:"near",purposeZh:"近月先锁定首批采购",purposeEn:"Lock the first procurement tranche",futureVenue:"delivery"},
+      {id:"target-future",kind:"future",side:1,weight:.35,expiry:"target",purposeZh:"覆盖主要采购月份",purposeEn:"Cover the main procurement month",futureVenue:"delivery"},
+      {id:"deferred-future",kind:"future",side:1,weight:.25,expiry:"deferred",purposeZh:"为延期采购保留覆盖",purposeEn:"Carry protection into delayed procurement",futureVenue:"delivery"},
+    ]},
+    {id:"bull-call",name:tx(lang,"双期限牛市看涨价差","Two-expiry bull call spreads"),structure:"+C(K) / −C(K+Δ)",desc:tx(lang,"在目标月与递延月各建立一组牛市看涨价差，用卖出高执行价看涨期权抵减权利金；保护收益有上限。","Builds a bull call spread in both target and deferred expiries. Short higher-strike calls reduce premium, while upside protection is capped."),coverage:v.ratio,educationUrl:"https://www.cmegroup.com/education/courses/option-strategies/bull-spread",legs:[
+      {id:"target-long-call",kind:"option",side:1,weight:.65,expiry:"target",right:"call",strikeOffset:0,purposeZh:"目标月买入较低执行价看涨",purposeEn:"Buy the lower-strike target-month call"},
+      {id:"target-short-call",kind:"option",side:-1,weight:.65,expiry:"target",right:"call",strikeOffset:1,purposeZh:"卖出较高执行价看涨抵减成本",purposeEn:"Sell the higher-strike call to reduce cost"},
+      {id:"deferred-long-call",kind:"option",side:1,weight:.35,expiry:"deferred",right:"call",strikeOffset:.5,purposeZh:"递延月保留第二层上涨保护",purposeEn:"Add a second layer of deferred protection"},
+      {id:"deferred-short-call",kind:"option",side:-1,weight:.35,expiry:"deferred",right:"call",strikeOffset:1.5,purposeZh:"递延月卖出上翼回收权利金",purposeEn:"Sell the deferred upper wing"},
+    ]},
+    {id:"collar",name:tx(lang,"期货领口组合","Futures collar"),structure:"+F / +P(K−Δ) / −C(K+Δ)",desc:tx(lang,"买入目标月期货，同时买入看跌、卖出看涨，把期货套保的价格结果限制在一个区间；上方收益被封顶。","Combines a long target-month future with a long put and short call, constraining the futures hedge to a price band."),coverage:v.ratio,educationUrl:"https://www.cmegroup.com/education/courses/option-strategies/collars",legs:[
+      {id:"collar-future",kind:"future",side:1,weight:1,expiry:"target",purposeZh:"目标月期货锁定采购基准",purposeEn:"Lock the target-month benchmark",futureVenue:"financial"},
+      {id:"collar-put",kind:"option",side:1,weight:1,expiry:"target",right:"put",strikeOffset:-1,purposeZh:"买入看跌保护期货下跌损失",purposeEn:"Buy a put to protect the long future"},
+      {id:"collar-call",kind:"option",side:-1,weight:1,expiry:"target",right:"call",strikeOffset:1,purposeZh:"卖出看涨补贴看跌权利金",purposeEn:"Sell a call to finance the put"},
+    ]},
+    {id:"calendar",name:tx(lang,"期权日历价差与期货底仓","Call calendar with futures core"),structure:"−C(近月,K) / +C(递延,K) / +F",desc:tx(lang,"卖出近月看涨、买入同执行价递延月看涨，并配置目标月期货底仓，适合采购风险向后延伸的情形。","Sells a near-month call, buys the same-strike deferred call and keeps a target-month futures core for risk that extends over time."),coverage:Math.max(0,v.ratio-10),educationUrl:"https://www.cmegroup.com/education/lessons/option-calendar-spreads",legs:[
+      {id:"calendar-short",kind:"option",side:-1,weight:.65,expiry:"near",right:"call",strikeOffset:0,purposeZh:"卖出近月时间价值",purposeEn:"Sell near-month time value"},
+      {id:"calendar-long",kind:"option",side:1,weight:.65,expiry:"deferred",right:"call",strikeOffset:0,purposeZh:"买入递延月上涨保护",purposeEn:"Buy deferred upside protection"},
+      {id:"calendar-core",kind:"future",side:1,weight:.35,expiry:"target",purposeZh:"期货底仓覆盖核心采购",purposeEn:"Futures core covers the central procurement tranche",futureVenue:"financial"},
+    ]},
+    {id:"butterfly",name:tx(lang,"期货底仓与看涨蝶式价差","Futures core plus call butterfly"),structure:"+F(45%) + C(K−Δ) − 2C(K) + C(K+Δ)",desc:tx(lang,"45%期货底仓负责极端上涨保护；其余部分叠加1:−2:1看涨蝶式，针对价格落在中间执行价附近的情景。","A 45% futures core protects the tail, while a 1:-2:1 call butterfly targets a finish near the middle strike."),coverage:Math.max(0,v.ratio-5),educationUrl:"https://www.cmegroup.com/education/courses/option-strategies/option-butterfly",legs:[
+      {id:"fly-core",kind:"future",side:1,weight:.45,expiry:"target",purposeZh:"期货底仓保留极端上涨保护",purposeEn:"Futures core retains tail protection",futureVenue:"financial"},
+      {id:"fly-low",kind:"option",side:1,weight:.55,expiry:"target",right:"call",strikeOffset:-1,purposeZh:"买入蝶式下翼",purposeEn:"Buy the lower butterfly wing"},
+      {id:"fly-body",kind:"option",side:-1,weight:1.10,expiry:"target",right:"call",strikeOffset:0,purposeZh:"卖出两倍中间执行价看涨",purposeEn:"Sell twice the middle-strike call"},
+      {id:"fly-high",kind:"option",side:1,weight:.55,expiry:"target",right:"call",strikeOffset:1,purposeZh:"买入蝶式上翼限制风险",purposeEn:"Buy the upper wing to limit risk"},
+    ]},
+    {id:"seagull",name:tx(lang,"采购方三腿海鸥组合","Buyer three-way seagull"),structure:"+F(25%) + C(K) − C(K+Δ) − P(K−Δ)",desc:tx(lang,"用少量期货作底仓，买入看涨并卖出高执行价看涨与低执行价看跌来降低净权利金；低价区间存在履约义务。","Uses a small futures core, buys a call and sells an upper call plus lower put to reduce net premium; the short put creates a downside obligation."),coverage:Math.max(0,v.ratio-15),educationUrl:"https://www.cmegroup.com/articles/brochures-and-handbooks/25-proven-strategies.html",legs:[
+      {id:"seagull-core",kind:"future",side:1,weight:.25,expiry:"near",purposeZh:"近月期货底仓",purposeEn:"Near-month futures core",futureVenue:"financial"},
+      {id:"seagull-long-call",kind:"option",side:1,weight:.75,expiry:"target",right:"call",strikeOffset:0,purposeZh:"买入主要上涨保护",purposeEn:"Buy primary upside protection"},
+      {id:"seagull-short-call",kind:"option",side:-1,weight:.75,expiry:"target",right:"call",strikeOffset:1,purposeZh:"卖出上方看涨降低权利金",purposeEn:"Sell the upper call to reduce premium"},
+      {id:"seagull-short-put",kind:"option",side:-1,weight:.75,expiry:"target",right:"put",strikeOffset:-1,purposeZh:"卖出低执行价看跌承担低价履约义务",purposeEn:"Sell a lower-strike put and accept downside assignment risk"},
+    ]},
+    {id:"rolling-collar",name:tx(lang,"双期限滚动领口","Two-expiry rolling collar"),structure:"½(+F+P−C)近月 + ½(+F+P−C)目标月",desc:tx(lang,"把期货领口拆成近月与目标月两批执行，分别管理首批采购和主采购窗口，降低单一到期日与集中换月风险。","Splits a futures collar across near and target expiries, separately covering the first and main procurement windows while reducing expiry concentration."),coverage:Math.min(95,v.ratio+5),educationUrl:"https://www.cmegroup.com/education/courses/option-strategies/collars",legs:[
+      {id:"roll-near-future",kind:"future",side:1,weight:.50,expiry:"near",purposeZh:"近月期货覆盖首批采购",purposeEn:"Near-month future covers the first tranche",futureVenue:"financial"},
+      {id:"roll-near-put",kind:"option",side:1,weight:.50,expiry:"near",right:"put",strikeOffset:-1,purposeZh:"近月看跌限制期货下跌损失",purposeEn:"Near-month put limits downside on the long future"},
+      {id:"roll-near-call",kind:"option",side:-1,weight:.50,expiry:"near",right:"call",strikeOffset:1,purposeZh:"近月卖出看涨补贴保护成本",purposeEn:"Near-month short call finances protection"},
+      {id:"roll-target-future",kind:"future",side:1,weight:.50,expiry:"target",purposeZh:"目标月期货覆盖主采购窗口",purposeEn:"Target-month future covers the main window",futureVenue:"financial"},
+      {id:"roll-target-put",kind:"option",side:1,weight:.50,expiry:"target",right:"put",strikeOffset:-1,purposeZh:"目标月看跌限制期货下跌损失",purposeEn:"Target-month put limits downside on the long future"},
+      {id:"roll-target-call",kind:"option",side:-1,weight:.50,expiry:"target",right:"call",strikeOffset:1,purposeZh:"目标月卖出看涨补贴保护成本",purposeEn:"Target-month short call finances protection"},
+    ]},
+    {id:"condor",name:tx(lang,"期货底仓与看涨鹰式价差","Futures core plus call condor"),structure:"+F(40%) + C(K−2Δ) − C(K−Δ) − C(K+Δ) + C(K+2Δ)",desc:tx(lang,"40%期货底仓负责尾部上涨，其余覆盖叠加1:−1:−1:1看涨鹰式价差，把有效保护区间做得比蝶式更宽，同时保持期权最大损失有限。","A 40% futures core covers the upside tail; a 1:-1:-1:1 call condor widens the targeted protection zone beyond a butterfly while keeping option loss bounded."),coverage:Math.max(55,v.ratio),educationUrl:"https://www.cmegroup.com/articles/brochures-and-handbooks/25-proven-strategies.html",legs:[
+      {id:"condor-core",kind:"future",side:1,weight:.40,expiry:"target",purposeZh:"期货底仓承担极端上涨保护",purposeEn:"Futures core covers the extreme upside tail",futureVenue:"financial"},
+      {id:"condor-low",kind:"option",side:1,weight:.60,expiry:"target",right:"call",strikeOffset:-2,purposeZh:"买入鹰式最下方看涨",purposeEn:"Buy the lowest-strike condor call"},
+      {id:"condor-mid-low",kind:"option",side:-1,weight:.60,expiry:"target",right:"call",strikeOffset:-1,purposeZh:"卖出下方中间执行价看涨",purposeEn:"Sell the lower-middle call"},
+      {id:"condor-mid-high",kind:"option",side:-1,weight:.60,expiry:"target",right:"call",strikeOffset:1,purposeZh:"卖出上方中间执行价看涨",purposeEn:"Sell the upper-middle call"},
+      {id:"condor-high",kind:"option",side:1,weight:.60,expiry:"target",right:"call",strikeOffset:2,purposeZh:"买入最上方看涨封闭风险",purposeEn:"Buy the highest-strike call to cap risk"},
+    ]},
+    {id:"diagonal",name:tx(lang,"对角看涨价差与期货底仓","Diagonal call spread with futures core"),structure:"+F(30%) − C(近月,K+Δ) + C(递延,K)",desc:tx(lang,"卖出近月较高执行价看涨、买入递延月较低执行价看涨，并保留30%目标月期货底仓；兼顾期限与执行价两维，但需要持续管理近月短腿。","Sells a higher-strike near call, buys a lower-strike deferred call and retains a 30% target-month futures core; it spans both time and strike dimensions and requires active management of the near short leg."),coverage:Math.max(0,v.ratio-5),educationUrl:"https://www.cmegroup.com/education/lessons/option-calendar-spreads",legs:[
+      {id:"diagonal-core",kind:"future",side:1,weight:.30,expiry:"target",purposeZh:"目标月期货底仓提供连续保护",purposeEn:"Target-month futures core provides continuous protection",futureVenue:"financial"},
+      {id:"diagonal-short",kind:"option",side:-1,weight:.70,expiry:"near",right:"call",strikeOffset:1,purposeZh:"卖出近月高执行价时间价值",purposeEn:"Sell near-month higher-strike time value"},
+      {id:"diagonal-long",kind:"option",side:1,weight:.70,expiry:"deferred",right:"call",strikeOffset:0,purposeZh:"买入递延月较低执行价上涨保护",purposeEn:"Buy deferred lower-strike upside protection"},
+    ]},
+    {id:"staged-vertical",name:tx(lang,"三批跨期看涨价差","Three-tranche vertical call spreads"),structure:"Σ[+Cₜ(K) − Cₜ(K+Δ)]，t=近月/目标月/递延月",desc:tx(lang,"在近月、目标月和递延月分别建立牛市看涨价差，按30%/45%/25%覆盖采购批次，使权利金、到期日和上涨保护分散。","Builds bull call spreads in near, target and deferred expiries at 30%/45%/25%, distributing premium, expiry and upside protection across procurement tranches."),coverage:v.ratio,educationUrl:"https://www.cmegroup.com/education/courses/option-strategies/bull-spread",legs:[
+      {id:"stage-near-long",kind:"option",side:1,weight:.30,expiry:"near",right:"call",strikeOffset:0,purposeZh:"近月买入看涨覆盖首批采购",purposeEn:"Near-month long call covers the first tranche"},
+      {id:"stage-near-short",kind:"option",side:-1,weight:.30,expiry:"near",right:"call",strikeOffset:1,purposeZh:"近月卖出上翼抵减权利金",purposeEn:"Near-month short upper wing reduces premium"},
+      {id:"stage-target-long",kind:"option",side:1,weight:.45,expiry:"target",right:"call",strikeOffset:0,purposeZh:"目标月买入看涨覆盖主采购",purposeEn:"Target-month long call covers the main tranche"},
+      {id:"stage-target-short",kind:"option",side:-1,weight:.45,expiry:"target",right:"call",strikeOffset:1,purposeZh:"目标月卖出上翼抵减权利金",purposeEn:"Target-month short upper wing reduces premium"},
+      {id:"stage-deferred-long",kind:"option",side:1,weight:.25,expiry:"deferred",right:"call",strikeOffset:.5,purposeZh:"递延月买入看涨覆盖延期采购",purposeEn:"Deferred long call covers delayed procurement"},
+      {id:"stage-deferred-short",kind:"option",side:-1,weight:.25,expiry:"deferred",right:"call",strikeOffset:1.5,purposeZh:"递延月卖出上翼抵减权利金",purposeEn:"Deferred short upper wing reduces premium"},
+    ]},
   ];
-  const plans=planDefinitions.map((plan)=>{const lower=calculate(scenarioPrices[0].price,plan.coverage,plan.futures),mid=calculate(scenarioPrices[2].price,plan.coverage,plan.futures),upper=calculate(scenarioPrices[4].price,plan.coverage,plan.futures);return{...plan,lower,mid,upper};});
   const selectedProducts=instruments?.products||[];
-  const allocate=(targetBarrels:number,kind:"future"|"option",planId:string)=>{
-    if(targetBarrels<=0)return [];
-    const candidates=selectedProducts.filter((product)=>product.kind===kind);
-    if(!candidates.length)return [];
-    const standard=candidates.filter((product)=>product.size>=1000);
-    const micro=candidates.find((product)=>product.size<1000);
-    let primary=standard[0]||candidates[0];
-    if(primary.benchmark==="Brent"&&kind==="future")primary=candidates.find((product)=>product.id===(planId==="balanced"||planId==="staged"?"CME-BZ":"ICE-B"))||primary;
-    const rows:Array<{product:InstrumentProduct;contracts:number}>=[];
-    let primaryContracts=micro?Math.floor(targetBarrels/primary.size):Math.round(targetBarrels/primary.size);
-    let residual=targetBarrels-primaryContracts*primary.size;
-    if(primaryContracts>0)rows.push({product:primary,contracts:primaryContracts});
-    if(micro&&residual>0){let microContracts=Math.round(residual/micro.size);if(microContracts*micro.size>=primary.size){primaryContracts+=1;const existing=rows.find((row)=>row.product.id===primary.id);existing?existing.contracts=primaryContracts:rows.push({product:primary,contracts:primaryContracts});microContracts=0;}if(microContracts>0)rows.push({product:micro,contracts:microContracts});}
-    if(!rows.length)rows.push({product:primary,contracts:1});
-    return rows.map(({product,contracts})=>{const barrels=contracts*product.size;const entry=v.entry;const notional=barrels*entry*v.budgetFx;const margin=kind==="future"?notional*v.margin/100:0;const premium=kind==="option"?barrels*v.premium*v.budgetFx:0;const fees=barrels*v.fee*v.budgetFx*2;const funding=margin*v.finance/100*v.horizon/365;return{product,contracts,barrels,entry,notional,margin,premium,fees,funding,initialCash:margin+premium+fees};});
-  };
-  const executablePlans=plans.map((plan)=>{const protectedBarrels=v.volume*plan.coverage/100;const futureTarget=protectedBarrels*plan.futures/100;const optionTarget=Math.max(0,protectedBarrels-futureTarget);const orders=[...allocate(futureTarget,"future",plan.id),...allocate(optionTarget,"option",plan.id)];const totals=orders.reduce((sum,row)=>({barrels:sum.barrels+row.barrels,notional:sum.notional+row.notional,margin:sum.margin+row.margin,premium:sum.premium+row.premium,fees:sum.fees+row.fees,funding:sum.funding+row.funding,initialCash:sum.initialCash+row.initialCash}),{barrels:0,notional:0,margin:0,premium:0,fees:0,funding:0,initialCash:0});return{...plan,orders,totals,targetBarrels:protectedBarrels};});
+  const targetMonths=Math.max(2,Math.ceil(v.horizon/30)+1);
+  const expiryOffsets:Record<ExpiryKey,number>={near:Math.max(1,targetMonths-1),target:targetMonths,deferred:targetMonths+2};
+  const expiryLabel=(key:ExpiryKey)=>{const date=new Date();date.setUTCDate(1);date.setUTCMonth(date.getUTCMonth()+expiryOffsets[key]);return date.toISOString().slice(0,7);};
+  const normalCdf=(x:number)=>{const t=1/(1+.2316419*Math.abs(x)),d=.3989423*Math.exp(-x*x/2),p=1-d*t*(.3193815+t*(-.3565638+t*(1.781478+t*(-1.821256+t*1.330274))));return x>=0?p:1-p;};
+  const optionModelPremium=(strike:number,right:"call"|"put",days:number)=>{const time=Math.max(days,7)/365;const lower=Math.max(scenarioPrices[0].price,.01),upper=Math.max(scenarioPrices[4].price,lower+.01);const sigma=Math.min(.80,Math.max(.12,Math.log(upper/lower)/(2*1.96*Math.sqrt(Math.max(v.horizon,7)/365))));const rate=Math.max(0,v.finance/100),forward=Math.max(v.entry,.01);const black=(k:number,kind:"call"|"put")=>{const vol=sigma*Math.sqrt(time),d1=(Math.log(forward/Math.max(k,.01))+.5*sigma*sigma*time)/vol,d2=d1-vol,discount=Math.exp(-rate*time);return kind==="call"?discount*(forward*normalCdf(d1)-k*normalCdf(d2)):discount*(k*normalCdf(-d2)-forward*normalCdf(-d1));};const atm=Math.max(black(forward,"call"),.01),scale=Math.max(v.premium,.01)/atm;return Math.max(.001,black(strike,right)*scale);};
+  const pickProduct=(kind:"future"|"option",venue?:"delivery"|"financial")=>{const rows=selectedProducts.filter((product)=>product.kind===kind&&product.size>=1000);if(kind==="future"&&venue==="financial")return rows.find((product)=>product.id==="CME-BZ")||rows[0];if(kind==="future"&&venue==="delivery")return rows.find((product)=>product.id==="ICE-B"||product.id==="CME-CL")||rows[0];return rows[0]||selectedProducts.find((product)=>product.kind===kind);};
+  const executablePlans=planDefinitions.map((plan)=>{
+    const targetBarrels=v.volume*plan.coverage/100;
+    const orders=plan.legs.flatMap((leg)=>{const product=pickProduct(leg.kind,leg.futureVenue);if(!product)return[];const contracts=Math.max(1,Math.round(targetBarrels*leg.weight/product.size));const barrels=contracts*product.size;const strike=leg.kind==="option"?Math.max(.01,v.strike+(leg.strikeOffset||0)*v.strikeGap):null;const expiry=expiryLabel(leg.expiry);const days=Math.max(7,Math.round(expiryOffsets[leg.expiry]*30.44));const premiumPerBbl=leg.kind==="option"&&leg.right&&strike!=null?optionModelPremium(strike,leg.right,days):0;const entry=v.entry;const notional=barrels*entry*v.budgetFx;const premium=leg.side*premiumPerBbl*barrels*v.budgetFx;const margin=leg.kind==="future"||leg.side<0?notional*v.margin/100:0;const fees=barrels*v.fee*v.budgetFx*2;const funding=margin*v.finance/100*days/365;return[{...leg,product,contracts,barrels,strike,expiry,days,premiumPerBbl,entry,notional,margin,premium,fees,funding}];});
+    const totals=orders.reduce((sum,row)=>({grossBarrels:sum.grossBarrels+row.barrels,notional:sum.notional+row.notional,margin:sum.margin+row.margin,premium:sum.premium+row.premium,fees:sum.fees+row.fees,funding:sum.funding+row.funding}),{grossBarrels:0,notional:0,margin:0,premium:0,fees:0,funding:0});
+    const initialCash=Math.max(0,totals.margin+totals.premium+totals.fees);
+    const scenarios=scenarioPrices.map((scenario)=>{const physical=v.volume*(scenario.price+v.purchaseBasis)*v.fx;const derivativePnl=orders.reduce((sum,row)=>{const legPrice=Math.max(.01,market*Math.pow(Math.max(scenario.price,.01)/Math.max(market,.01),row.days/Math.max(v.horizon,1)));if(row.kind==="future")return sum+row.side*row.barrels*(legPrice-row.entry)*v.fx;const intrinsic=row.right==="call"?Math.max(legPrice-Number(row.strike),0):Math.max(Number(row.strike)-legPrice,0);return sum+row.side*row.barrels*intrinsic*v.fx;},0);const hedged=physical-derivativePnl+totals.premium+totals.funding+totals.fees;return{...scenario,physical,derivativePnl,hedged,saving:physical-hedged};});
+    return{...plan,orders,totals:{...totals,initialCash},targetBarrels,lower:scenarios[0],mid:scenarios[2],upper:scenarios[4],scenarios};
+  });
   return (
     <Card
       title={tx(lang, "采购成本预警测算", "Procurement cost stress test")}
@@ -986,12 +1044,14 @@ function HedgeCalculator({ lang, market, suggestedRatio, forecast, instruments }
           label={tx(lang, "采购量", "Purchase volume")}
           value={v.volume}
           suffix={tx(lang, "桶", "bbl")}
+          min={1}
           onChange={(n) => set("volume", n)}
         />
         <Field
           label={tx(lang, "预算单价", "Budget price")}
           value={v.budget}
           suffix={tx(lang, "美元/桶", "USD/bbl")}
+          min={0}
           onChange={(n) => set("budget", n)}
         />
         <Field label={tx(lang,"期货限价参考","Futures limit reference")} value={v.entry} suffix={tx(lang,"美元/桶","USD/bbl")} step={.01} min={0} onChange={(n)=>set("entry",n)}/>
@@ -999,12 +1059,16 @@ function HedgeCalculator({ lang, market, suggestedRatio, forecast, instruments }
           label={tx(lang, "套保覆盖", "Hedge coverage")}
           value={v.ratio}
           suffix="%"
+          min={0}
+          max={100}
           onChange={(n) => set("ratio", n)}
         />
         <Field
           label={tx(lang, "期货占比", "Futures share")}
           value={v.futures}
           suffix="%"
+          min={0}
+          max={100}
           onChange={(n) => set("futures", n)}
         />
         <Field
@@ -1033,6 +1097,8 @@ function HedgeCalculator({ lang, market, suggestedRatio, forecast, instruments }
           label={tx(lang, "保证金比例", "Margin rate")}
           value={v.margin}
           suffix="%"
+          min={0}
+          max={100}
           onChange={(n) => set("margin", n)}
         />
         <Field
@@ -1040,12 +1106,14 @@ function HedgeCalculator({ lang, market, suggestedRatio, forecast, instruments }
           value={v.finance}
           suffix="%"
           step={0.1}
+          min={0}
           onChange={(n) => set("finance", n)}
         />
         <Field
           label={tx(lang, "合约规模", "Contract size")}
           value={v.contract}
           suffix={tx(lang, "桶", "bbl")}
+          min={1}
           onChange={(n) => set("contract", n)}
         />
         <Field
@@ -1053,14 +1121,18 @@ function HedgeCalculator({ lang, market, suggestedRatio, forecast, instruments }
           value={v.fee}
           suffix={tx(lang, "美元/桶", "USD/bbl")}
           step={0.005}
+          min={0}
           onChange={(n) => set("fee", n)}
         />
-        <Field label={tx(lang,"期权权利金","Option premium")} value={v.premium} suffix={tx(lang,"美元/桶","USD/bbl")} step={.1} min={0} onChange={(n)=>set("premium",n)}/>
-        <Field label={tx(lang,"看涨期权执行价","Call strike")} value={v.strike} suffix={tx(lang,"美元/桶","USD/bbl")} step={.25} min={0} onChange={(n)=>set("strike",n)}/>
+        <Field label={tx(lang,"ATM权利金（预测推导/可覆盖）","ATM premium (forecast-derived / override)")} value={v.premium} suffix={tx(lang,"美元/桶","USD/bbl")} step={.1} min={0} onChange={(n)=>set("premium",n)}/>
+        <Field label={tx(lang,"中心执行价","Center strike")} value={v.strike} suffix={tx(lang,"美元/桶","USD/bbl")} step={.25} min={0} onChange={(n)=>set("strike",n)}/>
+        <Field label={tx(lang,"执行价间距","Strike interval")} value={v.strikeGap} suffix={tx(lang,"美元/桶","USD/bbl")} step={.25} min={.25} onChange={(n)=>set("strikeGap",n)}/>
         <Field
           label={tx(lang, "方案期限", "Plan horizon")}
           value={v.horizon}
           suffix={tx(lang, "天", "days")}
+          min={1}
+          max={3650}
           onChange={(n) => set("horizon", n)}
         />
       </div>
@@ -1089,12 +1161,16 @@ function HedgeCalculator({ lang, market, suggestedRatio, forecast, instruments }
       <div className="formula-note"><b>{tx(lang,"口径已校正","Corrected accounting")}</b><span>{tx(lang,"现货成本 =（基准价格 + 采购基差）× 汇率；期货盈亏只比较结算价与入场价。基差不再被错误地从期货盈亏中重复扣除。","Physical cost = (benchmark + purchase basis) × FX. Futures P&L compares settlement with entry price only; basis is no longer double-counted in futures P&L.")}</span></div>
       <h3 className="result-title">{tx(lang,"不同价格情景下的总采购成本","Total procurement cost across price scenarios")}</h3>
       <ChartFrame label={tx(lang,"缩放查看未套保与套保成本","Zoom to compare unhedged and hedged cost")}><div className="chart medium"><ResponsiveContainer><ComposedChart data={scenarioRows} margin={{top:8,right:20,bottom:4,left:20}}><CartesianGrid vertical={false}/><XAxis dataKey="scenario"/><YAxis yAxisId="cost" width={72} tickMargin={8} tickFormatter={(value)=>`${(Number(value)/1e6).toFixed(3)}m`}/><YAxis yAxisId="improvement" orientation="right" width={72} tickMargin={8} tickFormatter={(value)=>`${(Number(value)/1e6).toFixed(3)}m`}/><Tooltip formatter={(value)=>tx(lang,`${(Number(value)/1e6).toFixed(3)} 百万元`,`RMB ${(Number(value)/1e6).toFixed(3)}m`)}/><Legend/><Bar yAxisId="cost" dataKey="unhedged" name={tx(lang,"未套保成本","Unhedged cost")} fill="#7d8792" radius={[8,8,0,0]}/><Bar yAxisId="cost" dataKey="hedged" name={tx(lang,"套保后成本","Hedged cost")} fill="#5f7895" radius={[8,8,0,0]}/><Line yAxisId="improvement" dataKey="saving" name={tx(lang,"相对成本改善（右轴）","Cost improvement (right axis)")} stroke="#c47d59" strokeWidth={2.4}/></ComposedChart></ResponsiveContainer></div></ChartFrame>
-      <h3 className="result-title">{tx(lang,"六套可选组合","Six portfolio alternatives")}</h3>
-      <p className="plain-note">{tx(lang,"点击任一组合可查看具体产品、买入方向、张数、保证金、权利金、费用和逐步操作说明。每套组合只列实际用于该方案的产品，不再把所有候选产品单独堆在页面上。","Open any portfolio to see exact products, direction, quantity, margin, premium, fees and a step-by-step order guide. Each portfolio lists only the instruments it actually uses.")}</p>
-      <div className="portfolio-grid">{executablePlans.map((plan)=><details className="portfolio-card" key={plan.id}><summary><div><span>{plan.name}</span><b>{plan.coverage.toFixed(3)}% / {plan.futures.toFixed(3)}%</b></div><p>{plan.desc}</p><dl><div><dt>{tx(lang,"95%上界改善","95% upper improvement")}</dt><dd className={plan.upper.saving>=0?"positive":"negative"}>{(plan.upper.saving/1e6).toFixed(3)}m</dd></div><div><dt>{tx(lang,"首期资金","Initial cash")}</dt><dd>{(plan.totals.initialCash/1e6).toFixed(3)}m</dd></div><div><dt>{tx(lang,"保证金 / 权利金","Margin / premium")}</dt><dd>{(plan.totals.margin/1e6).toFixed(3)}m / {(plan.totals.premium/1e6).toFixed(3)}m</dd></div><div><dt>{tx(lang,"打开执行清单","Open order ticket")}</dt><dd><ChevronRight/></dd></div></dl></summary><div className="portfolio-detail">
-        <div className="order-summary"><span><b>{plan.targetBarrels.toLocaleString()}</b>{tx(lang,"目标覆盖桶数","target bbl")}</span><span><b>{plan.totals.barrels.toLocaleString()}</b>{tx(lang,"取整后覆盖","rounded coverage")}</span><span><b>RMB {(plan.totals.initialCash/1e6).toFixed(3)}m</b>{tx(lang,"首期资金","initial cash")}</span><span><b>RMB {((plan.totals.fees+plan.totals.funding)/1e4).toFixed(3)}万</b>{tx(lang,"双边费用与融资","fees + funding")}</span></div>
-        <div className="order-lines">{plan.orders.map((order)=><article key={`${plan.id}-${order.product.id}`}><header><span>{order.product.exchange}</span><b>{tx(lang,"买入","BUY / LONG")} {order.contracts} × {order.product.code}</b></header><h4>{lang==="zh"?order.product.nameZh||order.product.name:order.product.name}</h4><p>{order.product.kind==="future"?tx(lang,"期货多头，用于对冲采购价格上涨","Long futures hedge against a rise in procurement prices"):tx(lang,"买入看涨期权，用权利金限定上涨风险","Buy calls to cap upside exposure with a known premium")}</p><dl><div><dt>{tx(lang,"合约规模 / 覆盖","Contract / coverage")}</dt><dd>{order.product.size.toLocaleString()} / {order.barrels.toLocaleString()} bbl</dd></div><div><dt>{tx(lang,"测算限价 / 公开卖一","Model limit / public ask")}</dt><dd>{order.entry.toFixed(3)} / {order.product.quote?.ask?.toFixed(3)??"—"}</dd></div><div><dt>{tx(lang,"名义本金","Notional")}</dt><dd>RMB {(order.notional/1e6).toFixed(3)}m</dd></div><div><dt>{tx(lang,"初始保证金","Initial margin")}</dt><dd>RMB {(order.margin/1e6).toFixed(3)}m</dd></div><div><dt>{tx(lang,"权利金","Premium")}</dt><dd>RMB {(order.premium/1e6).toFixed(3)}m</dd></div><div><dt>{tx(lang,"双边费用 / 融资","Fees / funding")}</dt><dd>RMB {(order.fees/1e3).toFixed(3)}k / {(order.funding/1e3).toFixed(3)}k</dd></div></dl><a href={order.product.url} target="_blank" rel="noreferrer">{tx(lang,"核对交易所规格","Verify exchange specification")} <ArrowRight/></a></article>)}</div>
-        <ol className="execution-steps"><li>{tx(lang,"在采购日期附近选择流动性充足、且到期日晚于预计采购日的合约月份；避免无交割计划却持有实物交割合约进入通知期。","Choose a liquid expiry after the planned purchase date; do not carry a physically delivered contract into notice without a delivery plan.")}</li><li>{tx(lang,"在经纪商订单票据中逐项输入上表代码与张数，方向统一为买入/做多；期权选择执行价接近上方设定值的看涨期权。","Enter each code and quantity in the broker ticket as BUY/LONG; for options, select a call strike close to the configured strike above.")}</li><li>{tx(lang,"使用限价单并复核买卖价差、实际初始保证金、权利金和佣金；公开行情只是参考，不能替代成交确认。","Use limit orders and verify spread, actual initial margin, premium and commission. Public quotes are indicative, not an execution confirmation.")}</li><li>{tx(lang,"成交后记录月份、成交均价和费用；采购完成时同步平仓或按既定滚动规则换月，并重新计算剩余敞口。","Record expiry, average fill and fees. Close or roll alongside the physical purchase, then recalculate the remaining exposure.")}</li></ol>
+      <h3 className="result-title">{tx(lang,"十套多腿套保组合","Ten multi-leg hedge portfolios")}</h3>
+      <p className="plain-note">{tx(lang,"策略覆盖期货期限梯、垂直价差、领口、日历与对角价差、蝶式、鹰式、海鸥式和分批跨期结构，每套包含3—6条真实交易腿。点击后可查看方向、月份、行权价、张数、净权利金、保证金、费用及五种价格情景图。","The library spans futures ladders, verticals, collars, calendar and diagonal spreads, butterflies, condors, seagulls and staged cross-expiry structures, each with three to six executable legs. Open a card to inspect side, month, strike, quantity, net premium, margin, fees and a five-scenario chart.")}</p>
+      <div className="portfolio-grid">{executablePlans.map((plan)=><details className="portfolio-card" key={plan.id} onToggle={(event)=>{const isOpen=event.currentTarget.open;setOpenPlans((previous)=>{const next=new Set(previous);if(isOpen)next.add(plan.id);else next.delete(plan.id);return next;});}}><summary><div><span>{plan.name}</span><b>{plan.coverage.toFixed(3)}% · {plan.orders.length} {tx(lang,"条腿","legs")}</b></div><strong className="strategy-structure">{plan.structure}</strong><p>{plan.desc}</p><dl><div><dt>{tx(lang,"95%上界改善","95% upper improvement")}</dt><dd className={plan.upper.saving>=0?"positive":"negative"}>{(plan.upper.saving/1e6).toFixed(3)}m</dd></div><div><dt>{tx(lang,"首期资金","Initial cash")}</dt><dd>{(plan.totals.initialCash/1e6).toFixed(3)}m</dd></div><div><dt>{tx(lang,"保证金 / 净权利金","Margin / net premium")}</dt><dd>{(plan.totals.margin/1e6).toFixed(3)}m / {(plan.totals.premium/1e6).toFixed(3)}m</dd></div><div><dt>{tx(lang,"打开多腿执行清单","Open multi-leg ticket")}</dt><dd><ChevronRight/></dd></div></dl></summary><div className="portfolio-detail">
+        <div className="strategy-banner"><div><span>{tx(lang,"组合结构","Structure")}</span><b>{plan.structure}</b></div><a href={plan.educationUrl} target="_blank" rel="noreferrer">{tx(lang,"查看交易所策略说明","Exchange strategy reference")} <ArrowRight/></a></div>
+        <div className="order-summary"><span><b>{plan.targetBarrels.toLocaleString()}</b>{tx(lang,"目标覆盖桶数","target bbl")}</span><span><b>{plan.totals.grossBarrels.toLocaleString()}</b>{tx(lang,"全部交易腿名义桶数","gross leg bbl")}</span><span><b>RMB {(plan.totals.initialCash/1e6).toFixed(3)}m</b>{tx(lang,"首期资金","initial cash")}</span><span><b>RMB {((plan.totals.fees+plan.totals.funding)/1e4).toFixed(3)}万</b>{tx(lang,"双边费用与融资","fees + funding")}</span></div>
+        <div className="order-lines">{plan.orders.map((order)=><article key={`${plan.id}-${order.id}`}><header><span>{order.product.exchange}</span><b className={order.side>0?"buy-side":"sell-side"}>{order.side>0?tx(lang,"买入","BUY / LONG"):tx(lang,"卖出","SELL / SHORT")} {order.contracts} × {order.product.code} · {order.expiry}</b></header><h4>{lang==="zh"?order.product.nameZh||order.product.name:order.product.name}</h4><p>{lang==="zh"?order.purposeZh:order.purposeEn}</p><dl><div><dt>{tx(lang,"到期月份 / 方向","Expiry / side")}</dt><dd>{order.expiry} · {order.side>0?tx(lang,"买入","BUY"):tx(lang,"卖出","SELL")}</dd></div>{order.kind==="option"&&<><div><dt>{tx(lang,"期权类型 / 行权价","Option / strike")}</dt><dd>{order.right==="call"?tx(lang,"看涨","CALL"):tx(lang,"看跌","PUT")} · {Number(order.strike).toFixed(3)}</dd></div><div><dt>{tx(lang,"模型权利金 / 桶","Model premium / bbl")}</dt><dd>{order.premiumPerBbl.toFixed(3)} USD</dd></div></>}<div><dt>{tx(lang,"张数 / 名义桶数","Contracts / notional bbl")}</dt><dd>{order.contracts} / {order.barrels.toLocaleString()}</dd></div><div><dt>{tx(lang,"期货参考限价","Futures reference")}</dt><dd>{order.kind==="future"?`${order.entry.toFixed(3)} USD`:"—"}</dd></div><div><dt>{tx(lang,"保证金估算","Margin estimate")}</dt><dd>RMB {(order.margin/1e6).toFixed(3)}m</dd></div><div><dt>{tx(lang,"权利金现金流","Premium cash flow")}</dt><dd className={order.premium<=0?"credit":"debit"}>RMB {(order.premium/1e6).toFixed(3)}m</dd></div><div><dt>{tx(lang,"双边费用 / 融资","Fees / funding")}</dt><dd>RMB {(order.fees/1e3).toFixed(3)}k / {(order.funding/1e3).toFixed(3)}k</dd></div></dl><a href={order.product.url} target="_blank" rel="noreferrer">{tx(lang,"核对交易所规格","Verify exchange specification")} <ArrowRight/></a></article>)}</div>
+        <div className="strategy-scenarios">{plan.scenarios.map((row)=><div key={row.scenario}><span>{row.scenario}</span><b>RMB {(row.hedged/1e6).toFixed(3)}m</b><em className={row.saving>=0?"positive":"negative"}>{tx(lang,"较未套保","vs unhedged")} {(row.saving/1e6).toFixed(3)}m</em></div>)}</div>
+        {openPlans.has(plan.id)&&<ChartFrame label={tx(lang,"悬停比较组合成本与衍生品损益","Hover to compare portfolio cost and derivative payoff")}><div className="chart strategy-payoff-chart"><ResponsiveContainer><ComposedChart data={plan.scenarios.map((row)=>({scenario:row.scenario,unhedged:row.physical/1e6,hedged:row.hedged/1e6,derivative:row.derivativePnl/1e6}))} margin={{top:12,right:24,bottom:4,left:16}}><CartesianGrid vertical={false}/><XAxis dataKey="scenario" tick={{fontSize:10}}/><YAxis yAxisId="cost" width={62} tickFormatter={(value)=>Number(value).toFixed(3)} label={{value:tx(lang,"采购成本·百万元","Cost · RMB m"),angle:-90,position:"insideLeft",fontSize:10}}/><YAxis yAxisId="payoff" orientation="right" width={62} tickFormatter={(value)=>Number(value).toFixed(3)} label={{value:tx(lang,"衍生品损益·百万元","Payoff · RMB m"),angle:90,position:"insideRight",fontSize:10}}/><Tooltip formatter={(value,name)=>[`${Number(value).toFixed(3)}m`,String(name)]}/><Legend/><Bar yAxisId="payoff" dataKey="derivative" name={tx(lang,"期货期权合计损益","Derivative payoff")} fill="#d8d3e7" radius={[7,7,0,0]}/><Line yAxisId="cost" dataKey="unhedged" name={tx(lang,"未套保成本","Unhedged cost")} stroke="#7d8792" strokeWidth={2.1}/><Line yAxisId="cost" dataKey="hedged" name={tx(lang,"组合后净成本","Portfolio net cost")} stroke="#514b80" strokeWidth={2.8}/></ComposedChart></ResponsiveContainer></div></ChartFrame>}
+        <p className="plain-note">{tx(lang,"多期限腿的情景结算价按“当前价格→预测终值”的对数路径映射到各自到期月；这是一致的路径压力测试，不是对远期曲线或成交价的承诺。","Multi-expiry settlement prices are mapped to each expiry along a log path from the current price to the forecast endpoint. This is a consistent path stress test, not a promise of the forward curve or execution price.")}</p>
+        <ol className="execution-steps"><li>{tx(lang,"先在经纪商核对每条腿的准确到期日、期权行权价与可成交报价；页面月份是采购期限映射，不替代合约日历。","First confirm each exact expiry date, strike and executable quote with the broker. Displayed months map the procurement horizon and do not replace the contract calendar.")}</li><li>{tx(lang,"优先使用交易所组合单、策略单或RFQ一次性报出全部交易腿，避免逐腿成交造成方向裸露；若只能逐腿执行，先成交限制尾部风险的买入腿。","Prefer an exchange combination order, strategy order or RFQ for all legs to avoid legging risk. If legs must be entered separately, execute the long tail-protection legs first.")}</li><li>{tx(lang,"ATM权利金输入应使用同一时点的真实期权报价；其他执行价权利金由预测波动率曲面插值，仅用于测算，成交前必须替换为经纪商报价。","Enter a real, same-timestamp ATM option quote. Other-strike premiums are interpolated from the forecast-implied surface for planning only and must be replaced with broker quotes before execution.")}</li><li>{tx(lang,"短期权按配置的保证金比例进行保守估算；实际SPAN组合保证金、价差抵扣、佣金和流动性冲击以经纪商回报为准。采购完成时同步平仓或整体展期。","Short-option margin uses the configured rate as a conservative estimate. Actual SPAN offsets, commissions and liquidity impact must come from the broker. Close or roll the full structure with the physical purchase.")}</li></ol>
       </div></details>)}</div>
       <div className="broker-note"><ShieldCheck/><div><b>{instruments?.broker.connected?tx(lang,"经纪商合约发现已配置","Broker contract discovery configured"):tx(lang,"当前为交易所产品匹配，不是下单接口","Exchange product matching, not an order interface")}</b><p>{tx(lang,"产品代码和合约规模来自交易所规格页；具体到期月份、实时买卖价、权利金与可成交性必须在已授权经纪商会话中复核。页面只展示模型情景损益，不承诺收益，也不会提交订单。","Product codes and sizes come from exchange specifications. Expiry, live bid/ask, premium and tradability require an authenticated broker session. Results are model scenarios, not promised returns, and no order is submitted.")}</p></div></div>
     </Card>
