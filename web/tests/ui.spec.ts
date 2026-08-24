@@ -36,7 +36,7 @@ test("decision accounting, advanced variables and multiple real-product plans re
       {id:"ICE-B",benchmark:"Brent",exchange:"ICE Futures Europe",kind:"future",code:"B",name:"Brent Crude Futures",nameZh:"ICE 布伦特原油期货",size:1000,settlement:"EFP delivery",url:"https://www.ice.com/products/219/Brent-Crude-Futures",contracts:126,coveredBarrels:126000,roundingError:0,verification:"Exchange product specification",quote:{last:91,bid:90.99,ask:91.01,time:"12:00:00",date:"2026-08-24",name:"布伦特原油",provider:"Sina"}},
       {id:"CME-BZ",benchmark:"Brent",exchange:"NYMEX / CME Group",kind:"future",code:"BZ",name:"Brent Last Day Financial Futures",size:1000,settlement:"Financial",url:"https://www.cmegroup.com/",contracts:126,coveredBarrels:126000,roundingError:0,verification:"Exchange product specification"},
       {id:"CME-BE",benchmark:"Brent",exchange:"NYMEX / CME Group",kind:"option",code:"BE",name:"Brent Crude options",size:1000,settlement:"Financial",url:"https://www.cmegroup.com/",contracts:54,coveredBarrels:54000,roundingError:0,verification:"Exchange product specification"},
-      {id:"CME-ZN",benchmark:"US rates",exchange:"CBOT / CME Group",kind:"future",code:"ZN",name:"10-Year T-Note Futures",nameZh:"美国10年期国债期货",size:100000,contractUnit:"USD face value",settlement:"Physical",role:"cross-asset",url:"https://www.cmegroup.com/",contracts:1,coveredBarrels:100000,roundingError:0,verification:"Exchange product specification"},
+      {id:"CME-ZN",benchmark:"US rates",exchange:"CBOT / CME Group",kind:"future",code:"ZN",name:"10-Year T-Note Futures",nameZh:"美国10年期国债期货",size:100000,priceScale:.01,contractUnit:"USD face value",currency:"USD",settlement:"Physical",role:"cross-asset",url:"https://www.cmegroup.com/",contracts:1,coveredBarrels:100000,roundingError:0,verification:"Exchange product specification",quote:{last:112.5,bid:112.484,ask:112.516,time:"12:00:00",date:"2026-08-24",name:"10Y Treasury",provider:"Test live quote"}},
     ] } });
     const body = route.request().postDataJSON() as { action:string };
     if (body.action === "forecast") return route.fulfill({ json: { mode:"verified-live",method:"test",asOf:"2026-08-20",latestPrice:100,history:[{Date:"2026-08-20",Actual:100}],forecast:[{Date:"2026-09-20",PointForecast:100,Lower50:95,Upper50:105,Lower80:90,Upper80:110,Lower95:80,Upper95:120}],metrics:{},components:[] } });
@@ -61,15 +61,16 @@ test("decision accounting, advanced variables and multiple real-product plans re
   await expect(page.locator(".association-grid article.linked")).toHaveCount(1);
   await expect(page.locator(".overlay-grid article")).toHaveCount(1);
   await page.locator(".association-section").screenshot({path:"test-results/decision-granger-gate.png"});
-  await expect(page.locator(".portfolio-grid>.portfolio-card")).toHaveCount(10);
-  await expect(page.locator(".strategy-action")).toHaveCount(10);
-  await expect(page.locator(".strategy-structure")).toHaveCount(10);
+  await expect(page.locator(".portfolio-grid>.portfolio-card")).toHaveCount(14);
+  await expect(page.locator(".strategy-action")).toHaveCount(14);
+  await expect(page.locator(".strategy-structure")).toHaveCount(14);
+  await expect(page.locator(".portfolio-card.mixed-asset")).toHaveCount(4);
   await expect(page.locator(".portfolio-card").first().getByText("交易安排")).toBeVisible();
   await expect(page.locator(".portfolio-card").first().getByText(/近月、目标月和递延月分别买入期货/)).toBeVisible();
   await page.locator(".kpi-grid").screenshot({path:"test-results/decision-kpis.png"});
   await page.locator(".portfolio-card").nth(1).screenshot({path:"test-results/portfolio-readable-summary.png"});
   for (const card of await page.locator(".portfolio-card").all()) expect(await card.locator(".order-lines article").count()).toBeGreaterThanOrEqual(3);
-  for(let index=0;index<10;index+=1){
+  for(let index=0;index<14;index+=1){
     await page.locator(".portfolio-card summary").nth(index).click();
     await expect(page.locator(".portfolio-card").nth(index).locator(".strategy-payoff-chart svg.recharts-surface").first()).toBeVisible();
     await page.locator(".portfolio-card summary").nth(index).click();
@@ -103,6 +104,14 @@ test("decision accounting, advanced variables and multiple real-product plans re
   await expect(page.locator(".portfolio-card").nth(8).locator(".order-lines article")).toHaveCount(3);
   await page.locator(".portfolio-card summary").nth(9).click();
   await expect(page.locator(".portfolio-card").nth(9).locator(".order-lines article")).toHaveCount(6);
+  await page.locator(".portfolio-card summary").nth(10).click();
+  const mixedCard=page.locator(".portfolio-card").nth(10);
+  await expect(mixedCard.locator(".order-lines article.cross-order")).toHaveCount(1);
+  await expect(mixedCard).toContainText("美国10年期国债期货");
+  await expect(mixedCard).toContainText("USD face value");
+  await expect(mixedCard).toContainText("目标风险预算");
+  await expect(mixedCard.getByText("跨资产压力损益")).toBeVisible();
+  await mixedCard.screenshot({path:"test-results/multi-asset-portfolio.png"});
   await expect(page.locator(".product-grid")).toHaveCount(0);
   await page.getByRole("button", { name: /展开/ }).click();
   await expect(page.locator(".decision-settings .field").filter({hasText:"最大滞后"}).locator("input")).toHaveValue("5");
@@ -128,6 +137,11 @@ test("decision accounting, advanced variables and multiple real-product plans re
   const rangeKpi=page.locator(".kpi.compact-value");
   expect(await rangeKpi.evaluate((element)=>element.scrollWidth<=element.clientWidth+1)).toBeTruthy();
   await page.locator(".kpi-grid").screenshot({path:"test-results/decision-kpis-mobile.png"});
+  const mobileMixed=page.locator(".portfolio-card.mixed-asset").first();
+  await mobileMixed.locator("summary").click();
+  await mobileMixed.scrollIntoViewIfNeeded();
+  expect(await mobileMixed.evaluate((element)=>element.scrollWidth<=element.clientWidth+1)).toBeTruthy();
+  await mobileMixed.screenshot({path:"test-results/multi-asset-portfolio-mobile.png"});
 });
 
 test("data center is independent and searches GPRD plus financial products", async ({ page }) => {
