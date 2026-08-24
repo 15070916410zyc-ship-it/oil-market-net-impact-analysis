@@ -51,7 +51,7 @@ import {
   type Frequency,
   type PriceRow,
 } from "./data";
-import { checkApiHealth, fetchCatalog, fetchSeries, readLocalRecords, requestLiveAnalysis, saveLocalRecord } from "./storage";
+import { checkApiHealth, fetchCatalog, fetchInstruments, fetchSeries, readLocalRecords, requestLiveAnalysis, saveLocalRecord } from "./storage";
 
 type Lang = "zh" | "en";
 type Mode = "landing" | "decision" | "professional";
@@ -65,6 +65,8 @@ type ScaleGrangerResult = GrangerResult & { imf: string };
 type NetImpactResult = { mode: string; method: string; asOf: string; observations: number; estimationWindow:{start:string;end:string}; eventWindow:{start:string;end:string}; rSquared: number; drivers: DriverResult[]; granger: GrangerResult[]; scaleGranger: ScaleGrangerResult[]; selectedScales: Array<{id:string;nameZh:string;nameEn:string;imf:string;pValue:number}>; components: ComponentResult[]; hht:Array<{date:string;frequency:number;period:number}>; scaleEffect:{selectedScale:string;minimumDate:string;minimumValue:number;maximumDate:string;maximumValue:number;tradingDayInterval:number;calendarDayInterval:number;netEffect:number;originalResponse:number;shareInOriginalResponse:number}; fevd: Array<{id:string;nameZh:string;nameEn:string;share:number;externalWeight:number;absoluteImpact:number}>; fevdOwnShare:number; fevdHorizon:number; varLag:number; rolling: Array<{ date: string; observed: number; fitted: number }>; rollingFevd:Array<{date:string;externalShare:number;ownShare:number;lag:number}>; breakTest:{fixed:{breakDate:string;fStatistic:number;pValue:number;preSlope:number;postSlope:number;slopeChange:number;levelShift:number;significant:boolean};optimal:{candidateCount:number;bestDate:string;rssImprovementPercent:number;profile:Array<{date:string;rss:number;improvementPercent:number}>}}; sources: Array<{ id: string; providerId: string; nameZh: string; nameEn: string }> };
 type RiskResult = { mode: string; method: string; latestDate: string; riskScore: number; alertThreshold: number; alert: boolean; history: Array<{ date: string; score: number }> };
 type ForecastResult = { mode: string; method: string; asOf: string; latestPrice: number; history: Array<{ Date: string; Actual: number }>; forecast: Array<Record<string, number | string>>; metrics: Record<string, number>; components: Array<{ imf: string; channelZh: string; channelEn: string; centerFrequency: number; latestForecast: number }> };
+type InstrumentProduct = { id:string; benchmark:string; exchange:string; kind:"future"|"option"; code:string; name:string; size:number; settlement:string; url:string; contracts:number; coveredBarrels:number; roundingError:number; verification:string };
+type InstrumentResponse = { asOf:string; benchmark:string; products:InstrumentProduct[]; broker:{connected:boolean;name:string;message:string}; executionEnabled:boolean; disclaimer:string };
 
 const driverNamesEn: Record<string, string> = {
   "OPEC+产量纪律": "OPEC+ production discipline",
@@ -493,34 +495,41 @@ function Decision({
   lang: Lang;
   t: typeof copy.zh | typeof copy.en;
 }) {
+  const today = new Date().toISOString().slice(0,10);
   const [frequency, setFrequency] = useState<Frequency>("daily");
+  const [settings, setSettings] = useState({ target:"EIA-BRENT", horizon:30, training:60, imf:5, window:120, maxLag:3, alpha:.1, estimationStart:"2018-11-07", eventStart:"2020-01-01", eventEnd:today });
+  const [available, setAvailable] = useState<DataSeries[]>([]);
+  const [factors, setFactors] = useState<Set<string>>(new Set());
+  const [advanced, setAdvanced] = useState(false);
+  const [runVersion, setRunVersion] = useState(0);
   const [forecast, setForecast] = useState<PriceRow[]>([]);
   const [forecastResult, setForecastResult] = useState<ForecastResult | null>(null);
   const [impact, setImpact] = useState<NetImpactResult | null>(null);
   const [risk, setRisk] = useState<RiskResult | null>(null);
+  const [instruments, setInstruments] = useState<InstrumentResponse | null>(null);
   const [wti, setWti] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  useEffect(()=>{ void fetchCatalog().then((items)=>{const base=items as unknown as DataSeries[];const saved=readLocalRecords().filter((r)=>r.kind==="series").map((record)=>({id:record.id,name:String(record.payload.name||record.label),nameEn:String(record.payload.nameEn||record.label),category:String(record.payload.category||"Saved variable"),source:String(record.payload.source||"Saved variable"),unit:String(record.payload.unit||""),frequency:String(record.payload.frequency||""),updated:record.savedAt.slice(0,10),color:String(record.payload.color||"#587a9a")}));const rows=[...saved,...base.filter((item)=>!saved.some((row)=>row.id===item.id))];setAvailable(rows);setFactors(new Set(rows.filter((item)=>["FRED-PETINV","FRED-DTWEXBGS","FRED-DGS10","FRED-INDPRO","FRED-T10YIE","FRED-VIXCLS","FRED-HENRYHUB"].includes(item.id)).map((item)=>item.id)));}).catch(()=>{});},[]);
   useEffect(() => {
-    let active = true;
-    setLoading(true); setError("");
+    let active = true; setLoading(true); setError("");
+    const records=readLocalRecords().filter((record)=>record.kind==="series"&&factors.has(record.id)&&Array.isArray(record.payload.points));
+    const customSeries=records.map((record)=>({id:record.id,nameZh:String(record.payload.name||record.label),nameEn:String(record.payload.nameEn||record.label),points:record.payload.points}));
+    const benchmark=settings.target.includes("WTI")?"WTI":"Brent";
     void Promise.all([
-      requestLiveAnalysis<ForecastResult>("/api/models/forecast", { horizon: frequency === "daily" ? 30 : 12 }),
-      requestLiveAnalysis<NetImpactResult>("/api/models/net-impact", {}),
-      requestLiveAnalysis<RiskResult>("/api/models/risk", {}),
+      requestLiveAnalysis<ForecastResult>("/api/models/forecast", { target:settings.target,horizon:frequency==="daily"?settings.horizon:Math.max(3,Math.round(settings.horizon/2)),frequency,training:settings.training,imf:settings.imf }),
+      requestLiveAnalysis<NetImpactResult>("/api/models/net-impact", { target:settings.target,imf:settings.imf,window:settings.window,maxLag:settings.maxLag,alpha:settings.alpha,estimationStart:settings.estimationStart,eventStart:settings.eventStart,eventEnd:settings.eventEnd,factors:[...factors],customSeries }),
+      requestLiveAnalysis<RiskResult>("/api/models/risk", { target:settings.target }),
       fetchSeries("FRED-DCOILWTICO", frequency),
-    ]).then(([forecastPayload, impactPayload, riskPayload, wtiPayload]) => {
+      fetchInstruments({ benchmark,volume:300000,coverage:60,futuresShare:70 }) as Promise<InstrumentResponse>,
+    ]).then(([forecastPayload, impactPayload, riskPayload, wtiPayload, instrumentPayload]) => {
       if (!active || !forecastPayload || !impactPayload || !riskPayload) return;
-      setForecastResult(forecastPayload); setImpact(impactPayload); setRisk(riskPayload);
-      setForecast([
-        ...forecastPayload.history.map((row) => ({ date: row.Date, actual: row.Actual })),
-        ...forecastPayload.forecast.map((row) => ({ date: String(row.Date), forecast: Number(row.PointForecast), lo50: Number(row.Lower50), hi50: Number(row.Upper50), lo80: Number(row.Lower80), hi80: Number(row.Upper80), lo95: Number(row.Lower95), hi95: Number(row.Upper95) })),
-      ]);
-      setWti(wtiPayload.points.at(-1)?.value ?? null);
-    }).catch((reason) => { if (active) setError(reason instanceof Error ? reason.message : String(reason)); })
-      .finally(() => { if (active) setLoading(false); });
-    return () => { active = false; };
-  }, [frequency]);
+      setForecastResult(forecastPayload); setImpact(impactPayload); setRisk(riskPayload); setInstruments(instrumentPayload);
+      setForecast([...forecastPayload.history.map((row)=>({date:row.Date,actual:row.Actual})),...forecastPayload.forecast.map((row)=>({date:String(row.Date),forecast:Number(row.PointForecast),lo50:Number(row.Lower50),hi50:Number(row.Upper50),lo80:Number(row.Lower80),hi80:Number(row.Upper80),lo95:Number(row.Lower95),hi95:Number(row.Upper95)}))]);
+      setWti(wtiPayload.points.at(-1)?.value??null);
+    }).catch((reason)=>{if(active)setError(reason instanceof Error?reason.message:String(reason));}).finally(()=>{if(active)setLoading(false);});
+    return()=>{active=false;};
+  }, [frequency, runVersion]);
   if (loading) return <div className="page"><StatusPanel text={tx(lang, "正在从官方来源更新数据并运行模型…", "Updating official data and running verified models…")} /></div>;
   if (error || !forecastResult || !impact || !risk) return <div className="page"><StatusPanel error text={tx(lang, `无法生成可靠结果：${error}`, `Verified results are unavailable: ${error}`)} /></div>;
   const latest = forecastResult.latestPrice;
@@ -563,6 +572,9 @@ function Decision({
         <span>{tx(lang, "04 风险预警", "04 Risk alert")}</span>
         <span>{tx(lang, "05 行动方案", "05 Action plan")}</span>
       </div>
+      <Card title={tx(lang,"高级设置","Advanced settings")} desc={tx(lang,"调整时间范围、模型窗口和参与计算的变量；在数据中心保存的新序列会自动出现在这里。","Adjust time ranges, model windows and variables. Series saved in Data workspace appear here automatically.")} action={<button className="soft-button" onClick={()=>setAdvanced((value)=>!value)}><Settings2/>{advanced?tx(lang,"收起","Collapse"):tx(lang,"展开","Open")}</button>}>
+        {advanced&&<div className="decision-settings"><div className="inline-fields"><label className="field"><span>{tx(lang,"目标油价","Target price")}</span><div><select value={settings.target} onChange={(e)=>setSettings((s)=>({...s,target:e.target.value}))}><option value="EIA-BRENT">Brent</option><option value="FRED-DCOILWTICO">WTI</option></select></div></label><Field label={tx(lang,"预测长度","Forecast horizon")} value={settings.horizon} suffix={tx(lang,"期","periods")} min={5} max={120} onChange={(horizon)=>setSettings((s)=>({...s,horizon}))}/><Field label={tx(lang,"训练窗口","Training window")} value={settings.training} suffix={tx(lang,"月","months")} min={24} max={180} onChange={(training)=>setSettings((s)=>({...s,training}))}/><Field label={tx(lang,"分量数量","Components")} value={settings.imf} suffix="IMF" min={3} max={8} onChange={(imf)=>setSettings((s)=>({...s,imf}))}/><Field label={tx(lang,"滚动窗口","Rolling window")} value={settings.window} suffix={tx(lang,"交易日","days")} min={48} max={500} onChange={(window)=>setSettings((s)=>({...s,window}))}/><Field label={tx(lang,"最大滞后","Maximum lag")} value={settings.maxLag} suffix={tx(lang,"阶","lags")} min={1} max={6} onChange={(maxLag)=>setSettings((s)=>({...s,maxLag}))}/></div><div className="inline-fields"><DateField lang={lang} label={tx(lang,"估计期开始","Estimation start")} value={settings.estimationStart} onChange={(estimationStart)=>setSettings((s)=>({...s,estimationStart}))}/><DateField lang={lang} label={tx(lang,"事件期开始","Event start")} value={settings.eventStart} onChange={(eventStart)=>setSettings((s)=>({...s,eventStart}))}/><DateField lang={lang} label={tx(lang,"事件期结束","Event end")} value={settings.eventEnd} onChange={(eventEnd)=>setSettings((s)=>({...s,eventEnd}))}/></div><div className="factor-head"><b>{tx(lang,`考虑变量（${factors.size}）`,`Included variables (${factors.size})`)}</b><div><button onClick={()=>setFactors(new Set(available.filter((item)=>item.id!==settings.target).map((item)=>item.id)))}>{tx(lang,"全选","Select all")}</button><button onClick={()=>setFactors(new Set())}>{tx(lang,"清空","Clear")}</button></div></div><div className="factor-grid compact-factors">{available.filter((item)=>item.id!==settings.target).map((item)=><label key={item.id} className={factors.has(item.id)?"active":""}><input type="checkbox" checked={factors.has(item.id)} onChange={()=>setFactors((current)=>{const next=new Set(current);next.has(item.id)?next.delete(item.id):next.add(item.id);return next;})}/><span><b>{seriesText(item,lang).name}</b><small>{item.source} · {item.id}</small></span></label>)}</div><button className="primary compact" onClick={()=>setRunVersion((value)=>value+1)}>{tx(lang,"按以上设置重新计算","Rerun with these settings")}</button></div>}
+      </Card>
       <Card
         title={t.drivers}
         desc={tx(lang, "净影响表示该因素与当前油价变动的方向和估计幅度，不代表单一因果关系。", "Net impact estimates direction and magnitude; it does not claim a single causal relationship.")}
@@ -608,7 +620,7 @@ function Decision({
         </Card>
         <ScaleCard lang={lang} components={impact.components} />
       </div>
-      <HedgeCalculator lang={lang} market={latest} suggestedRatio={suggestedRatio} />
+      <HedgeCalculator lang={lang} market={latest} suggestedRatio={suggestedRatio} forecast={forecastResult} instruments={instruments} />
       <Card title={t.advice} className="advice">
         <div className="advice-grid">
           <Advice
@@ -875,44 +887,50 @@ type Hedge = {
   budget: number;
   ratio: number;
   futures: number;
-  basis: number;
+  purchaseBasis: number;
+  budgetBasis: number;
   fx: number;
+  budgetFx: number;
   margin: number;
   finance: number;
   contract: number;
   fee: number;
+  premium: number;
+  strike: number;
   horizon: number;
 };
-function HedgeCalculator({ lang, market, suggestedRatio }: { lang: Lang; market: number; suggestedRatio: number }) {
+function HedgeCalculator({ lang, market, suggestedRatio, forecast, instruments }: { lang: Lang; market: number; suggestedRatio: number; forecast: ForecastResult; instruments: InstrumentResponse | null }) {
   const [v, setV] = useState<Hedge>({
     volume: 300000,
     budget: market,
     ratio: suggestedRatio,
     futures: 70,
-    basis: 1.2,
+    purchaseBasis: 1.2,
+    budgetBasis: 1.2,
     fx: 7.18,
+    budgetFx: 7.18,
     margin: 12,
     finance: 3.4,
     contract: 1000,
     fee: 0.035,
+    premium: 2.1,
+    strike: market * 1.03,
     horizon: 90,
   });
   const set = (k: keyof Hedge, n: number) => setV((s) => ({ ...s, [k]: n }));
-  const unhedged = v.volume * market * v.fx;
-  const protectedBarrels = (v.volume * v.ratio) / 100;
-  const futuresBarrels = protectedBarrels * v.futures / 100;
-  const futuresGain =
-    futuresBarrels *
-    (market - v.budget - v.basis) *
-    v.fx;
-  const finance =
-    ((futuresBarrels * v.budget * v.fx * v.margin) / 100) *
-    (v.finance / 100) *
-    (v.horizon / 365);
-  const fees = (futuresBarrels / v.contract) * v.fee * v.contract * v.fx;
-  const hedged = unhedged - futuresGain + finance + fees;
-  const budget = v.volume * v.budget * v.fx;
-  const marginReq = (futuresBarrels * v.budget * v.fx * v.margin) / 100;
+  const endings=forecast.forecast; const pick=(key:string,fallback:number)=>Number(endings.at(-1)?.[key]??fallback);
+  const scenarioPrices=[{scenario:tx(lang,"95%下界","95% lower"),price:pick("Lower95",market*.8)},{scenario:tx(lang,"80%下界","80% lower"),price:pick("Lower80",market*.9)},{scenario:tx(lang,"中位路径","Median path"),price:pick("PointForecast",market)},{scenario:tx(lang,"80%上界","80% upper"),price:pick("Upper80",market*1.1)},{scenario:tx(lang,"95%上界","95% upper"),price:pick("Upper95",market*1.2)}];
+  const calculate=(price:number,coverage=v.ratio,futuresShare=v.futures)=>{const protectedBarrels=v.volume*coverage/100;const targetFutures=protectedBarrels*futuresShare/100;const contracts=Math.round(targetFutures/Math.max(v.contract,1));const futuresBarrels=contracts*v.contract;const optionBarrels=Math.max(0,protectedBarrels-futuresBarrels);const physical=v.volume*(price+v.purchaseBasis)*v.fx;const futuresPnl=futuresBarrels*(price-v.budget)*v.fx;const optionPnl=optionBarrels*Math.max(price-v.strike,0)*v.fx;const premium=optionBarrels*v.premium*v.budgetFx;const marginReq=futuresBarrels*v.budget*v.budgetFx*v.margin/100;const funding=marginReq*v.finance/100*v.horizon/365;const fees=(futuresBarrels+optionBarrels)*v.fee*v.budgetFx*2;const hedged=physical-futuresPnl-optionPnl+premium+funding+fees;return{physical,hedged,saving:physical-hedged,marginReq,funding,fees,futuresBarrels,optionBarrels,contracts};};
+  const scenarioRows=scenarioPrices.map((row)=>({...row,...calculate(row.price),unhedged:calculate(row.price).physical}));
+  const base=scenarioRows[2]; const budget=v.volume*(v.budget+v.budgetBasis)*v.budgetFx; const delta=base.physical-base.hedged;
+  const planDefinitions=[
+    {id:"lock",name:tx(lang,"预算锁定型","Budget lock"),desc:tx(lang,"期货为主，优先压缩上行成本波动；需要准备保证金。","Futures-led plan prioritizing upper-cost stability; margin liquidity is required."),coverage:Math.min(90,v.ratio+10),futures:100},
+    {id:"balanced",name:tx(lang,"均衡套保型","Balanced hedge"),desc:tx(lang,"期货与看涨期权组合，兼顾锁价与价格下跌时的参与空间。","Mixes futures and calls to balance price certainty with downside participation."),coverage:v.ratio,futures:70},
+    {id:"cap",name:tx(lang,"期权封顶型","Option cost cap"),desc:tx(lang,"使用看涨期权限定极端上涨成本，不产生期货追加保证金，但需支付权利金。","Uses calls to cap extreme upside cost without futures variation margin, at the cost of premium."),coverage:Math.max(35,v.ratio-10),futures:0},
+    {id:"staged",name:tx(lang,"分批执行型","Staged execution"),desc:tx(lang,"先覆盖一半风险敞口，其余在风险阈值或价格区间被触发后再分批增加。","Covers half initially and adds tranches only when risk or price-band triggers are reached."),coverage:Math.max(30,Math.round(v.ratio*.65)),futures:50},
+  ];
+  const plans=planDefinitions.map((plan)=>{const lower=calculate(scenarioPrices[0].price,plan.coverage,plan.futures),mid=calculate(scenarioPrices[2].price,plan.coverage,plan.futures),upper=calculate(scenarioPrices[4].price,plan.coverage,plan.futures);return{...plan,lower,mid,upper};});
+  const selectedProducts=instruments?.products||[];
   return (
     <Card
       title={tx(lang, "采购成本预警测算", "Procurement cost stress test")}
@@ -944,10 +962,18 @@ function HedgeCalculator({ lang, market, suggestedRatio }: { lang: Lang; market:
           onChange={(n) => set("futures", n)}
         />
         <Field
-          label={tx(lang, "预计基差", "Expected basis")}
-          value={v.basis}
+          label={tx(lang, "预计采购基差", "Expected purchase basis")}
+          value={v.purchaseBasis}
           suffix={tx(lang, "美元/桶", "USD/bbl")}
-          onChange={(n) => set("basis", n)}
+          step={.1}
+          onChange={(n) => set("purchaseBasis", n)}
+        />
+        <Field
+          label={tx(lang, "预算基差", "Budget basis")}
+          value={v.budgetBasis}
+          suffix={tx(lang, "美元/桶", "USD/bbl")}
+          step={.1}
+          onChange={(n) => set("budgetBasis", n)}
         />
         <Field
           label={tx(lang, "美元兑人民币", "USD/CNY")}
@@ -956,6 +982,7 @@ function HedgeCalculator({ lang, market, suggestedRatio }: { lang: Lang; market:
           step={0.01}
           onChange={(n) => set("fx", n)}
         />
+        <Field label={tx(lang,"预算汇率","Budget FX rate")} value={v.budgetFx} suffix="CNY" step={.01} onChange={(n)=>set("budgetFx",n)}/>
         <Field
           label={tx(lang, "保证金比例", "Margin rate")}
           value={v.margin}
@@ -982,6 +1009,8 @@ function HedgeCalculator({ lang, market, suggestedRatio }: { lang: Lang; market:
           step={0.005}
           onChange={(n) => set("fee", n)}
         />
+        <Field label={tx(lang,"期权权利金","Option premium")} value={v.premium} suffix={tx(lang,"美元/桶","USD/bbl")} step={.1} min={0} onChange={(n)=>set("premium",n)}/>
+        <Field label={tx(lang,"看涨期权执行价","Call strike")} value={v.strike} suffix={tx(lang,"美元/桶","USD/bbl")} step={.25} min={0} onChange={(n)=>set("strike",n)}/>
         <Field
           label={tx(lang, "方案期限", "Plan horizon")}
           value={v.horizon}
@@ -992,24 +1021,33 @@ function HedgeCalculator({ lang, market, suggestedRatio }: { lang: Lang; market:
       <div className="result-grid">
         <Kpi
           label={tx(lang, "未套保成本", "Unhedged cost")}
-          value={tx(lang, `${(unhedged / 1e6).toFixed(3)} 百万元`, `RMB ${(unhedged / 1e6).toFixed(3)}m`)}
+          value={tx(lang, `${(base.physical / 1e6).toFixed(3)} 百万元`, `RMB ${(base.physical / 1e6).toFixed(3)}m`)}
+          delta={tx(lang,"模型中位价格与采购基差","Median model price plus purchase basis")}
         />
         <Kpi
           label={tx(lang, "套保后净成本", "Net hedged cost")}
-          value={tx(lang, `${(hedged / 1e6).toFixed(3)} 百万元`, `RMB ${(hedged / 1e6).toFixed(3)}m`)}
-          delta={tx(lang, `节省 ${((unhedged - hedged) / 1e6).toFixed(3)} 百万元`, `Saving RMB ${((unhedged - hedged) / 1e6).toFixed(3)}m`)}
+          value={tx(lang, `${(base.hedged / 1e6).toFixed(3)} 百万元`, `RMB ${(base.hedged / 1e6).toFixed(3)}m`)}
+          delta={delta>=0?tx(lang,`相对未套保节省 ${(delta/1e6).toFixed(3)} 百万元`,`Saving vs unhedged RMB ${(delta/1e6).toFixed(3)}m`):tx(lang,`保险与机会成本 ${(-delta/1e6).toFixed(3)} 百万元`,`Insurance/opportunity cost RMB ${(-delta/1e6).toFixed(3)}m`)}
         />
         <Kpi
           label={tx(lang, "相对预算", "Versus budget")}
-          value={tx(lang, `${((hedged - budget) / 1e6).toFixed(3)} 百万元`, `RMB ${((hedged - budget) / 1e6).toFixed(3)}m`)}
-          tone={hedged > budget ? "warm" : ""}
+          value={tx(lang, `${((base.hedged-budget)/1e6).toFixed(3)} 百万元`, `RMB ${((base.hedged-budget)/1e6).toFixed(3)}m`)}
+          tone={base.hedged>budget?"warm":""}
         />
         <Kpi
           label={tx(lang, "保证金需求", "Margin requirement")}
-          value={tx(lang, `${(marginReq / 1e6).toFixed(3)} 百万元`, `RMB ${(marginReq / 1e6).toFixed(3)}m`)}
-          delta={tx(lang, `融资成本 ${(finance / 1e4).toFixed(3)} 万元`, `Funding cost RMB ${(finance / 1e3).toFixed(3)}k`)}
+          value={tx(lang, `${(base.marginReq/1e6).toFixed(3)} 百万元`, `RMB ${(base.marginReq/1e6).toFixed(3)}m`)}
+          delta={tx(lang, `融资 ${(base.funding/1e4).toFixed(3)} 万元 · 双边费用 ${(base.fees/1e4).toFixed(3)} 万元`, `Funding RMB ${(base.funding/1e3).toFixed(3)}k · round-trip fees RMB ${(base.fees/1e3).toFixed(3)}k`)}
         />
       </div>
+      <div className="formula-note"><b>{tx(lang,"口径已校正","Corrected accounting")}</b><span>{tx(lang,"现货成本 =（基准价格 + 采购基差）× 汇率；期货盈亏只比较结算价与入场价。基差不再被错误地从期货盈亏中重复扣除。","Physical cost = (benchmark + purchase basis) × FX. Futures P&L compares settlement with entry price only; basis is no longer double-counted in futures P&L.")}</span></div>
+      <h3 className="result-title">{tx(lang,"不同价格情景下的总采购成本","Total procurement cost across price scenarios")}</h3>
+      <ChartFrame label={tx(lang,"缩放查看未套保与套保成本","Zoom to compare unhedged and hedged cost")}><div className="chart medium"><ResponsiveContainer><ComposedChart data={scenarioRows}><CartesianGrid vertical={false}/><XAxis dataKey="scenario"/><YAxis tickFormatter={(value)=>`${(Number(value)/1e6).toFixed(3)}m`}/><Tooltip formatter={(value)=>tx(lang,`${(Number(value)/1e6).toFixed(3)} 百万元`,`RMB ${(Number(value)/1e6).toFixed(3)}m`)}/><Legend/><Bar dataKey="unhedged" name={tx(lang,"未套保成本","Unhedged cost")} fill="#7d8792" radius={[8,8,0,0]}/><Bar dataKey="hedged" name={tx(lang,"套保后成本","Hedged cost")} fill="#5f7895" radius={[8,8,0,0]}/><Line dataKey="saving" name={tx(lang,"相对成本改善","Cost improvement")} stroke="#c47d59" strokeWidth={2.4}/></ComposedChart></ResponsiveContainer></div></ChartFrame>
+      <h3 className="result-title">{tx(lang,"四套可选组合","Four portfolio alternatives")}</h3>
+      <div className="portfolio-grid">{plans.map((plan)=><article key={plan.id}><div><span>{plan.name}</span><b>{plan.coverage.toFixed(3)}% / {plan.futures.toFixed(3)}%</b></div><p>{plan.desc}</p><dl><div><dt>{tx(lang,"95%上界改善","95% upper improvement")}</dt><dd className={plan.upper.saving>=0?"positive":"negative"}>{(plan.upper.saving/1e6).toFixed(3)}m</dd></div><div><dt>{tx(lang,"中位情景","Median scenario")}</dt><dd>{(plan.mid.saving/1e6).toFixed(3)}m</dd></div><div><dt>{tx(lang,"95%下界机会成本","95% lower opportunity cost")}</dt><dd>{(Math.max(0,-plan.lower.saving)/1e6).toFixed(3)}m</dd></div><div><dt>{tx(lang,"期货张数","Futures contracts")}</dt><dd>{plan.mid.contracts}</dd></div></dl></article>)}</div>
+      <h3 className="result-title">{tx(lang,"匹配到的真实交易所产品","Matched exchange-listed products")}</h3>
+      <div className="product-grid">{selectedProducts.map((product)=><a href={product.url} target="_blank" rel="noreferrer" key={product.id}><div><span>{product.exchange}</span><b>{product.code}</b></div><h4>{product.name}</h4><p>{product.kind==="future"?tx(lang,"期货","Future"):tx(lang,"期权","Option")} · {product.size} bbl · {product.settlement}</p><dl><div><dt>{tx(lang,"参考张数","Indicative contracts")}</dt><dd>{product.contracts}</dd></div><div><dt>{tx(lang,"覆盖桶数","Covered barrels")}</dt><dd>{product.coveredBarrels.toLocaleString()}</dd></div><div><dt>{tx(lang,"取整偏差","Rounding difference")}</dt><dd>{product.roundingError.toFixed(3)}</dd></div></dl></a>)}</div>
+      <div className="broker-note"><ShieldCheck/><div><b>{instruments?.broker.connected?tx(lang,"经纪商合约发现已配置","Broker contract discovery configured"):tx(lang,"当前为交易所产品匹配，不是下单接口","Exchange product matching, not an order interface")}</b><p>{tx(lang,"产品代码和合约规模来自交易所规格页；具体到期月份、实时买卖价、权利金与可成交性必须在已授权经纪商会话中复核。页面只展示模型情景损益，不承诺收益，也不会提交订单。","Product codes and sizes come from exchange specifications. Expiry, live bid/ask, premium and tradability require an authenticated broker session. Results are model scenarios, not promised returns, and no order is submitted.")}</p></div></div>
     </Card>
   );
 }
@@ -1486,10 +1524,8 @@ function DataLab({ lang }: { lang: Lang }) {
   useEffect(() => {
     if (q.trim().length < 2) { setDiscovery("idle"); setDiscoveredIds(new Set()); return; }
     const timer = window.setTimeout(() => {
-      const aliases:Record<string,string>={"石油":"oil","原油":"crude oil","库存":"inventory","美元":"dollar","利率":"interest rate","产量":"production","天然气":"natural gas","汽油":"gasoline","通胀":"inflation","就业":"employment","黄金":"gold"};
-      const remoteQuery=Object.entries(aliases).reduce((value,[zh,en])=>value.replaceAll(zh,en),q.trim());
       setDiscovery("searching");
-      void fetchCatalog(remoteQuery).then((items) => {
+      void fetchCatalog(q.trim()).then((items) => {
         const discovered = items as unknown as DataSeries[];
         setDiscoveredIds(new Set(discovered.map((item)=>item.id)));
         setLiveCatalog((current) => [...current, ...discovered.filter((item) => !current.some((existing) => existing.id === item.id))]);
@@ -1546,7 +1582,7 @@ function DataLab({ lang }: { lang: Lang }) {
       id: selected,
       kind: "series",
       label: seriesText(item, lang).name,
-      payload: { source: item.source, unit: item.unit, frequency: item.frequency, name: item.name, nameEn: item.nameEn || item.name, color: item.color, points: liveSeries },
+        payload: { source: item.source, category:item.category, unit: item.unit, frequency: item.frequency, name: item.name, nameEn: item.nameEn || item.name, color: item.color, points: liveSeries },
     });
   };
   const uploadFiles = async (files: FileList | null) => {
@@ -1597,7 +1633,7 @@ function DataLab({ lang }: { lang: Lang }) {
           placeholder={tx(lang, "输入 Brent、库存、美元、利率……", "Search Brent, inventories, dollar, rates…")}
         />
       </div>
-      {q.trim().length >= 2 && <div className="search-state">{discovery === "searching" ? tx(lang,"正在检索 FRED 官方目录…","Searching the official FRED directory…") : discovery === "error" ? tx(lang,"官方目录暂时没有响应，请稍后重试。","The official directory did not respond. Please retry shortly.") : discovery === "ready" ? tx(lang,`找到 ${found.length} 个可用序列；选中并保存后会出现在净影响分析中。`,`${found.length} available series found. Select and save one to use it in net-impact analysis.`) : ""}</div>}
+      {q.trim().length >= 2 && <div className="search-state">{discovery === "searching" ? tx(lang,"正在对 FRED 全文目录与 EIA 分层数据目录做模糊检索…","Fuzzy-searching the FRED full-text catalog and hierarchical EIA catalog…") : discovery === "error" ? tx(lang,"官方目录暂时没有响应，请稍后重试。","The official directories did not respond. Please retry shortly.") : discovery === "ready" ? tx(lang,`找到 ${found.length} 个可用序列；选中并保存后会出现在净影响分析和决策高级设置中。`,`${found.length} available series found. Save one to use it in net-impact analysis and Decision advanced settings.`) : ""}</div>}
       <div className="data-layout">
         <div className="series-list">
           {found.map((x) => (

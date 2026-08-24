@@ -21,3 +21,29 @@ test("number steppers and mode switching respond immediately", async ({ page }) 
   await page.getByRole("button", { name: "专业模式" }).click();
   await expect(page).toHaveURL(/\/professional$/);
 });
+
+test("decision accounting, advanced variables and multiple real-product plans render together", async ({ page }) => {
+  await page.route("**/api/**", async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname.endsWith("/health")) return route.fulfill({ json: { ok:true } });
+    if (url.pathname.endsWith("/catalog")) return route.fulfill({ json: { items: [{ id:"FRED-DGS10",name:"美国10年期国债收益率",nameEn:"US 10-Year Treasury Yield",source:"FRED",unit:"%",frequency:"Daily",updated:"2026-08-20",color:"#587a9a" }] } });
+    if (url.pathname.endsWith("/series")) return route.fulfill({ json: { updated:"2026-08-20",points:[{date:"2026-08-20",value:86.48}] } });
+    if (url.pathname.endsWith("/instruments")) return route.fulfill({ json: { asOf:"2026-08-24",benchmark:"Brent",broker:{connected:false,name:"IBKR",message:"not configured"},executionEnabled:false,disclaimer:"scenario only",products:[
+      {id:"ICE-B",benchmark:"Brent",exchange:"ICE Futures Europe",kind:"future",code:"B",name:"Brent Crude Futures",size:1000,settlement:"EFP delivery",url:"https://www.ice.com/products/219/Brent-Crude-Futures",contracts:126,coveredBarrels:126000,roundingError:0,verification:"Exchange product specification"},
+      {id:"CME-BZ",benchmark:"Brent",exchange:"NYMEX / CME Group",kind:"future",code:"BZ",name:"Brent Last Day Financial Futures",size:1000,settlement:"Financial",url:"https://www.cmegroup.com/",contracts:126,coveredBarrels:126000,roundingError:0,verification:"Exchange product specification"},
+      {id:"CME-BE",benchmark:"Brent",exchange:"NYMEX / CME Group",kind:"option",code:"BE",name:"Brent Crude options",size:1000,settlement:"Financial",url:"https://www.cmegroup.com/",contracts:54,coveredBarrels:54000,roundingError:0,verification:"Exchange product specification"},
+    ] } });
+    const body = route.request().postDataJSON() as { action:string };
+    if (body.action === "forecast") return route.fulfill({ json: { mode:"verified-live",method:"test",asOf:"2026-08-20",latestPrice:100,history:[{Date:"2026-08-20",Actual:100}],forecast:[{Date:"2026-09-20",PointForecast:100,Lower50:95,Upper50:105,Lower80:90,Upper80:110,Lower95:80,Upper95:120}],metrics:{},components:[] } });
+    if (body.action === "risk") return route.fulfill({ json: { mode:"verified-live",method:"test",latestDate:"2026-08-20",riskScore:60,alertThreshold:80,alert:false,history:[{date:"2026-08-20",score:60}] } });
+    return route.fulfill({ json: { mode:"verified-live",method:"test",asOf:"2026-08-20",observations:200,estimationWindow:{start:"2018-01-01",end:"2019-12-31"},eventWindow:{start:"2020-01-01",end:"2026-08-20"},rSquared:.5,drivers:[{id:"FRED-DGS10",nameZh:"美国10年期国债收益率",nameEn:"US 10-Year Treasury Yield",impact:.2,coefficient:.1}],granger:[],scaleGranger:[],selectedScales:[],components:[{imf:"IMF1",channelZh:"短周期",channelEn:"Short cycle",centerFrequency:.2,volatilityShare:100,points:[{date:"2026-08-20",value:100}]}],hht:[],scaleEffect:{selectedScale:"IMF1",minimumDate:"2026-01-01",minimumValue:80,maximumDate:"2026-08-20",maximumValue:100,tradingDayInterval:20,calendarDayInterval:30,netEffect:20,originalResponse:20,shareInOriginalResponse:100},fevd:[],fevdOwnShare:100,fevdHorizon:20,varLag:1,rolling:[],rollingFevd:[],breakTest:{fixed:{breakDate:"2020-01-01",fStatistic:1,pValue:.1,preSlope:0,postSlope:0,slopeChange:0,levelShift:0,significant:false},optimal:{candidateCount:1,bestDate:"2020-01-01",rssImprovementPercent:1,profile:[]}},sources:[] } });
+  });
+  await page.goto("http://localhost:4174/decision");
+  await expect(page.getByRole("heading", { name: "采购成本预警测算" })).toBeVisible();
+  await expect(page.getByText("口径已校正")).toBeVisible();
+  await expect(page.getByText(/保险与机会成本/)).toBeVisible();
+  await expect(page.locator(".portfolio-grid article")).toHaveCount(4);
+  await expect(page.locator(".product-grid>a")).toHaveCount(3);
+  await page.getByRole("button", { name: /展开/ }).click();
+  await expect(page.getByText("美国10年期国债收益率").first()).toBeVisible();
+});

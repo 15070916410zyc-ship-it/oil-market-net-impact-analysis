@@ -53,6 +53,13 @@ export async function fetchSeries(id: string, frequency: "daily" | "monthly") {
   return response.json() as Promise<{ updated: string; points: Array<{ date: string; value: number }> }>;
 }
 
+export async function fetchInstruments(params: Record<string, string | number>) {
+  const query = new URLSearchParams(Object.entries(params).map(([key, value]) => [key, String(value)]));
+  const response = await fetch(apiUrl(`/api/instruments?${query}`), { headers: { accept: "application/json" } });
+  if (!response.ok) throw new Error(`Instrument API returned ${response.status}`);
+  return response.json();
+}
+
 export async function requestLiveAnalysis<T>(path: string, body: unknown): Promise<T | null> {
   const modelAction = path.match(/^\/api\/models\/([^/]+)$/)?.[1];
   const endpoint = modelAction ? "/api/models" : path;
