@@ -7,10 +7,15 @@ const aliases = {
   "电力":"electricity", "煤炭":"coal", "进口":"imports", "出口":"exports", "美元":"dollar", "汇率":"exchange rate",
   "利率":"interest rate yield", "通胀":"inflation cpi", "就业":"employment payroll unemployment", "黄金":"gold", "期货":"futures",
 };
+const commonMisspellings = {
+  brnt:"brent", prce:"price", pric:"price", invntry:"inventory", inventry:"inventory",
+  prodction:"production", consumtion:"consumption", interst:"interest", infltion:"inflation",
+  natral:"natural", gass:"gas", petrolium:"petroleum", unemployement:"unemployment",
+};
 const normalize = (value) => {
   let text = String(value || "").trim().toLowerCase();
   for (const [zh,en] of Object.entries(aliases)) text = text.replaceAll(zh,` ${en} `);
-  return text.replace(/[^a-z0-9\u4e00-\u9fff]+/g," ").replace(/\b(inventories|stocks)\b/g,"inventory").replace(/\bprices\b/g,"price").replace(/\brates\b/g,"rate").trim();
+  return text.replace(/[^a-z0-9\u4e00-\u9fff]+/g," ").replace(/\b(inventories|stocks)\b/g,"inventory").replace(/\bprices\b/g,"price").replace(/\brates\b/g,"rate").trim().split(/\s+/).map((token)=>commonMisspellings[token]||token).join(" ");
 };
 const words = (value) => normalize(value).split(/\s+/).filter(Boolean);
 const trigrams = (value) => { const clean=`  ${normalize(value)} `; return new Set(Array.from({length:Math.max(0,clean.length-2)},(_,i)=>clean.slice(i,i+3))); };

@@ -42,7 +42,7 @@ test("decision accounting, advanced variables and multiple real-product plans re
   await expect(page.getByRole("heading", { name: "采购成本预警测算" })).toBeVisible();
   await expect(page.getByText("口径已校正")).toBeVisible();
   await expect(page.getByText(/保险与机会成本/)).toBeVisible();
-  await expect(page.locator(".portfolio-grid article")).toHaveCount(4);
+  await expect(page.locator(".portfolio-grid article")).toHaveCount(6);
   await expect(page.locator(".product-grid>a")).toHaveCount(3);
   await page.getByRole("button", { name: /展开/ }).click();
   await expect(page.getByText("美国10年期国债收益率").first()).toBeVisible();
