@@ -26,10 +26,11 @@ test("decision accounting, advanced variables and multiple real-product plans re
   await page.route("**/api/**", async (route) => {
     const url = new URL(route.request().url());
     if (url.pathname.endsWith("/health")) return route.fulfill({ json: { ok:true } });
-    if (url.pathname.endsWith("/catalog")) return route.fulfill({ json: { items: [{ id:"FRED-DGS10",name:"美国10年期国债收益率",nameEn:"US 10-Year Treasury Yield",source:"FRED",unit:"%",frequency:"Daily",updated:"2026-08-20",color:"#587a9a" }] } });
+    if (url.pathname.endsWith("/catalog")) return route.fulfill({ json: { items: [{ id:"GPRD",name:"地缘政治风险指数（传统日度 GPR）",nameEn:"Geopolitical Risk Index (traditional daily GPR)",source:"Caldara-Iacoviello GPR",unit:"指数",frequency:"日度",updated:"2026-08-17",color:"#c47d59" },{ id:"FRED-DGS10",name:"美国10年期国债收益率",nameEn:"US 10-Year Treasury Yield",source:"FRED",unit:"%",frequency:"Daily",updated:"2026-08-20",color:"#587a9a" }] } });
+    if (url.pathname.endsWith("/gprd")) return route.fulfill({ json: { updated:"2026-08-17",points:[{date:"2026-08-17",value:144.473}] } });
     if (url.pathname.endsWith("/series")) return route.fulfill({ json: { updated:"2026-08-20",points:[{date:"2026-08-20",value:86.48}] } });
     if (url.pathname.endsWith("/instruments")) return route.fulfill({ json: { asOf:"2026-08-24",benchmark:"Brent",broker:{connected:false,name:"IBKR",message:"not configured"},executionEnabled:false,disclaimer:"scenario only",products:[
-      {id:"ICE-B",benchmark:"Brent",exchange:"ICE Futures Europe",kind:"future",code:"B",name:"Brent Crude Futures",size:1000,settlement:"EFP delivery",url:"https://www.ice.com/products/219/Brent-Crude-Futures",contracts:126,coveredBarrels:126000,roundingError:0,verification:"Exchange product specification"},
+      {id:"ICE-B",benchmark:"Brent",exchange:"ICE Futures Europe",kind:"future",code:"B",name:"Brent Crude Futures",nameZh:"ICE 布伦特原油期货",size:1000,settlement:"EFP delivery",url:"https://www.ice.com/products/219/Brent-Crude-Futures",contracts:126,coveredBarrels:126000,roundingError:0,verification:"Exchange product specification",quote:{last:91,bid:90.99,ask:91.01,time:"12:00:00",date:"2026-08-24",name:"布伦特原油",provider:"Sina"}},
       {id:"CME-BZ",benchmark:"Brent",exchange:"NYMEX / CME Group",kind:"future",code:"BZ",name:"Brent Last Day Financial Futures",size:1000,settlement:"Financial",url:"https://www.cmegroup.com/",contracts:126,coveredBarrels:126000,roundingError:0,verification:"Exchange product specification"},
       {id:"CME-BE",benchmark:"Brent",exchange:"NYMEX / CME Group",kind:"option",code:"BE",name:"Brent Crude options",size:1000,settlement:"Financial",url:"https://www.cmegroup.com/",contracts:54,coveredBarrels:54000,roundingError:0,verification:"Exchange product specification"},
     ] } });
@@ -41,9 +42,30 @@ test("decision accounting, advanced variables and multiple real-product plans re
   await page.goto("http://localhost:4174/decision");
   await expect(page.getByRole("heading", { name: "采购成本预警测算" })).toBeVisible();
   await expect(page.getByText("口径已校正")).toBeVisible();
-  await expect(page.getByText(/保险与机会成本/)).toBeVisible();
-  await expect(page.locator(".portfolio-grid article")).toHaveCount(6);
-  await expect(page.locator(".product-grid>a")).toHaveCount(3);
+  await expect(page.getByText(/相对未套保节省|保险与机会成本/)).toBeVisible();
+  await expect(page.locator(".portfolio-grid>.portfolio-card")).toHaveCount(6);
+  await page.locator(".portfolio-card summary").first().click();
+  await expect(page.locator(".portfolio-card").first().getByText(/BUY \/ LONG|买入/).first()).toBeVisible();
+  await expect(page.locator(".portfolio-card").first().getByText(/Initial margin|初始保证金/).first()).toBeVisible();
+  await expect(page.locator(".product-grid")).toHaveCount(0);
   await page.getByRole("button", { name: /展开/ }).click();
   await expect(page.getByText("美国10年期国债收益率").first()).toBeVisible();
+});
+
+test("data center is independent and searches GPRD plus financial products", async ({ page }) => {
+  await page.route("**/api/**", async (route) => {
+    const url=new URL(route.request().url());
+    if(url.pathname.endsWith("/health"))return route.fulfill({json:{ok:true}});
+    if(url.pathname.endsWith("/catalog"))return route.fulfill({json:{items:[{id:"GPRD",name:"地缘政治风险指数（传统日度 GPR）",nameEn:"Geopolitical Risk Index (traditional daily GPR)",category:"地缘政治与事件风险",source:"Caldara-Iacoviello GPR",unit:"指数",frequency:"日度",updated:"2026-08-17",color:"#c47d59"},{id:"FRED-DGS10",name:"美国10年期国债收益率",nameEn:"US 10-Year Treasury Yield",category:"金融条件",source:"FRED",unit:"%",frequency:"Daily",updated:"2026-08-20",color:"#587a9a"}]}});
+    if(url.pathname.endsWith("/gprd"))return route.fulfill({json:{updated:"2026-08-17",points:[{date:"2026-08-16",value:120.123},{date:"2026-08-17",value:144.473}]}});
+    if(url.pathname.endsWith("/instruments"))return route.fulfill({json:{asOf:"2026-08-24",benchmark:"All",quoteMethod:"AKShare / Sina",broker:{connected:false,name:"IBKR",message:"not connected"},executionEnabled:false,disclaimer:"indicative",products:[{id:"CME-CL",benchmark:"WTI",exchange:"NYMEX / CME Group",kind:"future",code:"CL",name:"WTI Crude Oil futures",nameZh:"WTI 原油期货",size:1000,settlement:"Physical",url:"https://www.cmegroup.com/",contracts:1,coveredBarrels:1000,roundingError:0,verification:"official",quote:{last:85.2,bid:85.19,ask:85.21,time:"12:00:00",date:"2026-08-24",name:"纽约原油",provider:"Sina"}}]}});
+    return route.fulfill({json:{}});
+  });
+  await page.goto("http://localhost:4174/data");
+  await expect(page.getByRole("heading",{name:"变量因素查询"})).toBeVisible();
+  await page.getByPlaceholder(/Brent/).fill("GPRD");
+  await expect(page.getByText("地缘政治风险指数（传统日度 GPR）")).toBeVisible();
+  await page.getByRole("tab",{name:"金融产品查询"}).click();
+  await expect(page.getByText("WTI 原油期货")).toBeVisible();
+  await expect(page.getByText("85.200 USD")).toBeVisible();
 });

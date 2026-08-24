@@ -34,3 +34,7 @@ tmp/
 !outputs/tables/.gitkeep
 !outputs/models/.gitkeep
 .neon
+
+.vercel
+.env*
+web/test-results/

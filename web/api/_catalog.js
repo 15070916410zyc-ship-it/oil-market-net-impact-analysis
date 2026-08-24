@@ -1,6 +1,7 @@
 const row = (id, providerId, name, nameEn, category, unit, frequency, color) => ({ id, providerId, name, nameEn, category, source: "FRED / official source", unit, frequency, color });
 
 export const catalog = [
+  { id:"GPRD", providerId:"GPRD", name:"地缘政治风险指数（传统日度 GPR）", nameEn:"Geopolitical Risk Index (traditional daily GPR)", category:"地缘政治与事件风险", source:"Caldara-Iacoviello GPR", unit:"指数", frequency:"日度", color:"#c47d59", aliases:"GPR GPRD geopolitical risk 地缘政治风险 地缘风险" },
   row("EIA-BRENT", "DCOILBRENTEU", "Brent现货价格", "Brent spot price", "原油基准", "美元/桶", "日度", "#287b72"),
   row("FRED-DCOILWTICO", "DCOILWTICO", "WTI现货价格", "WTI spot price", "原油基准", "美元/桶", "日度", "#3f70a3"),
   row("FRED-PETINV", "A24STI", "美国石油与煤炭产品制造业库存", "US petroleum and coal products manufacturing inventories", "库存与炼化", "百万美元", "月度", "#6d75a6"),

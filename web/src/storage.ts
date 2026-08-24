@@ -48,7 +48,8 @@ export async function fetchCatalog(q = ""): Promise<Array<Record<string, string>
 
 export async function fetchSeries(id: string, frequency: "daily" | "monthly") {
   const params = new URLSearchParams({ id, frequency });
-  const response = await fetch(apiUrl(`/api/series?${params}`), { headers: { accept: "application/json" } });
+  const endpoint = id === "GPRD" ? `/api/gprd?${params}` : `/api/series?${params}`;
+  const response = await fetch(apiUrl(endpoint), { headers: { accept: "application/json" } });
   if (!response.ok) throw new Error(`Series API returned ${response.status}`);
   return response.json() as Promise<{ updated: string; points: Array<{ date: string; value: number }> }>;
 }

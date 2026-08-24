@@ -6,6 +6,7 @@ from datetime import date, timedelta
 from urllib.parse import urlparse, urlencode
 from urllib.request import urlopen
 import numpy as np
+import xlrd
 from scipy.stats import f as f_distribution
 from scipy.signal import hilbert
 from vmdpy import VMD
@@ -13,6 +14,7 @@ from vmdpy import VMD
 CHANNELS_ZH = ["投机与短期重定价", "产量政策", "库存调整", "供给扰动", "需求与长期趋势"]
 CHANNELS_EN = ["Speculation and short-term repricing", "Production policy", "Inventory adjustment", "Supply disruption", "Demand and long-run trend"]
 SERIES = {
+    "GPRD": ("GPRD", "地缘政治风险指数（传统日度 GPR）", "Geopolitical Risk Index (traditional daily GPR)"),
     "EIA-BRENT": ("DCOILBRENTEU", "Brent现货价格", "Brent spot price"),
     "FRED-DCOILWTICO": ("DCOILWTICO", "WTI现货价格", "WTI spot price"),
     "FRED-PETINV": ("A24STI", "美国石油与煤炭产品制造业库存", "US petroleum and coal products manufacturing inventories"),
@@ -34,6 +36,31 @@ SERIES = {
     "FRED-HYSPREAD": ("BAMLH0A0HYM2", "美国高收益债利差", "US high-yield credit spread"),
 }
 
+GPRD_URL = "https://www.matteoiacoviello.com/gpr_files/data_gpr_daily_recent.xls"
+_GPRD_CACHE = None
+
+def fetch_gprd(start="1985-01-01"):
+    global _GPRD_CACHE
+    if _GPRD_CACHE is None:
+        with urlopen(GPRD_URL, timeout=35) as response:
+            workbook = xlrd.open_workbook(file_contents=response.read())
+        sheet = workbook.sheet_by_index(0)
+        headers = [str(sheet.cell_value(0, column)).strip() for column in range(sheet.ncols)]
+        day_column, value_column = headers.index("DAY"), headers.index("GPRD")
+        loaded = []
+        for index in range(1, sheet.nrows):
+            try:
+                digits = str(int(sheet.cell_value(index, day_column)))
+                stamp = f"{digits[:4]}-{digits[4:6]}-{digits[6:8]}"
+                value = float(sheet.cell_value(index, value_column))
+            except (TypeError, ValueError):
+                continue
+            loaded.append((stamp, value))
+        _GPRD_CACHE = loaded
+    rows = [row for row in _GPRD_CACHE if row[0] >= start]
+    if not rows: raise ValueError("Official GPRD workbook contained no usable observations")
+    return rows
+
 def fetch_fred(provider_id, start="2000-01-01"):
     query = urlencode({"id": provider_id, "cosd": start})
     with urlopen(f"https://fred.stlouisfed.org/graph/fredgraph.csv?{query}", timeout=30) as response:
@@ -41,13 +68,14 @@ def fetch_fred(provider_id, start="2000-01-01"):
     return [(r[0], float(r[1])) for r in rows if len(r) > 1 and r[1] not in ("", ".")]
 
 def load_series(series_id, start="2000-01-01"):
+    if series_id == "GPRD": return fetch_gprd(start)
     if series_id in SERIES: provider_id = SERIES[series_id][0]
     elif re.fullmatch(r"FRED-[A-Z0-9_]+", series_id): provider_id = series_id[5:]
     else: raise ValueError(f"Unsupported official series: {series_id}")
     return fetch_fred(provider_id, start)
 
 def series_meta(series_id):
-    return SERIES.get(series_id, (series_id[5:], series_id[5:], series_id[5:]))
+    return SERIES.get(series_id, (series_id[5:] if series_id.startswith("FRED-") else series_id, series_id, series_id))
 
 def monthly(rows):
     result = {}
@@ -261,7 +289,7 @@ def net_impact(payload):
     valid = lambda sid: sid in SERIES or re.fullmatch(r"FRED-[A-Z0-9_]+",sid) or sid in custom_rows
     meta = lambda sid: custom_meta.get(sid,series_meta(sid))
     selected = [x for x in payload.get("factors", []) if valid(x) and x != target]
-    if not selected: selected = ["FRED-PETINV", "FRED-DTWEXBGS", "FRED-DGS10", "FRED-INDPRO", "FRED-T10YIE", "FRED-VIXCLS", "FRED-HENRYHUB"]
+    if not selected: selected = ["GPRD", "FRED-PETINV", "FRED-DTWEXBGS", "FRED-DGS10", "FRED-INDPRO", "FRED-T10YIE", "FRED-VIXCLS", "FRED-HENRYHUB"]
     selected = selected[:12]; estimation_start = str(payload.get("estimationStart") or payload.get("start") or "2018-11-07"); event_start = str(payload.get("eventStart") or "2020-01-01"); event_end = str(payload.get("eventEnd") or payload.get("end") or date.today()); max_lag = min(max(int(payload.get("maxLag", 3)), 1), 6); count = min(max(int(payload.get("imf", 5)), 3), 8)
     ids = [target]+selected
     def fetch(sid): return custom_rows[sid] if sid in custom_rows else load_series(sid,estimation_start)

@@ -54,8 +54,8 @@ import {
 import { checkApiHealth, fetchCatalog, fetchInstruments, fetchSeries, readLocalRecords, requestLiveAnalysis, saveLocalRecord } from "./storage";
 
 type Lang = "zh" | "en";
-type Mode = "landing" | "decision" | "professional";
-type ProTab = "impact" | "forecast" | "risk" | "data";
+type Mode = "landing" | "decision" | "professional" | "data";
+type ProTab = "impact" | "forecast" | "risk";
 const tx = (lang: Lang, zh: string, en: string) => (lang === "zh" ? zh : en);
 
 type DriverResult = { id: string; nameZh: string; nameEn: string; impact: number; coefficient: number };
@@ -65,8 +65,8 @@ type ScaleGrangerResult = GrangerResult & { imf: string };
 type NetImpactResult = { mode: string; method: string; asOf: string; observations: number; estimationWindow:{start:string;end:string}; eventWindow:{start:string;end:string}; rSquared: number; drivers: DriverResult[]; granger: GrangerResult[]; scaleGranger: ScaleGrangerResult[]; selectedScales: Array<{id:string;nameZh:string;nameEn:string;imf:string;pValue:number}>; components: ComponentResult[]; hht:Array<{date:string;frequency:number;period:number}>; scaleEffect:{selectedScale:string;minimumDate:string;minimumValue:number;maximumDate:string;maximumValue:number;tradingDayInterval:number;calendarDayInterval:number;netEffect:number;originalResponse:number;shareInOriginalResponse:number}; fevd: Array<{id:string;nameZh:string;nameEn:string;share:number;externalWeight:number;absoluteImpact:number}>; fevdOwnShare:number; fevdHorizon:number; varLag:number; rolling: Array<{ date: string; observed: number; fitted: number }>; rollingFevd:Array<{date:string;externalShare:number;ownShare:number;lag:number}>; breakTest:{fixed:{breakDate:string;fStatistic:number;pValue:number;preSlope:number;postSlope:number;slopeChange:number;levelShift:number;significant:boolean};optimal:{candidateCount:number;bestDate:string;rssImprovementPercent:number;profile:Array<{date:string;rss:number;improvementPercent:number}>}}; sources: Array<{ id: string; providerId: string; nameZh: string; nameEn: string }> };
 type RiskResult = { mode: string; method: string; latestDate: string; riskScore: number; alertThreshold: number; alert: boolean; history: Array<{ date: string; score: number }> };
 type ForecastResult = { mode: string; method: string; asOf: string; latestPrice: number; history: Array<{ Date: string; Actual: number }>; forecast: Array<Record<string, number | string>>; metrics: Record<string, number>; components: Array<{ imf: string; channelZh: string; channelEn: string; centerFrequency: number; latestForecast: number }> };
-type InstrumentProduct = { id:string; benchmark:string; exchange:string; kind:"future"|"option"; code:string; name:string; size:number; settlement:string; url:string; contracts:number; coveredBarrels:number; roundingError:number; verification:string };
-type InstrumentResponse = { asOf:string; benchmark:string; products:InstrumentProduct[]; broker:{connected:boolean;name:string;message:string}; executionEnabled:boolean; disclaimer:string };
+type InstrumentProduct = { id:string; benchmark:string; exchange:string; kind:"future"|"option"; code:string; name:string; nameZh?:string; size:number; currency?:string; settlement:string; source?:string; url:string; contracts:number; coveredBarrels:number; roundingError:number; verification:string; quote?:{last:number;bid:number|null;ask:number|null;time:string;date:string;name:string;provider:string}|null };
+type InstrumentResponse = { asOf:string; benchmark:string; products:InstrumentProduct[]; quoteWarning?:string|null; quoteMethod?:string; broker:{connected:boolean;name:string;message:string}; executionEnabled:boolean; disclaimer:string };
 
 const driverNamesEn: Record<string, string> = {
   "OPEC+产量纪律": "OPEC+ production discipline",
@@ -92,6 +92,7 @@ const seriesNamesEn: Record<string, string> = {
   "FRED-INDPRO": "US industrial production",
   "FRED-UNRATE": "US unemployment rate",
   "FRED-T10YIE": "US 10-year inflation expectations",
+  "GPRD": "Geopolitical Risk Index (traditional daily GPR)",
   "WB-GDP": "World economic growth",
   "IMF-CPI": "Global inflation indicator",
   "OECD-CLI": "OECD composite leading indicator",
@@ -153,6 +154,7 @@ const copy = {
 } as const;
 
 function routeFromPath(): Mode {
+  if (location.pathname.startsWith("/data")) return "data";
   if (location.pathname.startsWith("/professional")) return "professional";
   if (location.pathname.startsWith("/decision")) return "decision";
   return "landing";
@@ -230,6 +232,9 @@ function App() {
             >
               {t.professional}
             </button>
+            <button className={mode === "data" ? "active" : ""} onClick={() => navigate("data")}>
+              {t.source}
+            </button>
           </nav>
         )}
         <div className="utility">
@@ -253,6 +258,7 @@ function App() {
             <button onClick={() => navigate("professional")}>
               {t.professional}
             </button>
+            <button onClick={() => navigate("data")}>{t.source}</button>
             <button onClick={toggleLang}>中 / EN</button>
           </div>
         )}
@@ -265,10 +271,12 @@ function App() {
               t={t}
               onDecision={() => navigate("decision")}
               onProfessional={() => navigate("professional")}
+              onData={() => navigate("data")}
             />
           )}
           {mode === "decision" && <Decision lang={lang} t={t} />}
           {mode === "professional" && <Professional lang={lang} t={t} />}
+          {mode === "data" && <DataCenter lang={lang} />}
         </div>
       </main>
       <footer>
@@ -308,11 +316,13 @@ function Landing({
   t,
   onDecision,
   onProfessional,
+  onData,
 }: {
   lang: Lang;
   t: typeof copy.zh | typeof copy.en;
   onDecision: () => void;
   onProfessional: () => void;
+  onData: () => void;
 }) {
   const [quotes, setQuotes] = useState<{brent: number | null; brentMove: number | null; wti: number | null; wtiMove: number | null; updated: string}>({
     brent: null,
@@ -379,6 +389,10 @@ function Landing({
             {t.research}
             <ChevronRight size={17} />
           </button>
+          <button className="text-action" onClick={onData}>
+            {t.source}
+            <Database size={16} />
+          </button>
         </div>
         <div className="trust-row">
           <span>{tx(lang, "多源数据", "Multi-source data")}</span>
@@ -406,7 +420,7 @@ function Landing({
         </div>
         <div className="pulse-line">
           <span>{quotes.updated ? tx(lang, `官方数据更新至 ${quotes.updated}`, `Official data updated ${quotes.updated}`) : tx(lang, "正在同步官方市场数据；此处不显示替代曲线", "Syncing official market data; no substitute curve is displayed")}</span>
-          <div className="source-seal"><Database/><b>FRED · EIA</b><small>{tx(lang,"可追溯官方序列","Traceable official series")}</small></div>
+          <div className="source-seal"><Database/><b>FRED · EIA · GPRD</b><small>{tx(lang,"可追溯官方序列","Traceable official series")}</small></div>
         </div>
       </div>
     </section>
@@ -520,7 +534,7 @@ function Decision({
   const [wti, setWti] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  useEffect(()=>{ void fetchCatalog().then((items)=>{const base=items as unknown as DataSeries[];const saved=readLocalRecords().filter((r)=>r.kind==="series").map((record)=>({id:record.id,name:String(record.payload.name||record.label),nameEn:String(record.payload.nameEn||record.label),category:String(record.payload.category||"Saved variable"),source:String(record.payload.source||"Saved variable"),unit:String(record.payload.unit||""),frequency:String(record.payload.frequency||""),updated:record.savedAt.slice(0,10),color:String(record.payload.color||"#587a9a")}));const rows=[...saved,...base.filter((item)=>!saved.some((row)=>row.id===item.id))];setAvailable(rows);setFactors(new Set(rows.filter((item)=>["FRED-PETINV","FRED-DTWEXBGS","FRED-DGS10","FRED-INDPRO","FRED-T10YIE","FRED-VIXCLS","FRED-HENRYHUB"].includes(item.id)).map((item)=>item.id)));}).catch(()=>{});},[]);
+  useEffect(()=>{ void fetchCatalog().then((items)=>{const base=items as unknown as DataSeries[];const saved=readLocalRecords().filter((r)=>r.kind==="series").map((record)=>({id:record.id,name:String(record.payload.name||record.label),nameEn:String(record.payload.nameEn||record.label),category:String(record.payload.category||"Saved variable"),source:String(record.payload.source||"Saved variable"),unit:String(record.payload.unit||""),frequency:String(record.payload.frequency||""),updated:record.savedAt.slice(0,10),color:String(record.payload.color||"#587a9a")}));const rows=[...saved,...base.filter((item)=>!saved.some((row)=>row.id===item.id))];setAvailable(rows);setFactors(new Set(rows.filter((item)=>["GPRD","FRED-PETINV","FRED-DTWEXBGS","FRED-DGS10","FRED-INDPRO","FRED-T10YIE","FRED-VIXCLS","FRED-HENRYHUB"].includes(item.id)).map((item)=>item.id)));}).catch(()=>{});},[]);
   useEffect(() => {
     let active = true; setLoading(true); setError("");
     const records=readLocalRecords().filter((record)=>record.kind==="series"&&factors.has(record.id)&&Array.isArray(record.payload.points));
@@ -895,6 +909,7 @@ function ScaleCard({ lang, components }: { lang: Lang; components: ComponentResu
 type Hedge = {
   volume: number;
   budget: number;
+  entry: number;
   ratio: number;
   futures: number;
   purchaseBasis: number;
@@ -913,6 +928,7 @@ function HedgeCalculator({ lang, market, suggestedRatio, forecast, instruments }
   const [v, setV] = useState<Hedge>({
     volume: 300000,
     budget: market,
+    entry: instruments?.products.find((product)=>product.kind==="future")?.quote?.ask || market,
     ratio: suggestedRatio,
     futures: 70,
     purchaseBasis: 1.2,
@@ -930,7 +946,7 @@ function HedgeCalculator({ lang, market, suggestedRatio, forecast, instruments }
   const set = (k: keyof Hedge, n: number) => setV((s) => ({ ...s, [k]: n }));
   const endings=forecast.forecast; const pick=(key:string,fallback:number)=>Number(endings.at(-1)?.[key]??fallback);
   const scenarioPrices=[{scenario:tx(lang,"95%下界","95% lower"),price:pick("Lower95",market*.8)},{scenario:tx(lang,"80%下界","80% lower"),price:pick("Lower80",market*.9)},{scenario:tx(lang,"中位路径","Median path"),price:pick("PointForecast",market)},{scenario:tx(lang,"80%上界","80% upper"),price:pick("Upper80",market*1.1)},{scenario:tx(lang,"95%上界","95% upper"),price:pick("Upper95",market*1.2)}];
-  const calculate=(price:number,coverage=v.ratio,futuresShare=v.futures)=>{const protectedBarrels=v.volume*coverage/100;const targetFutures=protectedBarrels*futuresShare/100;const contracts=Math.round(targetFutures/Math.max(v.contract,1));const futuresBarrels=contracts*v.contract;const optionBarrels=Math.max(0,protectedBarrels-futuresBarrels);const physical=v.volume*(price+v.purchaseBasis)*v.fx;const futuresPnl=futuresBarrels*(price-v.budget)*v.fx;const optionPnl=optionBarrels*Math.max(price-v.strike,0)*v.fx;const premium=optionBarrels*v.premium*v.budgetFx;const marginReq=futuresBarrels*v.budget*v.budgetFx*v.margin/100;const funding=marginReq*v.finance/100*v.horizon/365;const fees=(futuresBarrels+optionBarrels)*v.fee*v.budgetFx*2;const hedged=physical-futuresPnl-optionPnl+premium+funding+fees;return{physical,hedged,saving:physical-hedged,marginReq,funding,fees,futuresBarrels,optionBarrels,contracts};};
+  const calculate=(price:number,coverage=v.ratio,futuresShare=v.futures)=>{const protectedBarrels=v.volume*coverage/100;const targetFutures=protectedBarrels*futuresShare/100;const contracts=Math.round(targetFutures/Math.max(v.contract,1));const futuresBarrels=contracts*v.contract;const optionBarrels=Math.max(0,protectedBarrels-futuresBarrels);const physical=v.volume*(price+v.purchaseBasis)*v.fx;const futuresPnl=futuresBarrels*(price-v.entry)*v.fx;const optionPnl=optionBarrels*Math.max(price-v.strike,0)*v.fx;const premium=optionBarrels*v.premium*v.budgetFx;const marginReq=futuresBarrels*v.entry*v.budgetFx*v.margin/100;const funding=marginReq*v.finance/100*v.horizon/365;const fees=(futuresBarrels+optionBarrels)*v.fee*v.budgetFx*2;const hedged=physical-futuresPnl-optionPnl+premium+funding+fees;return{physical,hedged,saving:physical-hedged,marginReq,funding,fees,futuresBarrels,optionBarrels,contracts};};
   const scenarioRows=scenarioPrices.map((row)=>({...row,...calculate(row.price),unhedged:calculate(row.price).physical}));
   const base=scenarioRows[2]; const budget=v.volume*(v.budget+v.budgetBasis)*v.budgetFx; const delta=base.physical-base.hedged;
   const planDefinitions=[
@@ -943,7 +959,23 @@ function HedgeCalculator({ lang, market, suggestedRatio, forecast, instruments }
   ];
   const plans=planDefinitions.map((plan)=>{const lower=calculate(scenarioPrices[0].price,plan.coverage,plan.futures),mid=calculate(scenarioPrices[2].price,plan.coverage,plan.futures),upper=calculate(scenarioPrices[4].price,plan.coverage,plan.futures);return{...plan,lower,mid,upper};});
   const selectedProducts=instruments?.products||[];
-  const productSizing=(product:InstrumentProduct)=>{const protectedBarrels=v.volume*v.ratio/100;const targetBarrels=protectedBarrels*(product.kind==="future"?v.futures:100-v.futures)/100;const contracts=Math.round(targetBarrels/product.size);const rounding=contracts*product.size-targetBarrels;return{contracts,coveredBarrels:contracts*product.size,rounding:Math.abs(rounding)<.0005?0:rounding};};
+  const allocate=(targetBarrels:number,kind:"future"|"option",planId:string)=>{
+    if(targetBarrels<=0)return [];
+    const candidates=selectedProducts.filter((product)=>product.kind===kind);
+    if(!candidates.length)return [];
+    const standard=candidates.filter((product)=>product.size>=1000);
+    const micro=candidates.find((product)=>product.size<1000);
+    let primary=standard[0]||candidates[0];
+    if(primary.benchmark==="Brent"&&kind==="future")primary=candidates.find((product)=>product.id===(planId==="balanced"||planId==="staged"?"CME-BZ":"ICE-B"))||primary;
+    const rows:Array<{product:InstrumentProduct;contracts:number}>=[];
+    let primaryContracts=micro?Math.floor(targetBarrels/primary.size):Math.round(targetBarrels/primary.size);
+    let residual=targetBarrels-primaryContracts*primary.size;
+    if(primaryContracts>0)rows.push({product:primary,contracts:primaryContracts});
+    if(micro&&residual>0){let microContracts=Math.round(residual/micro.size);if(microContracts*micro.size>=primary.size){primaryContracts+=1;const existing=rows.find((row)=>row.product.id===primary.id);existing?existing.contracts=primaryContracts:rows.push({product:primary,contracts:primaryContracts});microContracts=0;}if(microContracts>0)rows.push({product:micro,contracts:microContracts});}
+    if(!rows.length)rows.push({product:primary,contracts:1});
+    return rows.map(({product,contracts})=>{const barrels=contracts*product.size;const entry=v.entry;const notional=barrels*entry*v.budgetFx;const margin=kind==="future"?notional*v.margin/100:0;const premium=kind==="option"?barrels*v.premium*v.budgetFx:0;const fees=barrels*v.fee*v.budgetFx*2;const funding=margin*v.finance/100*v.horizon/365;return{product,contracts,barrels,entry,notional,margin,premium,fees,funding,initialCash:margin+premium+fees};});
+  };
+  const executablePlans=plans.map((plan)=>{const protectedBarrels=v.volume*plan.coverage/100;const futureTarget=protectedBarrels*plan.futures/100;const optionTarget=Math.max(0,protectedBarrels-futureTarget);const orders=[...allocate(futureTarget,"future",plan.id),...allocate(optionTarget,"option",plan.id)];const totals=orders.reduce((sum,row)=>({barrels:sum.barrels+row.barrels,notional:sum.notional+row.notional,margin:sum.margin+row.margin,premium:sum.premium+row.premium,fees:sum.fees+row.fees,funding:sum.funding+row.funding,initialCash:sum.initialCash+row.initialCash}),{barrels:0,notional:0,margin:0,premium:0,fees:0,funding:0,initialCash:0});return{...plan,orders,totals,targetBarrels:protectedBarrels};});
   return (
     <Card
       title={tx(lang, "采购成本预警测算", "Procurement cost stress test")}
@@ -962,6 +994,7 @@ function HedgeCalculator({ lang, market, suggestedRatio, forecast, instruments }
           suffix={tx(lang, "美元/桶", "USD/bbl")}
           onChange={(n) => set("budget", n)}
         />
+        <Field label={tx(lang,"期货限价参考","Futures limit reference")} value={v.entry} suffix={tx(lang,"美元/桶","USD/bbl")} step={.01} min={0} onChange={(n)=>set("entry",n)}/>
         <Field
           label={tx(lang, "套保覆盖", "Hedge coverage")}
           value={v.ratio}
@@ -1057,9 +1090,12 @@ function HedgeCalculator({ lang, market, suggestedRatio, forecast, instruments }
       <h3 className="result-title">{tx(lang,"不同价格情景下的总采购成本","Total procurement cost across price scenarios")}</h3>
       <ChartFrame label={tx(lang,"缩放查看未套保与套保成本","Zoom to compare unhedged and hedged cost")}><div className="chart medium"><ResponsiveContainer><ComposedChart data={scenarioRows} margin={{top:8,right:20,bottom:4,left:20}}><CartesianGrid vertical={false}/><XAxis dataKey="scenario"/><YAxis yAxisId="cost" width={72} tickMargin={8} tickFormatter={(value)=>`${(Number(value)/1e6).toFixed(3)}m`}/><YAxis yAxisId="improvement" orientation="right" width={72} tickMargin={8} tickFormatter={(value)=>`${(Number(value)/1e6).toFixed(3)}m`}/><Tooltip formatter={(value)=>tx(lang,`${(Number(value)/1e6).toFixed(3)} 百万元`,`RMB ${(Number(value)/1e6).toFixed(3)}m`)}/><Legend/><Bar yAxisId="cost" dataKey="unhedged" name={tx(lang,"未套保成本","Unhedged cost")} fill="#7d8792" radius={[8,8,0,0]}/><Bar yAxisId="cost" dataKey="hedged" name={tx(lang,"套保后成本","Hedged cost")} fill="#5f7895" radius={[8,8,0,0]}/><Line yAxisId="improvement" dataKey="saving" name={tx(lang,"相对成本改善（右轴）","Cost improvement (right axis)")} stroke="#c47d59" strokeWidth={2.4}/></ComposedChart></ResponsiveContainer></div></ChartFrame>
       <h3 className="result-title">{tx(lang,"六套可选组合","Six portfolio alternatives")}</h3>
-      <div className="portfolio-grid">{plans.map((plan)=><article key={plan.id}><div><span>{plan.name}</span><b>{plan.coverage.toFixed(3)}% / {plan.futures.toFixed(3)}%</b></div><p>{plan.desc}</p><dl><div><dt>{tx(lang,"95%上界改善","95% upper improvement")}</dt><dd className={plan.upper.saving>=0?"positive":"negative"}>{(plan.upper.saving/1e6).toFixed(3)}m</dd></div><div><dt>{tx(lang,"中位情景","Median scenario")}</dt><dd>{(plan.mid.saving/1e6).toFixed(3)}m</dd></div><div><dt>{tx(lang,"95%下界机会成本","95% lower opportunity cost")}</dt><dd>{(Math.max(0,-plan.lower.saving)/1e6).toFixed(3)}m</dd></div><div><dt>{tx(lang,"期货张数","Futures contracts")}</dt><dd>{plan.mid.contracts}</dd></div></dl></article>)}</div>
-      <h3 className="result-title">{tx(lang,"匹配到的真实交易所产品","Matched exchange-listed products")}</h3>
-      <div className="product-grid">{selectedProducts.map((product)=>{const sizing=productSizing(product);return <a href={product.url} target="_blank" rel="noreferrer" key={product.id}><div><span>{product.exchange}</span><b>{product.code}</b></div><h4>{product.name}</h4><p>{product.kind==="future"?tx(lang,"期货","Future"):tx(lang,"期权","Option")} · {product.size} bbl · {product.settlement}</p><dl><div><dt>{tx(lang,"参考张数","Indicative contracts")}</dt><dd>{sizing.contracts}</dd></div><div><dt>{tx(lang,"覆盖桶数","Covered barrels")}</dt><dd>{sizing.coveredBarrels.toLocaleString()}</dd></div><div><dt>{tx(lang,"取整偏差","Rounding difference")}</dt><dd>{sizing.rounding.toFixed(3)}</dd></div></dl></a>})}</div>
+      <p className="plain-note">{tx(lang,"点击任一组合可查看具体产品、买入方向、张数、保证金、权利金、费用和逐步操作说明。每套组合只列实际用于该方案的产品，不再把所有候选产品单独堆在页面上。","Open any portfolio to see exact products, direction, quantity, margin, premium, fees and a step-by-step order guide. Each portfolio lists only the instruments it actually uses.")}</p>
+      <div className="portfolio-grid">{executablePlans.map((plan)=><details className="portfolio-card" key={plan.id}><summary><div><span>{plan.name}</span><b>{plan.coverage.toFixed(3)}% / {plan.futures.toFixed(3)}%</b></div><p>{plan.desc}</p><dl><div><dt>{tx(lang,"95%上界改善","95% upper improvement")}</dt><dd className={plan.upper.saving>=0?"positive":"negative"}>{(plan.upper.saving/1e6).toFixed(3)}m</dd></div><div><dt>{tx(lang,"首期资金","Initial cash")}</dt><dd>{(plan.totals.initialCash/1e6).toFixed(3)}m</dd></div><div><dt>{tx(lang,"保证金 / 权利金","Margin / premium")}</dt><dd>{(plan.totals.margin/1e6).toFixed(3)}m / {(plan.totals.premium/1e6).toFixed(3)}m</dd></div><div><dt>{tx(lang,"打开执行清单","Open order ticket")}</dt><dd><ChevronRight/></dd></div></dl></summary><div className="portfolio-detail">
+        <div className="order-summary"><span><b>{plan.targetBarrels.toLocaleString()}</b>{tx(lang,"目标覆盖桶数","target bbl")}</span><span><b>{plan.totals.barrels.toLocaleString()}</b>{tx(lang,"取整后覆盖","rounded coverage")}</span><span><b>RMB {(plan.totals.initialCash/1e6).toFixed(3)}m</b>{tx(lang,"首期资金","initial cash")}</span><span><b>RMB {((plan.totals.fees+plan.totals.funding)/1e4).toFixed(3)}万</b>{tx(lang,"双边费用与融资","fees + funding")}</span></div>
+        <div className="order-lines">{plan.orders.map((order)=><article key={`${plan.id}-${order.product.id}`}><header><span>{order.product.exchange}</span><b>{tx(lang,"买入","BUY / LONG")} {order.contracts} × {order.product.code}</b></header><h4>{lang==="zh"?order.product.nameZh||order.product.name:order.product.name}</h4><p>{order.product.kind==="future"?tx(lang,"期货多头，用于对冲采购价格上涨","Long futures hedge against a rise in procurement prices"):tx(lang,"买入看涨期权，用权利金限定上涨风险","Buy calls to cap upside exposure with a known premium")}</p><dl><div><dt>{tx(lang,"合约规模 / 覆盖","Contract / coverage")}</dt><dd>{order.product.size.toLocaleString()} / {order.barrels.toLocaleString()} bbl</dd></div><div><dt>{tx(lang,"测算限价 / 公开卖一","Model limit / public ask")}</dt><dd>{order.entry.toFixed(3)} / {order.product.quote?.ask?.toFixed(3)??"—"}</dd></div><div><dt>{tx(lang,"名义本金","Notional")}</dt><dd>RMB {(order.notional/1e6).toFixed(3)}m</dd></div><div><dt>{tx(lang,"初始保证金","Initial margin")}</dt><dd>RMB {(order.margin/1e6).toFixed(3)}m</dd></div><div><dt>{tx(lang,"权利金","Premium")}</dt><dd>RMB {(order.premium/1e6).toFixed(3)}m</dd></div><div><dt>{tx(lang,"双边费用 / 融资","Fees / funding")}</dt><dd>RMB {(order.fees/1e3).toFixed(3)}k / {(order.funding/1e3).toFixed(3)}k</dd></div></dl><a href={order.product.url} target="_blank" rel="noreferrer">{tx(lang,"核对交易所规格","Verify exchange specification")} <ArrowRight/></a></article>)}</div>
+        <ol className="execution-steps"><li>{tx(lang,"在采购日期附近选择流动性充足、且到期日晚于预计采购日的合约月份；避免无交割计划却持有实物交割合约进入通知期。","Choose a liquid expiry after the planned purchase date; do not carry a physically delivered contract into notice without a delivery plan.")}</li><li>{tx(lang,"在经纪商订单票据中逐项输入上表代码与张数，方向统一为买入/做多；期权选择执行价接近上方设定值的看涨期权。","Enter each code and quantity in the broker ticket as BUY/LONG; for options, select a call strike close to the configured strike above.")}</li><li>{tx(lang,"使用限价单并复核买卖价差、实际初始保证金、权利金和佣金；公开行情只是参考，不能替代成交确认。","Use limit orders and verify spread, actual initial margin, premium and commission. Public quotes are indicative, not an execution confirmation.")}</li><li>{tx(lang,"成交后记录月份、成交均价和费用；采购完成时同步平仓或按既定滚动规则换月，并重新计算剩余敞口。","Record expiry, average fill and fees. Close or roll alongside the physical purchase, then recalculate the remaining exposure.")}</li></ol>
+      </div></details>)}</div>
       <div className="broker-note"><ShieldCheck/><div><b>{instruments?.broker.connected?tx(lang,"经纪商合约发现已配置","Broker contract discovery configured"):tx(lang,"当前为交易所产品匹配，不是下单接口","Exchange product matching, not an order interface")}</b><p>{tx(lang,"产品代码和合约规模来自交易所规格页；具体到期月份、实时买卖价、权利金与可成交性必须在已授权经纪商会话中复核。页面只展示模型情景损益，不承诺收益，也不会提交订单。","Product codes and sizes come from exchange specifications. Expiry, live bid/ask, premium and tradability require an authenticated broker session. Results are model scenarios, not promised returns, and no order is submitted.")}</p></div></div>
     </Card>
   );
@@ -1178,7 +1214,7 @@ function Professional({
         }
         desc={
           lang === "zh"
-            ? "净影响、价格预测、危机预警和数据工具彼此独立，参数与中间结果完整保留。"
+            ? "净影响、价格预测和危机预警彼此独立，参数与中间结果完整保留；数据中心已作为顶层工作区独立开放。"
             : "Full parameters and intermediate outputs for reproducible research."
         }
       />
@@ -1192,14 +1228,10 @@ function Professional({
         <Tab id="risk" active={tab} set={setTab} icon={<ShieldCheck />}>
           {tx(lang, "危机预警", "Risk warning")}
         </Tab>
-        <Tab id="data" active={tab} set={setTab} icon={<Database />}>
-          {t.source}
-        </Tab>
       </div>
       {tab === "impact" && <ImpactLab lang={lang} />}
       {tab === "forecast" && <ForecastLab lang={lang} />}
       {tab === "risk" && <RiskLab lang={lang} />}
-      {tab === "data" && <DataLab lang={lang} />}
     </div>
   );
 }
@@ -1251,7 +1283,7 @@ function ImpactLab({ lang }: { lang: Lang }) {
       const savedRows = records.filter((record) => !baseRows.some((item) => item.id === record.id)).map((record) => ({ id: record.id, name: String(record.payload.name || record.label), nameEn: String(record.payload.nameEn || record.label), source: String(record.payload.source || "FRED"), unit: String(record.payload.unit || ""), frequency: String(record.payload.frequency || ""), updated: record.savedAt.slice(0,10), color: String(record.payload.color || "#587a9a") }));
       const rows = [...baseRows, ...savedRows]; setAvailable(rows);
       const saved = new Set(records.map((r) => r.id));
-      const defaults = rows.filter((item) => item.id !== target && (saved.has(item.id) || ["FRED-PETINV","FRED-DTWEXBGS","FRED-DGS10","FRED-INDPRO","FRED-T10YIE","FRED-VIXCLS","FRED-HENRYHUB"].includes(item.id))).map((item) => item.id);
+      const defaults = rows.filter((item) => item.id !== target && (saved.has(item.id) || ["GPRD","FRED-PETINV","FRED-DTWEXBGS","FRED-DGS10","FRED-INDPRO","FRED-T10YIE","FRED-VIXCLS","FRED-HENRYHUB"].includes(item.id))).map((item) => item.id);
       setFactors(new Set(defaults));
     }).catch((reason) => setError(reason instanceof Error ? reason.message : String(reason)));
   }, [target]);
@@ -1318,7 +1350,7 @@ function ImpactLab({ lang }: { lang: Lang }) {
             <RollingFevdChart lang={lang} data={result.rollingFevd}/>
             <h3 className="result-title">F · {tx(lang,"结构断点诊断：事件起点检验与最优断点复核","Structural-break diagnostics: event-start test and optimal-break review")}</h3><BreakChart lang={lang} data={result.breakTest.optimal.profile}/>
             <div className="metric-table"><span><b>{tx(lang,"指定断点","Specified break")}</b>{result.breakTest.fixed.breakDate}</span><span><b>F / p</b>{result.breakTest.fixed.fStatistic.toFixed(3)} / {result.breakTest.fixed.pValue.toFixed(3)}</span><span><b>{tx(lang,"水平突变","Level shift")}</b>{result.breakTest.fixed.levelShift.toFixed(3)}</span><span><b>{tx(lang,"趋势变化","Slope change")}</b>{result.breakTest.fixed.slopeChange.toFixed(3)}</span><span><b>{tx(lang,"最优候选断点","Best candidate break")}</b>{result.breakTest.optimal.bestDate}</span><span><b>{tx(lang,"分段RSS改善","Segmented RSS improvement")}</b>{result.breakTest.optimal.rssImprovementPercent.toFixed(3)}%</span></div>
-            <div className="provenance"><Database/><span><b>{tx(lang,"本次数据血缘","Data provenance")}</b><small>{result.sources.map((s) => `${lang === "zh" ? s.nameZh : s.nameEn} [FRED:${s.providerId}]`).join(" · ")}</small></span></div>
+            <div className="provenance"><Database/><span><b>{tx(lang,"本次数据血缘","Data provenance")}</b><small>{result.sources.map((s) => `${lang === "zh" ? s.nameZh : s.nameEn} [${s.id === "GPRD" ? "Caldara-Iacoviello:GPRD" : `FRED:${s.providerId}`}]`).join(" · ")}</small></span></div>
           </>}
           <div className="method-steps">
             <span>{tx(lang, "A 方法、样本与事件窗口", "A Method, sample and event window")}</span>
@@ -1505,6 +1537,44 @@ async function readUploadedSeries(file: File) {
   return {id:`UPLOAD-${base}-${file.size}`,name:base,points};
 }
 
+function DataCenter({ lang }: { lang: Lang }) {
+  const [tab, setTab] = useState<"factors" | "products">("factors");
+  return <div className="page data-center-page">
+    <PageIntro
+      eyebrow={tx(lang,"Data intelligence","Data intelligence")}
+      title={tx(lang,"把数据与交易工具放在同一个工作台","A workspace for data and market instruments")}
+      desc={tx(lang,"变量因素查询连接 FRED、EIA 与官方 GPRD；金融产品查询连接交易所规格与 AKShare 所采用的新浪行情接口。","Factor search connects FRED, EIA and official GPRD. Product search combines exchange specifications with the Sina quote interface documented by AKShare.")}
+    />
+    <div className="pro-tabs data-tabs" role="tablist">
+      <button role="tab" aria-selected={tab==="factors"} className={tab==="factors"?"active":""} onClick={()=>setTab("factors")}><Database/>{tx(lang,"变量因素查询","Factor & variable search")}</button>
+      <button role="tab" aria-selected={tab==="products"} className={tab==="products"?"active":""} onClick={()=>setTab("products")}><CircleDollarSign/>{tx(lang,"金融产品查询","Financial product search")}</button>
+    </div>
+    {tab === "factors" ? <DataLab lang={lang}/> : <ProductLab lang={lang}/>}
+  </div>;
+}
+
+function ProductLab({ lang }: { lang: Lang }) {
+  const [q,setQ]=useState("");
+  const [products,setProducts]=useState<InstrumentProduct[]>([]);
+  const [response,setResponse]=useState<InstrumentResponse|null>(null);
+  const [loading,setLoading]=useState(true);
+  const [error,setError]=useState("");
+  useEffect(()=>{let active=true;const timer=window.setTimeout(()=>{setLoading(true);setError("");void fetchInstruments(q.trim()?{q:q.trim()}:{}).then((payload:InstrumentResponse)=>{if(active){setResponse(payload);setProducts(payload.products);}}).catch((reason)=>{if(active)setError(reason instanceof Error?reason.message:String(reason));}).finally(()=>{if(active)setLoading(false);});},q?280:0);return()=>{active=false;window.clearTimeout(timer);};},[q]);
+  return <Card title={tx(lang,"搜索可用于原油套保的金融产品","Search oil-hedging instruments")} desc={tx(lang,"按代码、名称、基准或交易所搜索。行情来自 AKShare 文档所采用的新浪公开接口；合约规模与结算方式以交易所官方规格为准。","Search by code, name, benchmark or exchange. Quotes use the Sina public interface documented by AKShare; contract size and settlement follow official exchange specifications.")} action={<span className="data-badge">{loading?tx(lang,"正在更新行情…","Refreshing quotes…"):tx(lang,`${products.length} 个产品`,`${products.length} products`)}</span>}>
+    <div className="search"><Search/><input value={q} onChange={(event)=>setQ(event.target.value)} placeholder={tx(lang,"输入 CL、Brent、WTI、微型、期权、CME……","Search CL, Brent, WTI, micro, option, CME…")}/></div>
+    {error&&<StatusPanel error text={tx(lang,`金融产品接口不可用：${error}`,`Product feed unavailable: ${error}`)}/>}
+    {!error&&<div className="instrument-directory">{products.map((product)=><article key={product.id}>
+      <div className="instrument-code"><span>{product.exchange}</span><b>{product.code}</b></div>
+      <h3>{lang==="zh"?product.nameZh||product.name:product.name}</h3>
+      <p>{product.kind==="future"?tx(lang,"期货","Future"):tx(lang,"期权","Option")} · {product.benchmark} · {product.size.toLocaleString()} bbl · {product.settlement}</p>
+      <dl><div><dt>{tx(lang,"最新参考价","Indicative last")}</dt><dd>{product.quote?`${product.quote.last.toFixed(3)} USD`:tx(lang,"需在经纪商复核","Broker check required")}</dd></div><div><dt>{tx(lang,"买一 / 卖一","Bid / ask")}</dt><dd>{product.quote?`${product.quote.bid?.toFixed(3)??"—"} / ${product.quote.ask?.toFixed(3)??"—"}`:"—"}</dd></div><div><dt>{tx(lang,"行情时间","Quote time")}</dt><dd>{product.quote?`${product.quote.date} ${product.quote.time}`:"—"}</dd></div></dl>
+      <a href={product.url} target="_blank" rel="noreferrer">{tx(lang,"查看交易所规格","Open exchange specification")} <ArrowRight/></a>
+    </article>)}</div>}
+    {!loading&&!error&&!products.length&&<div className="empty-search">{tx(lang,"没有匹配产品。可尝试品种代码、英文基准或交易所名称。","No matched products. Try a product code, benchmark or exchange name.")}</div>}
+    <div className="broker-note"><Radio/><div><b>{tx(lang,"行情与规格分层校验","Layered quote and specification checks")}</b><p>{response?.quoteMethod} {response?.quoteWarning?tx(lang,`当前行情提示：${response.quoteWarning}`,`Quote warning: ${response.quoteWarning}`):tx(lang,"公开行情接口已响应；正式下单仍需在经纪商中确认具体月份、权利金和保证金。","The public quote feed responded. Confirm expiry, option premium and margin in the broker ticket before trading.")}</p></div></div>
+  </Card>;
+}
+
 function DataLab({ lang }: { lang: Lang }) {
   const [q, setQ] = useState("");
   const [liveCatalog, setLiveCatalog] = useState<DataSeries[]>([]);
@@ -1621,8 +1691,8 @@ function DataLab({ lang }: { lang: Lang }) {
   };
   return (
     <Card
-      title={tx(lang, "搜索并连接数据", "Search and connect data")}
-      desc={tx(lang, "官方来源默认全选；选择序列后预览、下载或保存到研究库。", "All official sources are selected by default. Preview, download or save any series to the research library.")}
+      title={tx(lang, "变量因素查询", "Factor & variable search")}
+      desc={tx(lang, "FRED、EIA 与 Caldara-Iacoviello GPRD 默认全选；选择序列后可预览、下载或保存到变量池。", "FRED, EIA and Caldara-Iacoviello GPRD are enabled by default. Preview, download or save any series to the variable pool.")}
       action={<span className="data-badge">{loading ? tx(lang, "正在连接…", "Connecting…") : tx(lang, `${liveCatalog.length} 个官方序列`, `${liveCatalog.length} official series`)}</span>}
     >
       <div className="source-row">
@@ -1646,7 +1716,7 @@ function DataLab({ lang }: { lang: Lang }) {
           placeholder={tx(lang, "输入 Brent、库存、美元、利率……", "Search Brent, inventories, dollar, rates…")}
         />
       </div>
-      {q.trim().length >= 2 && <div className="search-state">{discovery === "searching" ? tx(lang,"正在对 FRED 全文目录与 EIA 分层数据目录做模糊检索…","Fuzzy-searching the FRED full-text catalog and hierarchical EIA catalog…") : discovery === "error" ? tx(lang,"官方目录暂时没有响应，请稍后重试。","The official directories did not respond. Please retry shortly.") : discovery === "ready" ? tx(lang,`找到 ${found.length} 个可用序列；选中并保存后会出现在净影响分析和决策高级设置中。`,`${found.length} available series found. Save one to use it in net-impact analysis and Decision advanced settings.`) : ""}</div>}
+      {q.trim().length >= 2 && <div className="search-state">{discovery === "searching" ? tx(lang,"正在对 FRED 全文目录、EIA 分层目录与官方 GPRD 做模糊检索…","Fuzzy-searching the FRED catalog, EIA hierarchy and official GPRD…") : discovery === "error" ? tx(lang,"官方目录暂时没有响应，请稍后重试。","The official directories did not respond. Please retry shortly.") : discovery === "ready" ? tx(lang,`找到 ${found.length} 个可用序列；选中并保存后会出现在净影响分析和决策高级设置中。`,`${found.length} available series found. Save one to use it in net-impact analysis and Decision advanced settings.`) : ""}</div>}
       <div className="data-layout">
         <div className="series-list">
           {found.map((x) => (

@@ -6,6 +6,7 @@ const aliases = {
   "产量":"production supply", "消费":"consumption demand", "天然气":"natural gas", "汽油":"gasoline", "柴油":"diesel",
   "电力":"electricity", "煤炭":"coal", "进口":"imports", "出口":"exports", "美元":"dollar", "汇率":"exchange rate",
   "利率":"interest rate yield", "通胀":"inflation cpi", "就业":"employment payroll unemployment", "黄金":"gold", "期货":"futures",
+  "地缘政治":"geopolitical risk gpr gprd", "地缘风险":"geopolitical risk gpr gprd", "战争风险":"geopolitical risk gpr gprd",
 };
 const commonMisspellings = {
   brnt:"brent", prce:"price", pric:"price", invntry:"inventory", inventry:"inventory",
