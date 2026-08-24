@@ -12,6 +12,7 @@ import {
   Gauge,
   Globe2,
   Languages,
+  LockKeyhole,
   Menu,
   Minus,
   MoveHorizontal,
@@ -23,6 +24,7 @@ import {
   ShieldCheck,
   Sparkles,
   TrendingUp,
+  Trash2,
   Upload,
   X,
   ZoomIn,
@@ -51,7 +53,7 @@ import {
   type Frequency,
   type PriceRow,
 } from "./data";
-import { checkApiHealth, fetchCatalog, fetchInstruments, fetchSeries, readLocalRecords, requestLiveAnalysis, saveLocalRecord } from "./storage";
+import { checkApiHealth, deleteLocalSeries, fetchCatalog, fetchInstruments, fetchSeries, readLocalRecords, requestLiveAnalysis, saveLocalRecord } from "./storage";
 
 type Lang = "zh" | "en";
 type Mode = "landing" | "decision" | "professional" | "data";
@@ -105,6 +107,12 @@ const representativeDecisionFactors = [
   "FRED-VIXCLS", "FRED-SP500", "FRED-NASDAQXAU",
   "FRED-CPIAUCSL", "FRED-INDPRO",
 ];
+
+const protectedDefaultVariableIds = new Set([
+  "EIA-BRENT", "FRED-DCOILWTICO",
+  ...representativeDecisionFactors,
+  "FRED-T10YIE",
+]);
 
 const seriesText = (item: DataSeries, lang: Lang) => ({
   name: lang === "en" ? item.nameEn || seriesNamesEn[item.id] || item.name : item.name,
@@ -1825,6 +1833,7 @@ function DataLab({ lang }: { lang: Lang }) {
   const [uploadStatus, setUploadStatus] = useState("");
   const [discovery, setDiscovery] = useState<"idle"|"searching"|"ready"|"error">("idle");
   const [discoveredIds, setDiscoveredIds] = useState<Set<string>>(new Set());
+  const [officialIds, setOfficialIds] = useState<Set<string>>(new Set());
   const [savedIds, setSavedIds] = useState<Set<string>>(
     () => new Set(readLocalRecords().filter((record) => record.kind === "series").map((record) => record.id)),
   );
@@ -1834,6 +1843,7 @@ function DataLab({ lang }: { lang: Lang }) {
       .then((items) => {
         if (!active || !items.length) return;
         const base = items as unknown as DataSeries[];
+        setOfficialIds(new Set(base.map((item) => item.id)));
         const saved = readLocalRecords().filter((record)=>record.kind==="series").map((record)=>({id:record.id,name:String(record.payload.name||record.label),nameEn:String(record.payload.nameEn||record.label),category:String(record.payload.category||""),source:String(record.payload.source||"Manual upload"),unit:String(record.payload.unit||""),frequency:String(record.payload.frequency||""),updated:String(record.payload.updated||record.savedAt.slice(0,10)),color:String(record.payload.color||"#756fa5")}));
         const next = [...saved,...base.filter((item)=>!saved.some((record)=>record.id===item.id))];
         setLiveCatalog(next);
@@ -1851,6 +1861,7 @@ function DataLab({ lang }: { lang: Lang }) {
       void fetchCatalog(q.trim()).then((items) => {
         const discovered = items as unknown as DataSeries[];
         setDiscoveredIds(new Set(discovered.map((item)=>item.id)));
+        setOfficialIds((current) => new Set([...current, ...discovered.map((item) => item.id)]));
         setLiveCatalog((current) => [...current, ...discovered.filter((item) => !current.some((existing) => existing.id === item.id))]);
         setSources((current) => new Set([...current, ...discovered.map((item) => item.source)]));
         setDiscovery("ready");
@@ -1908,6 +1919,24 @@ function DataLab({ lang }: { lang: Lang }) {
         payload: { source: item.source, category:item.category, unit: item.unit, frequency: item.frequency, name: item.name, nameEn: item.nameEn || item.name, color: item.color, points: liveSeries },
     });
     setSavedIds((current) => new Set([...current, selected]));
+    setUploadStatus(tx(lang, "已加入变量池，可在专业模式和决策高级设置中使用。", "Added to the variable pool for Research mode and Decision advanced settings."));
+  };
+  const remove = () => {
+    if (!selected || protectedDefaultVariableIds.has(selected) || !savedIds.has(selected)) return;
+    if (!deleteLocalSeries(selected)) return;
+    setSavedIds((current) => {
+      const next = new Set(current);
+      next.delete(selected);
+      return next;
+    });
+    setUploadStatus(tx(lang, "已删除新增变量，并同步从已保存的分析选择中移除。", "The added variable was deleted and removed from saved analysis selections."));
+    if (!officialIds.has(selected)) {
+      const nextCatalog = liveCatalog.filter((item) => item.id !== selected);
+      setLiveCatalog(nextCatalog);
+      setSelected(nextCatalog[0]?.id || "");
+      setLiveSeries([]);
+      setSeriesLive(false);
+    }
   };
   const uploadFiles = async (files: FileList | null) => {
     if (!files?.length) return; setUploadStatus(""); setError("");
@@ -1916,6 +1945,7 @@ function DataLab({ lang }: { lang: Lang }) {
       const added = parsed.map((item,index)=>({id:item.id,name:item.name,nameEn:item.name,category:tx(lang,"手动上传","Manual upload"),source:tx(lang,"手动上传","Manual upload"),unit:"",frequency:tx(lang,"用户提供","User supplied"),updated:item.points.at(-1)!.date,color:["#9b6d51","#5f7895","#756fa5"][index%3]}));
       parsed.forEach((item,index)=>saveLocalRecord({id:item.id,kind:"series",label:item.name,payload:{...added[index],points:item.points}}));
       setLiveCatalog((current)=>[...added,...current.filter((row)=>!added.some((item)=>item.id===row.id))]);
+      setSavedIds((current)=>new Set([...current,...added.map((item)=>item.id)]));
       setSources((current)=>new Set([...current,...added.map((item)=>item.source)])); setSelected(added[0].id); setLiveSeries(parsed[0].points); setSeriesLive(true);
       setUploadStatus(tx(lang,`已校验并加入研究库：${added.map((item)=>item.name).join("、")}`,`Validated and added to the research library: ${added.map((item)=>item.name).join(", ")}`));
     } catch (reason) { setError(reason instanceof Error?reason.message:String(reason)); }
@@ -1992,10 +2022,14 @@ function DataLab({ lang }: { lang: Lang }) {
                 { v: "daily", l: tx(lang, "日度", "Daily") },
               ]}
             />
-            <button className={savedIds.has(selected) ? "saved" : ""} onClick={save} disabled={!seriesLive || savedIds.has(selected)}>
+            {protectedDefaultVariableIds.has(selected) ? <span className="protected-variable"><LockKeyhole />{tx(lang,"系统默认变量","Protected default")}</span> : <button className={savedIds.has(selected) ? "saved" : ""} onClick={save} disabled={!seriesLive || savedIds.has(selected)}>
               <Save />
               {savedIds.has(selected) ? tx(lang, "已加入变量池", "Added to variable pool") : tx(lang, "加入变量池", "Add to variable pool")}
-            </button>
+            </button>}
+            {savedIds.has(selected) && !protectedDefaultVariableIds.has(selected) && <button className="remove-variable" onClick={remove}>
+              <Trash2 />
+              {tx(lang,"删除新增变量","Delete added variable")}
+            </button>}
             <button onClick={download} disabled={!seriesLive}>
               <Download />
               Excel/CSV

@@ -145,10 +145,15 @@ test("decision accounting, advanced variables and multiple real-product plans re
 });
 
 test("data center is independent and searches GPRD plus financial products", async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem("opi.savedRecords.v1", JSON.stringify([{
+      id:"decision-defaults",kind:"preference",label:"Decision mode defaults",savedAt:"2026-08-24T00:00:00.000Z",payload:{factorIds:["GPRD","FRED-GOLDAMGBD228NLBM"]},
+    }]));
+  });
   await page.route("**/api/**", async (route) => {
     const url=new URL(route.request().url());
     if(url.pathname.endsWith("/health"))return route.fulfill({json:{ok:true}});
-    if(url.pathname.endsWith("/catalog"))return route.fulfill({json:{items:[{id:"GPRD",name:"地缘政治风险指数（传统日度 GPR）",nameEn:"Geopolitical Risk Index (traditional daily GPR)",category:"地缘政治与事件风险",source:"Caldara-Iacoviello GPR",unit:"指数",frequency:"日度",updated:"2026-08-17",color:"#c47d59"},{id:"FRED-DGS10",name:"美国10年期国债收益率",nameEn:"US 10-Year Treasury Yield",category:"金融条件",source:"FRED",unit:"%",frequency:"Daily",updated:"2026-08-20",color:"#587a9a"},{id:"FRED-NASDAQXAU",name:"PHLX黄金与白银行业指数",nameEn:"PHLX Gold/Silver Sector Index",category:"金融资产与避险",source:"FRED / official source",unit:"指数",frequency:"日度",updated:"2026-08-20",color:"#b58a42"}]}});
+    if(url.pathname.endsWith("/catalog"))return route.fulfill({json:{items:[{id:"GPRD",name:"地缘政治风险指数（传统日度 GPR）",nameEn:"Geopolitical Risk Index (traditional daily GPR)",category:"地缘政治与事件风险",source:"Caldara-Iacoviello GPR",unit:"指数",frequency:"日度",updated:"2026-08-17",color:"#c47d59"},{id:"FRED-DGS10",name:"美国10年期国债收益率",nameEn:"US 10-Year Treasury Yield",category:"金融条件",source:"FRED",unit:"%",frequency:"Daily",updated:"2026-08-20",color:"#587a9a"},{id:"FRED-NASDAQXAU",name:"PHLX黄金与白银行业指数",nameEn:"PHLX Gold/Silver Sector Index",category:"金融资产与避险",source:"FRED / official source",unit:"指数",frequency:"日度",updated:"2026-08-20",color:"#b58a42"},{id:"FRED-GOLDAMGBD228NLBM",name:"伦敦黄金上午定盘价",nameEn:"London Gold AM Fixing Price",category:"金融资产与避险",source:"FRED / official source",unit:"美元/盎司",frequency:"日度",updated:"2026-08-20",color:"#b58a42"}]}});
     if(url.pathname.endsWith("/gprd"))return route.fulfill({json:{updated:"2026-08-17",points:[{date:"2026-08-16",value:120.123},{date:"2026-08-17",value:144.473}]}});
     if(url.pathname.endsWith("/series"))return route.fulfill({json:{updated:"2026-08-20",points:[{date:"2026-08-18",value:366.600},{date:"2026-08-19",value:399.020},{date:"2026-08-20",value:408.950}]}});
     if(url.pathname.endsWith("/instruments"))return route.fulfill({json:{asOf:"2026-08-24",benchmark:"All",quoteMethod:"AKShare / Sina",broker:{connected:false,name:"IBKR",message:"not connected"},executionEnabled:false,disclaimer:"indicative",products:[{id:"CME-CL",benchmark:"WTI",exchange:"NYMEX / CME Group",kind:"future",code:"CL",name:"WTI Crude Oil futures",nameZh:"WTI 原油期货",size:1000,settlement:"Physical",url:"https://www.cmegroup.com/",contracts:1,coveredBarrels:1000,roundingError:0,verification:"official",quote:{last:85.2,bid:85.19,ask:85.21,time:"12:00:00",date:"2026-08-24",name:"纽约原油",provider:"Sina"}}]}});
@@ -158,14 +163,36 @@ test("data center is independent and searches GPRD plus financial products", asy
   await expect(page.getByRole("heading",{name:"变量因素查询"})).toBeVisible();
   await page.getByPlaceholder(/Brent/).fill("GPRD");
   await expect(page.getByText("地缘政治风险指数（传统日度 GPR）")).toBeVisible();
+  await page.getByText("地缘政治风险指数（传统日度 GPR）").click();
+  await expect(page.getByText("系统默认变量")).toBeVisible();
+  await expect(page.getByRole("button",{name:"删除新增变量"})).toHaveCount(0);
   await page.getByPlaceholder(/Brent/).fill("gold");
   await expect(page.getByText("PHLX黄金与白银行业指数")).toBeVisible();
-  await page.getByText("PHLX黄金与白银行业指数").click();
+  await expect(page.getByText("伦敦黄金上午定盘价")).toBeVisible();
+  await page.getByText("伦敦黄金上午定盘价").click();
   await expect(page.getByRole("button",{name:"加入变量池"})).toBeVisible();
   expect(await page.locator(".data-layout").evaluate((element)=>element.scrollWidth<=element.clientWidth+1)).toBeTruthy();
   await page.locator(".data-layout").screenshot({path:"test-results/data-center-gold.png"});
   await page.getByRole("button",{name:"加入变量池"}).click();
   await expect(page.getByRole("button",{name:"已加入变量池"})).toBeVisible();
+  await expect(page.getByRole("button",{name:"删除新增变量"})).toBeVisible();
+  await page.locator(".preview-actions").screenshot({path:"test-results/user-variable-delete-action.png"});
+  await page.getByRole("button",{name:"删除新增变量"}).click();
+  await expect(page.getByRole("button",{name:"加入变量池"})).toBeVisible();
+  await expect(page.getByText("已删除新增变量，并同步从已保存的分析选择中移除。")).toBeVisible();
+  const stored = await page.evaluate(() => JSON.parse(localStorage.getItem("opi.savedRecords.v1") || "[]"));
+  expect(stored.some((record:{id:string})=>record.id==="FRED-GOLDAMGBD228NLBM")).toBeFalsy();
+  expect(stored.find((record:{id:string})=>record.id==="decision-defaults").payload.factorIds).toEqual(["GPRD"]);
+  await page.locator('input[type="file"]').setInputFiles({
+    name:"custom-demand.csv",
+    mimeType:"text/csv",
+    buffer:Buffer.from("date,value\n2026-08-17,1.125\n2026-08-18,1.250\n2026-08-19,1.375\n2026-08-20,1.500\n2026-08-21,1.625\n"),
+  });
+  await expect(page.getByText(/已校验并加入研究库/)).toBeVisible();
+  await expect(page.getByRole("button",{name:"删除新增变量"})).toBeVisible();
+  await page.getByRole("button",{name:"删除新增变量"}).click();
+  await expect(page.getByText(/已删除新增变量/)).toBeVisible();
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("opi.savedRecords.v1") || "[]").some((record:{id:string})=>record.id.startsWith("UPLOAD-")))).toBeFalsy();
   await page.setViewportSize({width:390,height:844});
   expect(await page.locator(".data-layout").evaluate((element)=>element.scrollWidth<=element.clientWidth+1)).toBeTruthy();
   await page.locator(".data-layout").screenshot({path:"test-results/data-center-mobile.png"});

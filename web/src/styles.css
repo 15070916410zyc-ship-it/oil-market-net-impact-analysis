@@ -152,6 +152,7 @@ body{background:#f8f7f5}
 .preview{min-width:0;max-width:100%;overflow:hidden}
 .preview-actions{min-width:0;flex-wrap:wrap}
 .preview-actions>button.saved{border-color:#b8c8c2;background:#edf3f1;color:#45645e}
+.preview-actions .protected-variable{display:flex;align-items:center;gap:.3rem;padding:.45rem .65rem;border:1px solid #d7d2cb;border-radius:10px;background:#f4f1ed;color:#6f6962;font-size:.65rem;white-space:nowrap}.preview-actions .protected-variable svg{width:13px}.preview-actions>button.remove-variable{border-color:#e2c7bd;background:#fff7f3;color:#9a4f35}.preview-actions>button.remove-variable:hover{border-color:#c98468;background:#fff0e8}
 .preview .chart-frame,.preview .chart-scroll{min-width:0;max-width:100%}
 .provenance{min-width:0;max-width:100%;align-items:flex-start}
 .provenance>span{min-width:0;max-width:100%;overflow-wrap:anywhere}

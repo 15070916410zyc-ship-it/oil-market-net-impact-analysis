@@ -7,12 +7,39 @@ export type SavedRecord = {
 };
 
 const STORAGE_KEY = "opi.savedRecords.v1";
+const STORAGE_EVENT = "opi:saved-records-changed";
+
+function writeLocalRecords(records: SavedRecord[]) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+  window.dispatchEvent(new CustomEvent(STORAGE_EVENT));
+}
 
 export function saveLocalRecord(record: Omit<SavedRecord, "savedAt">): SavedRecord {
   const full = { ...record, savedAt: new Date().toISOString() };
   const existing = readLocalRecords().filter((item) => item.id !== full.id);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify([full, ...existing]));
+  writeLocalRecords([full, ...existing]);
   return full;
+}
+
+export function deleteLocalSeries(id: string): boolean {
+  const records = readLocalRecords();
+  const removable = records.some((record) => record.kind === "series" && record.id === id);
+  if (!removable) return false;
+
+  const next = records
+    .filter((record) => !(record.kind === "series" && record.id === id))
+    .map((record) => {
+      if (record.kind !== "preference" || !Array.isArray(record.payload.factorIds)) return record;
+      return {
+        ...record,
+        payload: {
+          ...record.payload,
+          factorIds: record.payload.factorIds.filter((factorId) => String(factorId) !== id),
+        },
+      };
+    });
+  writeLocalRecords(next);
+  return true;
 }
 
 export function readLocalRecords(): SavedRecord[] {
