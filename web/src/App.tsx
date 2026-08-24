@@ -108,7 +108,7 @@ const defaultVariableGroups = [
   { zh:"替代能源与工业原料", en:"Substitute energy & industrial inputs", ids:["FRED-HENRYHUB","FRED-COPPER"] },
   { zh:"美元与跨境汇率", en:"US dollar & cross-border FX", ids:["FRED-DTWEXBGS","FRED-DEXCHUS"] },
   { zh:"利率与通胀预期", en:"Interest rates & inflation expectations", ids:["FRED-DGS10","FRED-DFF","FRED-T10YIE"] },
-  { zh:"信用、流动性与金融压力", en:"Credit, liquidity & financial stress", ids:["FRED-HYSPREAD","FRED-STLFSI4"] },
+  { zh:"信用、流动性与金融压力", en:"Credit, liquidity & financial stress", ids:["FRED-STLFSI4"] },
   { zh:"市场波动率与风险偏好", en:"Market volatility & risk appetite", ids:["FRED-VIXCLS","FRED-OVXCLS","FRED-SP500"] },
   { zh:"实体需求、就业与成本压力", en:"Real demand, employment & cost pressure", ids:["FRED-CPIAUCSL","FRED-PPI","FRED-INDPRO","FRED-UNRATE","FRED-RSAFS"] },
 ] as const;
