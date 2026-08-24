@@ -1,6 +1,8 @@
 from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
 
+import numpy as np
+
 
 def _load_models():
     path = Path(__file__).parents[1] / "api" / "models.py"
@@ -59,3 +61,21 @@ def test_all_default_economic_factor_groups_have_live_provider_mappings():
 
     assert default_ids <= models.SERIES.keys()
     assert all(models.SERIES[series_id][0] for series_id in default_ids)
+
+
+def test_f_survival_matches_reference_values_without_scipy_runtime():
+    models = _load_models()
+
+    assert abs(models.f_survival(1.0, 1, 10) - 0.34089313230206) < 1e-10
+    assert abs(models.f_survival(3.5, 2, 100) - 0.03394775941762179) < 1e-10
+    assert abs(models.f_survival(10.0, 5, 40) - 2.9195853033816384e-06) < 1e-12
+
+
+def test_fft_analytic_signal_preserves_real_series_and_quadrature():
+    models = _load_models()
+    phase = np.linspace(0, 4 * np.pi, 256, endpoint=False)
+    signal = np.cos(phase)
+    analytic = models.analytic_signal(signal)
+
+    assert np.allclose(analytic.real, signal, atol=1e-12)
+    assert np.allclose(analytic.imag, np.sin(phase), atol=1e-10)

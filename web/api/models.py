@@ -7,8 +7,6 @@ from urllib.parse import urlparse, urlencode
 from urllib.request import urlopen
 import numpy as np
 import xlrd
-from scipy.stats import f as f_distribution
-from scipy.signal import hilbert
 from vmdpy import VMD
 
 CHANNELS_ZH = ["投机与短期重定价", "产量政策", "库存调整", "供给扰动", "需求与长期趋势"]
@@ -51,6 +49,60 @@ SERIES = {
 GPRD_URL = "https://www.matteoiacoviello.com/gpr_files/data_gpr_daily_recent.xls"
 _GPRD_CACHE = None
 SELECTED_SCALE_SCORE_RATIO = 0.50
+
+def _beta_continued_fraction(a, b, x, iterations=200, tolerance=3e-14):
+    """Numerically stable continued fraction used by regularized beta."""
+    floor = 1e-300
+    qab, qap, qam = a + b, a + 1.0, a - 1.0
+    c = 1.0
+    d = 1.0 - qab * x / qap
+    d = 1.0 / max(abs(d), floor) * (1 if d >= 0 else -1)
+    result = d
+    for index in range(1, iterations + 1):
+        twice = 2 * index
+        coefficient = index * (b - index) * x / ((qam + twice) * (a + twice))
+        d = 1.0 + coefficient * d
+        d = 1.0 / max(abs(d), floor) * (1 if d >= 0 else -1)
+        c = 1.0 + coefficient / c
+        c = max(abs(c), floor) * (1 if c >= 0 else -1)
+        result *= d * c
+        coefficient = -(a + index) * (qab + index) * x / ((a + twice) * (qap + twice))
+        d = 1.0 + coefficient * d
+        d = 1.0 / max(abs(d), floor) * (1 if d >= 0 else -1)
+        c = 1.0 + coefficient / c
+        c = max(abs(c), floor) * (1 if c >= 0 else -1)
+        delta = d * c
+        result *= delta
+        if abs(delta - 1.0) < tolerance:
+            break
+    return result
+
+def regularized_beta(a, b, x):
+    if x <= 0: return 0.0
+    if x >= 1: return 1.0
+    front = math.exp(math.lgamma(a + b) - math.lgamma(a) - math.lgamma(b) + a * math.log(x) + b * math.log1p(-x))
+    if x < (a + 1.0) / (a + b + 2.0):
+        return front * _beta_continued_fraction(a, b, x) / a
+    return 1.0 - front * _beta_continued_fraction(b, a, 1.0 - x) / b
+
+def f_survival(statistic, numerator_df, denominator_df):
+    if statistic <= 0: return 1.0
+    if numerator_df <= 0 or denominator_df <= 0: return float("nan")
+    x = denominator_df / (denominator_df + numerator_df * statistic)
+    return min(1.0, max(0.0, regularized_beta(denominator_df / 2.0, numerator_df / 2.0, x)))
+
+def analytic_signal(values):
+    """FFT Hilbert transform equivalent to scipy.signal.hilbert for real input."""
+    values = np.asarray(values, dtype=float)
+    count = len(values)
+    spectrum_filter = np.zeros(count)
+    if count % 2 == 0:
+        spectrum_filter[0] = spectrum_filter[count // 2] = 1.0
+        spectrum_filter[1:count // 2] = 2.0
+    else:
+        spectrum_filter[0] = 1.0
+        spectrum_filter[1:(count + 1) // 2] = 2.0
+    return np.fft.ifft(np.fft.fft(values) * spectrum_filter)
 
 def fetch_gprd(start="1985-01-01"):
     global _GPRD_CACHE
@@ -181,7 +233,7 @@ def granger_test(y, x, max_lag):
     for lag in range(1, max_lag+1):
         dep, restricted, unrestricted = lag_matrix(y, x, lag); sse_r, sse_u = ols_sse(restricted, dep), ols_sse(unrestricted, dep); df2 = len(dep)-unrestricted.shape[1]
         if df2 <= 2 or sse_u <= 0: continue
-        statistic = max(0.0, ((sse_r-sse_u)/lag)/(sse_u/df2)); p_value = float(f_distribution.sf(statistic, lag, df2)); bic = len(dep)*math.log(max(sse_u/len(dep), 1e-12))+unrestricted.shape[1]*math.log(len(dep)); row = (bic, lag, statistic, p_value)
+        statistic = max(0.0, ((sse_r-sse_u)/lag)/(sse_u/df2)); p_value = f_survival(statistic, lag, df2); bic = len(dep)*math.log(max(sse_u/len(dep), 1e-12))+unrestricted.shape[1]*math.log(len(dep)); row = (bic, lag, statistic, p_value)
         if best is None or row[0] < best[0]: best = row
     return best or (float("nan"), 1, 0.0, 1.0)
 
@@ -279,7 +331,7 @@ def fixed_break_test(values, dates, break_date):
     restricted = np.column_stack([np.ones(len(y)), t]); unrestricted = np.column_stack([np.ones(len(y)), t, indicator, post])
     beta_r = np.linalg.lstsq(restricted, y, rcond=None)[0]; beta_u = np.linalg.lstsq(unrestricted, y, rcond=None)[0]
     rss_r = ols_sse(restricted, y); rss_u = ols_sse(unrestricted, y); df1 = 2; df2 = len(y)-4
-    statistic = max(0.0, ((rss_r-rss_u)/df1)/max(rss_u/max(df2,1),1e-12)); p_value = float(f_distribution.sf(statistic,df1,max(df2,1)))
+    statistic = max(0.0, ((rss_r-rss_u)/df1)/max(rss_u/max(df2,1),1e-12)); p_value = f_survival(statistic,df1,max(df2,1))
     return {"breakDate": dates[matches[0]], "fStatistic": statistic, "pValue": p_value, "preSlope": float(beta_u[1]), "postSlope": float(beta_u[1]+beta_u[3]), "slopeChange": float(beta_u[3]), "levelShift": float(beta_u[2]), "significant": p_value < .1}
 
 def retained_scale_rows(scale_granger, selected_imf):
@@ -389,7 +441,7 @@ def net_impact(payload):
             rolling_fevd.append({"date": common[end], "externalShare": float((1-local_fevd[0,0])*100), "ownShare": float(local_fevd[0,0]*100), "lag": local_lag})
     drivers = [{"id":sid,"nameZh":meta(sid)[1],"nameEn":meta(sid)[2],"impact":float(contributions[index]),"coefficient":float(beta[index+1])} for sid,index in zip(retained_ids,retained_indices)]; drivers.sort(key=lambda row: abs(row["impact"]),reverse=True)
     optimal_break = segmented_break_test(selected_scale,common); fixed_break = fixed_break_test(selected_scale,common,event_start)
-    analytic = hilbert(selected_scale); phase = np.unwrap(np.angle(analytic)); instantaneous_frequency = np.abs(np.diff(phase))/(2*np.pi)
+    analytic = analytic_signal(selected_scale); phase = np.unwrap(np.angle(analytic)); instantaneous_frequency = np.abs(np.diff(phase))/(2*np.pi)
     hht = [{"date": common[index+1], "frequency": float(value), "period": float(1/max(value,1e-9))} for index,value in enumerate(instantaneous_frequency) if np.isfinite(value)][-360:]
     scale_effect = {"selectedScale":selected_imf,"minimumDate":common[minimum_index],"minimumValue":float(selected_scale[minimum_index]),"maximumDate":common[maximum_index],"maximumValue":float(selected_scale[maximum_index]),"tradingDayInterval":horizon,"calendarDayInterval":abs((date.fromisoformat(common[maximum_index])-date.fromisoformat(common[minimum_index])).days),"netEffect":net_effect,"originalResponse":original_response,"shareInOriginalResponse":response_share}
     estimation_candidates = [stamp for stamp in common if stamp < event_start]
