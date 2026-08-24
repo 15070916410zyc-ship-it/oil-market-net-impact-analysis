@@ -100,7 +100,17 @@ const seriesNamesEn: Record<string, string> = {
 const seriesText = (item: DataSeries, lang: Lang) => ({
   name: lang === "en" ? item.nameEn || seriesNamesEn[item.id] || item.name : item.name,
   frequency: lang === "en" ? ({ 日度: "Daily", 周度: "Weekly", 月度: "Monthly", 年度: "Annual" }[item.frequency] || item.frequency) : item.frequency,
-  unit: lang === "en" ? ({ "美元/桶": "USD/bbl", 千桶: "thousand bbl", 指数: "index", 年度: "annual" }[item.unit] || item.unit) : item.unit,
+  unit: lang === "en" ? ({
+    "美元/桶": "USD/bbl",
+    "美元/MMBtu": "USD/MMBtu",
+    "美元/加仑": "USD/gal",
+    "百万元": "USD millions",
+    千桶: "thousand bbl",
+    千人: "thousand persons",
+    指数: "index",
+    年度: "annual",
+    "参见序列元数据": "See series metadata",
+  }[item.unit] || item.unit) : item.unit,
 });
 
 const copy = {
