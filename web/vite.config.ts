@@ -10,7 +10,7 @@ export default defineConfig({
       output: {
         manualChunks: {
           react: ["react", "react-dom"],
-          charts: ["recharts"],
+          echarts: ["echarts", "echarts-for-react"],
           icons: ["lucide-react"],
         },
       },

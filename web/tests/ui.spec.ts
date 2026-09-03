@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 test("professional controls and English dates are fully localized", async ({ page }) => {
-  await page.goto("http://localhost:4174/professional");
+  await page.goto("/professional");
   await expect(page.getByRole("heading", { name: "多尺度净影响分析" })).toBeVisible();
   await page.locator(".utility button").click();
   await expect(page.getByRole("heading", { name: "Multi-scale net-impact analysis" })).toBeVisible();
@@ -11,7 +11,7 @@ test("professional controls and English dates are fully localized", async ({ pag
 });
 
 test("number steppers and mode switching respond immediately", async ({ page }) => {
-  await page.goto("http://localhost:4174/professional");
+  await page.goto("/professional");
   const componentField = page.locator(".field").filter({ hasText: "分量数量" });
   await expect(componentField.locator("input")).toHaveValue("5");
   await componentField.locator(".stepper button").last().click();
@@ -46,7 +46,7 @@ test("decision accounting, advanced variables and multiple real-product plans re
     if (body.action === "risk") return route.fulfill({ json: { mode:"verified-live",method:"test",latestDate:"2026-08-20",riskScore:60,alertThreshold:80,alert:false,history:[{date:"2026-08-20",score:60}] } });
     return route.fulfill({ json: { mode:"verified-live",method:"test",asOf:"2026-08-20",observations:200,estimationWindow:{start:"2018-01-01",end:"2019-12-31"},eventWindow:{start:"2020-01-01",end:"2026-08-20"},rSquared:.5,drivers:[{id:"FRED-DGS10",nameZh:"美国10年期国债收益率",nameEn:"US 10-Year Treasury Yield",impact:.2,coefficient:.1}],granger:[{id:"FRED-DGS10",nameZh:"美国10年期国债收益率",nameEn:"US 10-Year Treasury Yield",lag:2,fStatistic:4.2,pValue:.028,significant:true},{id:"GPRD",nameZh:"地缘政治风险指数",nameEn:"Geopolitical Risk Index",lag:1,fStatistic:.9,pValue:.42,significant:false}],scaleGranger:[{id:"FRED-DGS10",nameZh:"美国10年期国债收益率",nameEn:"US 10-Year Treasury Yield",imf:"IMF1",lag:2,fStatistic:4.2,pValue:.028,significant:true},{id:"GPRD",nameZh:"地缘政治风险指数",nameEn:"Geopolitical Risk Index",imf:"IMF1",lag:1,fStatistic:.9,pValue:.42,significant:false}],selectedScaleGranger:[{id:"FRED-DGS10",nameZh:"美国10年期国债收益率",nameEn:"US 10-Year Treasury Yield",imf:"IMF1+IMF3",lag:2,fStatistic:4.2,pValue:.028,significant:true},{id:"GPRD",nameZh:"地缘政治风险指数",nameEn:"Geopolitical Risk Index",imf:"IMF1+IMF3",lag:1,fStatistic:.9,pValue:.42,significant:false}],selectedScales:[{id:"FRED-DGS10",nameZh:"美国10年期国债收益率",nameEn:"US 10-Year Treasury Yield",imf:"IMF1+IMF3",pValue:.028}],components:[{imf:"IMF1",channelZh:"短周期",channelEn:"Short cycle",centerFrequency:.2,volatilityShare:100,points:[{date:"2026-08-20",value:100}]}],hht:[],scaleEffect:{selectedScale:"IMF1+IMF3",minimumDate:"2026-01-01",minimumValue:80,maximumDate:"2026-08-20",maximumValue:100,tradingDayInterval:20,calendarDayInterval:30,netEffect:20,originalResponse:20,shareInOriginalResponse:100},fevd:[{id:"FRED-DGS10",nameZh:"美国10年期国债收益率",nameEn:"US 10-Year Treasury Yield",share:20,externalWeight:100,absoluteImpact:20}],fevdOwnShare:80,fevdHorizon:20,varLag:1,rolling:[],rollingFevd:[],breakTest:{fixed:{breakDate:"2020-01-01",fStatistic:1,pValue:.1,preSlope:0,postSlope:0,slopeChange:0,levelShift:0,significant:false},optimal:{candidateCount:1,bestDate:"2020-01-01",rssImprovementPercent:1,profile:[]}},sources:[] } });
   });
-  await page.goto("http://localhost:4174/decision");
+  await page.goto("/decision");
   await expect(page.getByRole("heading", { name: "采购成本预警测算" })).toBeVisible();
   await page.getByLabel("套保需求开始").fill("2026-09-01");
   await page.getByLabel("套保需求结束").fill("2027-02-28");
@@ -75,7 +75,7 @@ test("decision accounting, advanced variables and multiple real-product plans re
   for (const card of await page.locator(".portfolio-card").all()) expect(await card.locator(".order-lines article").count()).toBeGreaterThanOrEqual(3);
   for(let index=0;index<14;index+=1){
     await page.locator(".portfolio-card summary").nth(index).click();
-    await expect(page.locator(".portfolio-card").nth(index).locator(".strategy-payoff-chart svg.recharts-surface").first()).toBeVisible();
+    await expect(page.locator(".portfolio-card").nth(index).locator(".strategy-payoff-chart canvas").first()).toBeVisible();
     await page.locator(".portfolio-card summary").nth(index).click();
   }
   await page.locator(".portfolio-card summary").first().click();
@@ -90,18 +90,14 @@ test("decision accounting, advanced variables and multiple real-product plans re
   await expect(page.locator(".portfolio-card").nth(4).getByText(/1:−2:1|1:-2:1/).first()).toBeVisible();
   await expect(page.locator(".portfolio-card").nth(4).getByText(/Margin estimate|保证金估算/).first()).toBeVisible();
   await expect(page.locator(".portfolio-card").nth(4).locator(".strategy-payoff-chart")).toBeVisible();
-  await expect(page.locator(".portfolio-card").nth(4).locator(".strategy-payoff-chart svg.recharts-surface").first()).toBeVisible();
+  await expect(page.locator(".portfolio-card").nth(4).locator(".strategy-payoff-chart canvas").first()).toBeVisible();
   await page.locator(".portfolio-card").nth(4).screenshot({ path:"test-results/multi-leg-butterfly.png" });
   await page.locator(".portfolio-card summary").nth(6).click();
   await expect(page.locator(".portfolio-card").nth(6).locator(".order-lines article")).toHaveCount(6);
   await page.locator(".portfolio-card summary").nth(7).click();
   await expect(page.locator(".portfolio-card").nth(7).locator(".order-lines article")).toHaveCount(5);
   await expect(page.locator(".portfolio-card").nth(7).getByText(/1:−1:−1:1|1:-1:-1:1/).first()).toBeVisible();
-  await expect(page.locator(".portfolio-card").nth(7).locator(".strategy-payoff-chart svg.recharts-surface").first()).toBeVisible();
-  for(const path of await page.locator(".portfolio-card").nth(7).locator(".recharts-line-curve").all()){
-    const d=await path.getAttribute("d")||"";
-    expect(new Set([...d.matchAll(/[ML]([0-9.]+),/g)].map((match)=>match[1])).size).toBe(5);
-  }
+  await expect(page.locator(".portfolio-card").nth(7).locator(".strategy-payoff-chart canvas").first()).toBeVisible();
   await page.locator(".portfolio-card").nth(7).screenshot({ path:"test-results/multi-leg-condor.png" });
   await page.locator(".portfolio-card summary").nth(8).click();
   await expect(page.locator(".portfolio-card").nth(8).locator(".order-lines article")).toHaveCount(3);
@@ -113,7 +109,7 @@ test("decision accounting, advanced variables and multiple real-product plans re
   await expect(mixedCard).toContainText("美国10年期国债期货");
   await expect(mixedCard).toContainText("USD face value");
   await expect(mixedCard).toContainText("目标风险预算");
-  await expect(mixedCard.getByText("跨资产压力损益")).toBeVisible();
+  await expect(mixedCard.locator(".strategy-payoff-chart canvas").first()).toBeVisible();
   await mixedCard.screenshot({path:"test-results/multi-asset-portfolio.png"});
   await expect(page.locator(".product-grid")).toHaveCount(0);
   await page.getByRole("button", { name: /展开/ }).click();
@@ -159,6 +155,38 @@ test("decision accounting, advanced variables and multiple real-product plans re
   await expect(copperOption).toHaveCount(0);
 });
 
+test("professional forecast reports validation and historical risk metrics from observed prices", async ({ page }) => {
+  await page.route("**/api/catalog", async (route) => route.fulfill({ json: { items:[], warnings:[] } }));
+  await page.route("**/api/health", async (route) => route.fulfill({ json: { ok:true } }));
+  await page.route("**/api/models", async (route) => route.fulfill({ json: {
+    mode:"verified-live",
+    method:"VMD-5 + component AR-Ridge + rolling-origin residual intervals",
+    asOf:"2026-08-20",
+    latestPrice:104,
+    history:[
+      {Date:"2026-01-31",Actual:100},
+      {Date:"2026-02-28",Actual:106},
+      {Date:"2026-03-31",Actual:96},
+      {Date:"2026-04-30",Actual:102},
+      {Date:"2026-05-31",Actual:108},
+      {Date:"2026-06-30",Actual:104},
+    ],
+    forecast:[
+      {Date:"2026-07-31",PointForecast:105,Lower50:101,Upper50:109,Lower80:98,Upper80:112,Lower95:94,Upper95:116},
+      {Date:"2026-08-31",PointForecast:107,Lower50:102,Upper50:112,Lower80:97,Upper80:117,Lower95:92,Upper95:122},
+    ],
+    metrics:{ValidationMAE:2.125,ValidationRMSE:2.75,DirectionalAccuracyPercent:66.667,IntervalCoveragePercent:83.333,ValidationOrigins:6},
+    components:[],
+  }}));
+  await page.goto("/professional");
+  await page.getByRole("tab", { name:"价格预测" }).click();
+  await page.getByRole("button", { name:"用最新数据运行模型" }).click();
+  await expect(page.getByRole("heading", { name:"所选真实历史样本的基准表现" })).toBeVisible();
+  await expect(page.getByText("最大回撤", { exact:true })).toBeVisible();
+  await expect(page.getByText("CVaR 95%", { exact:true })).toBeVisible();
+  await page.locator(".card").filter({hasText:"价格预测实验"}).screenshot({path:"test-results/professional-forecast-metrics.png"});
+});
+
 test("data center is independent and searches GPRD plus financial products", async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.setItem("opi.savedRecords.v1", JSON.stringify([{
@@ -174,7 +202,7 @@ test("data center is independent and searches GPRD plus financial products", asy
     if(url.pathname.endsWith("/instruments"))return route.fulfill({json:{asOf:"2026-08-24",benchmark:"All",quoteMethod:"AKShare / Sina",broker:{connected:false,name:"IBKR",message:"not connected"},executionEnabled:false,disclaimer:"indicative",products:[{id:"CME-CL",benchmark:"WTI",exchange:"NYMEX / CME Group",kind:"future",code:"CL",name:"WTI Crude Oil futures",nameZh:"WTI 原油期货",size:1000,settlement:"Physical",url:"https://www.cmegroup.com/",contracts:1,coveredBarrels:1000,roundingError:0,verification:"official",quote:{last:85.2,bid:85.19,ask:85.21,time:"12:00:00",date:"2026-08-24",name:"纽约原油",provider:"Sina"}}]}});
     return route.fulfill({json:{}});
   });
-  await page.goto("http://localhost:4174/data");
+  await page.goto("/data");
   await expect(page.getByRole("heading",{name:"变量因素查询"})).toBeVisible();
   await page.getByPlaceholder(/Brent/).fill("GPRD");
   await expect(page.getByText("地缘政治风险指数（传统日度 GPR）")).toBeVisible();

@@ -79,3 +79,17 @@ def test_fft_analytic_signal_preserves_real_series_and_quadrature():
 
     assert np.allclose(analytic.real, signal, atol=1e-12)
     assert np.allclose(analytic.imag, np.sin(phase), atol=1e-10)
+
+
+def test_multiple_break_scan_recovers_two_material_regime_changes():
+    models = _load_models()
+    values = np.r_[np.linspace(0, 1, 40), np.linspace(8, 9, 40), np.linspace(-4, -3, 40)]
+    dates = [f"2026-{index + 1:03d}" for index in range(len(values))]
+
+    result = models.multiple_break_test(values, dates, min_size=12, max_breaks=4)
+
+    indices = result["breakIndices"]
+    assert len(indices) >= 2
+    assert any(abs(index - 40) <= 4 for index in indices)
+    assert any(abs(index - 80) <= 4 for index in indices)
+    assert result["method"] == "penalized binary segmentation"
