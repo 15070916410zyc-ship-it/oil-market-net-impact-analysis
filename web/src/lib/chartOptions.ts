@@ -1,4 +1,4 @@
-import type { EChartsOption, LineSeriesOption } from "echarts";
+import type { CustomSeriesOption, EChartsOption } from "echarts";
 
 export type ForecastChartRow = {
   date: string;
@@ -45,35 +45,40 @@ function intervalSeries(
   highKey: "high50" | "high80" | "high95",
   name: string,
   color: string,
-): LineSeriesOption[] {
-  const lower = values(rows, lowKey) as Array<number | null>;
-  const width = rows.map((row) => {
-    const low = row[lowKey];
-    const high = row[highKey];
-    return low === null || high === null ? null : high - low;
-  });
-  const stack = `band-${name}`;
-  return [
-    {
-      type: "line",
-      data: lower,
-      stack,
-      symbol: "none",
-      lineStyle: { opacity: 0 },
-      tooltip: { show: false },
-      silent: true,
+): CustomSeriesOption {
+  const segments: number[][] = [];
+  for (let index = 0; index < rows.length - 1; index += 1) {
+    const current = rows[index];
+    const next = rows[index + 1];
+    if (current[lowKey] === null || current[highKey] === null || next[lowKey] === null || next[highKey] === null) continue;
+    segments.push([index, current[lowKey], current[highKey], index + 1, next[lowKey], next[highKey]]);
+  }
+  return {
+    name,
+    type: "custom",
+    coordinateSystem: "cartesian2d",
+    dimensions: ["x0", "low0", "high0", "x1", "low1", "high1"],
+    encode: { x: [0, 3], y: [1, 2, 4, 5] },
+    data: segments,
+    itemStyle: { color, opacity: 0.24 },
+    renderItem: (_params, api) => {
+      const points = [
+        api.coord([api.value(0), api.value(1)]),
+        api.coord([api.value(0), api.value(2)]),
+        api.coord([api.value(3), api.value(5)]),
+        api.coord([api.value(3), api.value(4)]),
+      ];
+      return {
+        type: "polygon",
+        shape: { points },
+        style: api.style({ fill: color, stroke: color, lineWidth: 1, opacity: 0.24 }),
+        silent: true,
+      };
     },
-    {
-      name,
-      type: "line",
-      data: width,
-      stack,
-      symbol: "none",
-      lineStyle: { opacity: 0.7, width: 1, color },
-      areaStyle: { color, opacity: 0.24 },
-      emphasis: { disabled: true },
-    },
-  ];
+    tooltip: { show: false },
+    silent: true,
+    z: 1,
+  };
 }
 
 export function buildForecastOption(input: ForecastChartRow[], lang: "zh" | "en"): EChartsOption {
@@ -83,12 +88,36 @@ export function buildForecastOption(input: ForecastChartRow[], lang: "zh" | "en"
     animationDuration: 550,
     color: ["#96abc0", "#7e76ad", "#d28a63", "#252932", "#655d98"],
     grid: { left: 62, right: 34, top: 48, bottom: 78, containLabel: true },
-    legend: { top: 4, type: "scroll" },
+    legend: { top: 4, type: "scroll", selected: {
+      [label("95%区间", "95% interval")]: true,
+      [label("80%区间", "80% interval")]: true,
+      [label("50%区间", "50% interval")]: true,
+      [label("实际价格", "Observed price")]: true,
+      [label("中位预测", "Median forecast")]: true,
+    } },
     toolbox: {
       right: 8,
       feature: { dataZoom: {}, restore: {}, saveAsImage: { pixelRatio: 2 } },
     },
-    tooltip: { trigger: "axis", valueFormatter: (value) => Number(value).toFixed(3) },
+    tooltip: {
+      trigger: "axis",
+      formatter: (params: unknown) => {
+        const items = Array.isArray(params) ? params : [params];
+        const dataIndex = Number((items[0] as { dataIndex?: number } | undefined)?.dataIndex ?? 0);
+        const row = rows[dataIndex];
+        if (!row) return "";
+        const parts = [`<b>${row.date}</b>`];
+        if (row.actual !== null) parts.push(`${label("实际价格", "Observed price")}: ${row.actual.toFixed(3)}`);
+        if (row.median !== null) parts.push(`${label("中位预测", "Median forecast")}: ${row.median.toFixed(3)}`);
+        const addRange = (rangeLabel: string, low: number | null, high: number | null) => {
+          if (low !== null && high !== null) parts.push(`${rangeLabel}: ${low.toFixed(3)} – ${high.toFixed(3)}`);
+        };
+        addRange(label("50%区间", "50% interval"), row.low50, row.high50);
+        addRange(label("80%区间", "80% interval"), row.low80, row.high80);
+        addRange(label("95%区间", "95% interval"), row.low95, row.high95);
+        return parts.join("<br/>");
+      },
+    },
     xAxis: { type: "category", boundaryGap: false, data: rows.map((row) => row.date), axisLabel: { hideOverlap: true } },
     yAxis: {
       type: "value",
@@ -102,11 +131,11 @@ export function buildForecastOption(input: ForecastChartRow[], lang: "zh" | "en"
       { type: "slider", filterMode: "none", height: 24, bottom: 18, borderColor: "#d9d3cf" },
     ],
     series: [
-      ...intervalSeries(rows, "low95", "high95", label("95%区间", "95% interval"), "#9fb8cc"),
-      ...intervalSeries(rows, "low80", "high80", label("80%区间", "80% interval"), "#8179ad"),
-      ...intervalSeries(rows, "low50", "high50", label("50%区间", "50% interval"), "#d38a61"),
-      { name: label("实际价格", "Observed price"), type: "line", data: values(rows, "actual"), showSymbol: false, connectNulls: false, lineStyle: { width: 2.4, color: "#252932" } },
-      { name: label("中位预测", "Median forecast"), type: "line", data: values(rows, "median"), showSymbol: false, connectNulls: false, lineStyle: { width: 2.8, color: "#655d98" } },
+      intervalSeries(rows, "low95", "high95", label("95%区间", "95% interval"), "#9fb8cc"),
+      intervalSeries(rows, "low80", "high80", label("80%区间", "80% interval"), "#8179ad"),
+      intervalSeries(rows, "low50", "high50", label("50%区间", "50% interval"), "#d38a61"),
+      { name: label("实际价格", "Observed price"), type: "line", data: values(rows, "actual"), showSymbol: false, connectNulls: false, lineStyle: { width: 2.4, color: "#252932" }, itemStyle: { color: "#252932" }, z: 5 },
+      { name: label("中位预测", "Median forecast"), type: "line", data: values(rows, "median"), showSymbol: false, connectNulls: false, lineStyle: { width: 2.8, color: "#655d98" }, itemStyle: { color: "#655d98" }, z: 6 },
     ],
   };
 }

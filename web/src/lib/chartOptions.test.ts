@@ -18,7 +18,7 @@ describe("forecast chart options", () => {
 
   it("builds three visually distinct nested confidence bands with zoom controls", () => {
     const option = buildForecastOption(rows, "en");
-    const series = option.series as Array<{ name?: string; stack?: string }>;
+    const series = option.series as Array<{ name?: string; type?: string; data?: unknown[]; itemStyle?: { color?: string } }>;
     expect(series.map((item) => item.name)).toEqual(expect.arrayContaining([
       "95% interval",
       "80% interval",
@@ -26,6 +26,10 @@ describe("forecast chart options", () => {
       "Observed price",
       "Median forecast",
     ]));
+    const intervalBands = series.filter((item) => item.type === "custom");
+    expect(intervalBands).toHaveLength(3);
+    expect(intervalBands.every((item) => item.data?.length === 1)).toBe(true);
+    expect(series.find((item) => item.name === "95% interval")?.itemStyle?.color).toBe("#9fb8cc");
     expect(option.dataZoom).toHaveLength(2);
   });
 

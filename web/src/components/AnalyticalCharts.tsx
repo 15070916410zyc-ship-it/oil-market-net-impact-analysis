@@ -16,7 +16,8 @@ export function DriverChart({ lang, data }: { lang: Lang; data: Driver[] }) {
 }
 
 export function ForecastChart({ data, lang }: { data: PriceRow[]; lang: Lang }) {
-  return <EChartView className="forecast-echart" height={520} ariaLabel={tx(lang,"可缩放的真实油价与概率预测区间图","Zoomable observed oil-price and probabilistic forecast chart")} option={buildForecastOption(data.map((row)=>({
+  const resetKey = `${lang}:${data.length}:${data[0]?.date ?? "empty"}:${data.at(-1)?.date ?? "empty"}`;
+  return <EChartView resetKey={resetKey} className="forecast-echart" height={520} ariaLabel={tx(lang,"可缩放的真实油价与概率预测区间图","Zoomable observed oil-price and probabilistic forecast chart")} option={buildForecastOption(data.map((row)=>({
     date:row.date,actual:row.actual,median:row.forecast,low50:row.lo50,high50:row.hi50,low80:row.lo80,high80:row.hi80,low95:row.lo95,high95:row.hi95,
   })),lang)}/>;
 }
