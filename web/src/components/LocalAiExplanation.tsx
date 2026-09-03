@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import { Cpu, Square, Sparkles } from "lucide-react";
 import type { WebWorkerMLCEngine } from "@mlc-ai/web-llm";
-import { buildExplanationPrompt, detectLocalAiCapability, type ExplanationPacket } from "../ai/localExplanation";
+import { buildExplanationPrompt, detectLocalAiCapability, LOCAL_AI_CONTEXT, type ExplanationPacket } from "../ai/localExplanation";
 
 type LocalAiExplanationProps = {
   lang: "zh" | "en";
@@ -17,6 +17,29 @@ export function LocalAiExplanation({ lang, packet }: LocalAiExplanationProps) {
   const [running, setRunning] = useState(false);
   const [error, setError] = useState("");
 
+  async function streamAnswer(prompt: string, maxTokens: number) {
+    if (!engineRef.current) throw new Error("Local AI engine is unavailable");
+    const stream = await engineRef.current.chat.completions.create({
+      messages: [
+        { role: "system", content: lang === "zh" ? "你是严谨的量化研究解释助手。" : "You are a rigorous quantitative research explainer." },
+        { role: "user", content: prompt },
+      ],
+      temperature: 0.2,
+      max_tokens: maxTokens,
+      stream: true,
+    });
+    let output = "";
+    for await (const chunk of stream) {
+      output += chunk.choices[0]?.delta.content || "";
+      setAnswer(output);
+    }
+  }
+
+  function isContextWindowError(reason: unknown) {
+    const message = reason instanceof Error ? reason.message : String(reason);
+    return /context.?window|prompt tokens exceed/i.test(message);
+  }
+
   async function explain() {
     if (!capability.modelId || running) return;
     setRunning(true);
@@ -28,27 +51,30 @@ export function LocalAiExplanation({ lang, packet }: LocalAiExplanationProps) {
         const { CreateWebWorkerMLCEngine } = await import("@mlc-ai/web-llm");
         const worker = new Worker(new URL("../ai/ai.worker.ts", import.meta.url), { type: "module" });
         workerRef.current = worker;
-        engineRef.current = await CreateWebWorkerMLCEngine(worker, capability.modelId, {
-          initProgressCallback: (report) => setProgress(`${report.text} ${Number(report.progress * 100).toFixed(1)}%`),
-        });
+        engineRef.current = await CreateWebWorkerMLCEngine(
+          worker,
+          capability.modelId,
+          { initProgressCallback: (report) => setProgress(`${report.text} ${Number(report.progress * 100).toFixed(1)}%`) },
+          { context_window_size: capability.level === "high" ? LOCAL_AI_CONTEXT.high : LOCAL_AI_CONTEXT.standard },
+        );
       }
       setProgress(lang === "zh" ? "正在依据当前真实结果生成解释…" : "Explaining the current verified result…");
-      const stream = await engineRef.current.chat.completions.create({
-        messages: [
-          { role: "system", content: lang === "zh" ? "你是严谨的量化研究解释助手。" : "You are a rigorous quantitative research explainer." },
-          { role: "user", content: buildExplanationPrompt(packet, lang) },
-        ],
-        temperature: 0.2,
-        stream: true,
-      });
-      let output = "";
-      for await (const chunk of stream) {
-        output += chunk.choices[0]?.delta.content || "";
-        setAnswer(output);
+      const normalBudget = capability.level === "high" ? 5600 : 2600;
+      try {
+        await streamAnswer(buildExplanationPrompt(packet, lang, normalBudget), 700);
+      } catch (reason) {
+        if (!isContextWindowError(reason)) throw reason;
+        setAnswer("");
+        setProgress(lang === "zh" ? "结果较长，正在自动压缩后重新生成…" : "The result is long; compressing it and retrying…");
+        await engineRef.current.resetChat();
+        await streamAnswer(buildExplanationPrompt(packet, lang, 1600), 480);
       }
       setProgress("");
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : String(reason));
+      const fallback = lang === "zh"
+        ? "本地模型未能完成解释。请关闭其他占用显存的页面后重试；分析结果本身不受影响。"
+        : "The local model could not finish the explanation. Close other GPU-heavy tabs and retry; the analysis results are unaffected.";
+      setError(isContextWindowError(reason) ? fallback : (reason instanceof Error ? reason.message : String(reason)));
     } finally {
       setRunning(false);
     }
