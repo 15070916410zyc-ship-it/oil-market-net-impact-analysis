@@ -323,6 +323,58 @@ def segmented_break_test(values, dates):
         if best is None or rss < best[0]: best = (rss, row)
     return {"candidateCount": len(profile), "bestDate": best[1]["date"], "rssImprovementPercent": best[1]["improvementPercent"], "profile": profile}
 
+def multiple_break_test(values, dates, penalty=None, min_size=18, max_breaks=4):
+    """Penalized binary segmentation for multiple level/trend regime changes.
+
+    The implementation is NumPy-only so the public serverless runtime does not
+    need SciPy/ruptures. Each candidate compares one linear trend with two
+    independently fitted linear trends and accepts only improvements above the
+    disclosed penalty.
+    """
+    y = np.asarray(values, dtype=float)
+    if len(y) != len(dates) or len(y) < max(2 * min_size + 1, 25):
+        return {"method":"penalized binary segmentation","penalty":0.0,"breakIndices":[],"breakDates":[],"segments":[],"improvements":[]}
+    minimum = max(8, int(min_size))
+    penalty_value = float(penalty) if penalty is not None else float(max(np.var(y), 1e-12) * np.log(len(y)) * .2)
+
+    def segment_rss(start, end):
+        local = y[start:end]
+        t = np.arange(len(local), dtype=float)
+        return ols_sse(np.column_stack([np.ones(len(local)), t]), local)
+
+    segments = [(0, len(y))]
+    selected = []
+    improvements = []
+    for _ in range(max(0, int(max_breaks))):
+        best = None
+        for segment_index, (start, end) in enumerate(segments):
+            if end - start < 2 * minimum + 1:
+                continue
+            pooled = segment_rss(start, end)
+            step = max(1, (end - start) // 160)
+            for split in range(start + minimum, end - minimum + 1, step):
+                divided = segment_rss(start, split) + segment_rss(split, end)
+                improvement = pooled - divided
+                if best is None or improvement > best[0]:
+                    best = (improvement, segment_index, split, pooled, divided)
+        if best is None or best[0] <= penalty_value:
+            break
+        improvement, segment_index, split, pooled, divided = best
+        start, end = segments.pop(segment_index)
+        segments.extend([(start, split), (split, end)])
+        segments.sort()
+        selected.append(split)
+        improvements.append({"index":int(split),"date":dates[split],"rssReduction":float(improvement),"rssReductionPercent":float(improvement/max(pooled,1e-12)*100),"splitRss":float(divided)})
+    selected = sorted(selected)
+    return {
+        "method":"penalized binary segmentation",
+        "penalty":penalty_value,
+        "breakIndices":selected,
+        "breakDates":[dates[index] for index in selected],
+        "segments":[{"start":dates[start],"end":dates[end-1],"observations":end-start} for start,end in segments],
+        "improvements":sorted(improvements,key=lambda row:row["index"]),
+    }
+
 def fixed_break_test(values, dates, break_date):
     y = np.asarray(values, dtype=float); t = np.arange(1, len(y)+1, dtype=float)
     matches = [index for index, stamp in enumerate(dates) if stamp >= break_date]
@@ -440,13 +492,13 @@ def net_impact(payload):
             local_lag, local_fevd = orthogonal_fevd(np.column_stack([local_y, local_x]),horizon,min(max_lag,3))
             rolling_fevd.append({"date": common[end], "externalShare": float((1-local_fevd[0,0])*100), "ownShare": float(local_fevd[0,0]*100), "lag": local_lag})
     drivers = [{"id":sid,"nameZh":meta(sid)[1],"nameEn":meta(sid)[2],"impact":float(contributions[index]),"coefficient":float(beta[index+1])} for sid,index in zip(retained_ids,retained_indices)]; drivers.sort(key=lambda row: abs(row["impact"]),reverse=True)
-    optimal_break = segmented_break_test(selected_scale,common); fixed_break = fixed_break_test(selected_scale,common,event_start)
+    optimal_break = segmented_break_test(selected_scale,common); fixed_break = fixed_break_test(selected_scale,common,event_start); multiple_breaks = multiple_break_test(selected_scale,common)
     analytic = analytic_signal(selected_scale); phase = np.unwrap(np.angle(analytic)); instantaneous_frequency = np.abs(np.diff(phase))/(2*np.pi)
     hht = [{"date": common[index+1], "frequency": float(value), "period": float(1/max(value,1e-9))} for index,value in enumerate(instantaneous_frequency) if np.isfinite(value)][-360:]
     scale_effect = {"selectedScale":selected_imf,"minimumDate":common[minimum_index],"minimumValue":float(selected_scale[minimum_index]),"maximumDate":common[maximum_index],"maximumValue":float(selected_scale[maximum_index]),"tradingDayInterval":horizon,"calendarDayInterval":abs((date.fromisoformat(common[maximum_index])-date.fromisoformat(common[minimum_index])).days),"netEffect":net_effect,"originalResponse":original_response,"shareInOriginalResponse":response_share}
     estimation_candidates = [stamp for stamp in common if stamp < event_start]
     if not estimation_candidates: raise ValueError("Estimation window must end before the event window begins")
-    return {"mode":"verified-live","method":"Target-calendar alignment; VMD and HHT; one-or-two main-scale selection; selected-scale Granger significance gate; extrema-selected h; Cholesky-orthogonal rolling VAR-FEVD using retained factors only; fixed and optimal structural-break diagnostics","asOf":common[-1],"target":target,"observations":len(common),"estimationWindow":{"start":estimation_start,"end":max(estimation_candidates)},"eventWindow":{"start":event_start,"end":event_end},"rSquared":r2,"drivers":drivers,"granger":granger,"scaleGranger":scale_granger,"selectedScaleGranger":selected_scale_granger,"selectedScales":selected_scales,"components":components,"hht":hht,"scaleEffect":scale_effect,"fevd":fevd,"fevdOwnShare":own_share,"fevdHorizon":horizon,"varLag":var_lag,"rolling":rolling[-180:],"rollingFevd":rolling_fevd[-120:],"breakTest":{"fixed":fixed_break,"optimal":optimal_break},"sources":[{"id":sid,"providerId":meta(sid)[0],"nameZh":meta(sid)[1],"nameEn":meta(sid)[2]} for sid in ids]}
+    return {"mode":"verified-live","method":"Target-calendar alignment; VMD and HHT; one-or-two main-scale selection; selected-scale Granger significance gate; extrema-selected h; Cholesky-orthogonal rolling VAR-FEVD using retained factors only; fixed, optimal and penalized multiple structural-break diagnostics","asOf":common[-1],"target":target,"observations":len(common),"estimationWindow":{"start":estimation_start,"end":max(estimation_candidates)},"eventWindow":{"start":event_start,"end":event_end},"rSquared":r2,"drivers":drivers,"granger":granger,"scaleGranger":scale_granger,"selectedScaleGranger":selected_scale_granger,"selectedScales":selected_scales,"components":components,"hht":hht,"scaleEffect":scale_effect,"fevd":fevd,"fevdOwnShare":own_share,"fevdHorizon":horizon,"varLag":var_lag,"rolling":rolling[-180:],"rollingFevd":rolling_fevd[-120:],"breakTest":{"fixed":fixed_break,"optimal":optimal_break,"multiple":multiple_breaks},"sources":[{"id":sid,"providerId":meta(sid)[0],"nameZh":meta(sid)[1],"nameEn":meta(sid)[2]} for sid in ids]}
 
 class handler(BaseHTTPRequestHandler):
     def send_json(self, status, payload):
